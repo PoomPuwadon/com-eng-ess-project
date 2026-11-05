@@ -12,12 +12,26 @@ export function lobby(ctx) {
   // ---- security: 2 lanes, glass wall across the rest
   for (const x of [-4.4, 0, 4.4]) ctx.box(x - 0.4, x + 0.4, 0, 3, 24.1, 24.9, 0x707a88);
   ctx.deco(-4.8, 4.8, 3, 3.5, 24.1, 24.9, 0x707a88);
-  ctx.glassBox(-29, -4.8, 0, 4.5, 24.2, 24.8, GLASSWALL, true);
-  ctx.glassBox(4.8, 29, 0, 4.5, 24.2, 24.8, GLASSWALL, true);
   for (const x of [-4.8, 4.8]) ctx.deco(x - 0.08, x + 0.08, 0, 4.5, 24.1, 24.9, GOLD);
+  // glass side panels from the entrance doors to the scanners: the approach is a closed channel,
+  // so no full-width glass wall is needed; the space either side is planted instead
+  for (const x of [-4.8, 4.8]) {
+    ctx.glassBox(x - 0.1, x + 0.1, 0, 3, 24.1, 28.6, GLASSWALL, true);
+    ctx.deco(x - 0.12, x + 0.12, 3, 3.1, 24.1, 28.6, GOLD);
+  }
+  for (const sx of [-1, 1]) {
+    for (const [a, b] of [[6.5, 13], [15, 21.5], [23.5, 28.5]]) {
+      const x0 = sx < 0 ? -b : a, x1 = sx < 0 ? -a : b;
+      ctx.box(x0, x1, 0, 0.7, 25.2, 28.6, 0xd9d2c3); // marble planter
+      ctx.deco(x0 + 0.2, x1 - 0.2, 0.7, 0.75, 25.4, 28.4, 0x3b2a1a); // soil
+      for (let x = x0 + 1; x < x1 - 0.5; x += 1.6) ctx.deco(x - 0.5, x + 0.5, 0.75, 1.6 + ((x * 7) % 3) * 0.3, 26.3, 27.5, 0x4f8a3f); // shrubs
+      ctx.deco((x0 + x1) / 2 - 0.15, (x0 + x1) / 2 + 0.15, 0.75, 3.6, 26.75, 27.05, 0x5a3a20); // small tree
+      ctx.deco((x0 + x1) / 2 - 1.1, (x0 + x1) / 2 + 1.1, 3.0, 4.6, 25.8, 28.0, 0x3f7a35);
+    }
+  }
   for (const x of [-2.2, 2.2]) ctx.deco(x - 1.6, x + 1.6, 0.01, 0.03, 22, 27, 0x30384a); // lane mats
   ctx.sign('ASSET PROTECTION SCREENING', 0, 5.2, 24.5, { size: 0.8 });
-  ctx.npc(-6.5, 23, 0x050505); ctx.npc(6.5, 23, 0x050505); ctx.npc(-6.5, 26, 0x050505);
+  ctx.npc(-6.5, 23, 0x050505); ctx.npc(6.5, 23, 0x050505); // guards on the hall side
   for (const x of [-4.6, 4.6]) ctx.box(x - 0.45, x + 0.45, 0, 6, 28.6, 30, GOLD); // entrance portal
   ctx.deco(-5, 5, 6, 6.6, 28.6, 30, GOLD);
 
