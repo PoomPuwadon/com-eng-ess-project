@@ -1,0 +1,86 @@
+{
+  "note": "Phase 0 greybox rev 2 baseline (atrium lobby, moving lifts, merged Leisure Suite). Measured 2026-11-05 in the Claude desktop browser pane, 977x846, NVIDIA RTX 3070 (dev machine, NOT an average laptop). renderMs = average of 60 forced renders + gl.finish at the bench viewpoint. Single readings of 10-30 ms seen once at OT-04/BRIDGE/VT-02 did not reproduce (re-measured ~1.2 ms while the user was also using the pane); treat bridge level as the floor to watch. Rev 3 (foyers + senate arena demo): VT-03 re-measured as best of 3 x 30 renders.",
+  "floors": {
+    "B1": {
+      "drawCalls": 26,
+      "triangles": 6194,
+      "renderMs": 1.07
+    },
+    "L0": {
+      "drawCalls": 38,
+      "triangles": 9962,
+      "renderMs": 1.31
+    },
+    "OT-01": {
+      "drawCalls": 39,
+      "triangles": 29524,
+      "renderMs": 1.17
+    },
+    "OT-02": {
+      "drawCalls": 17,
+      "triangles": 15204,
+      "renderMs": 0.89
+    },
+    "OT-03": {
+      "drawCalls": 17,
+      "triangles": 15204,
+      "renderMs": 0.98
+    },
+    "OT-04": {
+      "drawCalls": 108,
+      "triangles": 13654,
+      "renderMs": 1.18
+    },
+    "OT-05": {
+      "drawCalls": 17,
+      "triangles": 14880,
+      "renderMs": 1.68
+    },
+    "OT-06": {
+      "drawCalls": 15,
+      "triangles": 7872,
+      "renderMs": 1.07
+    },
+    "OT-07": {
+      "drawCalls": 31,
+      "triangles": 9126,
+      "renderMs": 2.76
+    },
+    "BRIDGE": {
+      "drawCalls": 81,
+      "triangles": 13366,
+      "renderMs": null
+    },
+    "VT-01": {
+      "drawCalls": 25,
+      "triangles": 42008,
+      "renderMs": 1.02
+    },
+    "VT-02": {
+      "drawCalls": 108,
+      "triangles": 13654,
+      "renderMs": null
+    },
+    "VT-03": {
+      "drawCalls": 55,
+      "triangles": 69696,
+      "renderMs": 1.24,
+      "note": "rev 5 theatre-style arena (entrance at top, open boxes, pop-ups); worst view = level-3 box"
+    },
+    "VT-04": {
+      "drawCalls": 21,
+      "triangles": 62722,
+      "renderMs": 0.88
+    },
+    "VT-05": {
+      "drawCalls": 18,
+      "triangles": 46025,
+      "renderMs": 1.01
+    },
+    "VT-06": {
+      "drawCalls": 18,
+      "triangles": 24854,
+      "renderMs": 1.28
+    }
+  }
+}

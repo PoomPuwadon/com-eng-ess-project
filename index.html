@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>[FIRM NAME] — Greybox</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: system-ui, sans-serif; color: #fff; }
+    #c { display: block; width: 100vw; height: 100vh; }
+    .panel { position: fixed; background: rgba(10, 12, 18, 0.82); border: 1px solid rgba(201, 162, 58, 0.6); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+    #loc { top: 12px; left: 12px; min-width: 260px; }
+    #loc .t { color: #c9a23a; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    #loc .f { font-size: 17px; font-weight: 700; margin: 2px 0; }
+    #loc .r { color: #ddd; }
+    #loc .role { margin-top: 6px; font-size: 12px; color: #9ad; }
+    #minimap { position: fixed; left: 12px; bottom: 12px; border-radius: 8px; border: 1px solid rgba(201, 162, 58, 0.6); }
+    #floors { top: 12px; right: 12px; display: flex; gap: 6px; padding: 8px; }
+    .fcol { display: flex; flex-direction: column; gap: 3px; }
+    .ftitle { font-size: 10px; text-transform: uppercase; color: #c9a23a; letter-spacing: .08em; margin-bottom: 2px; }
+    .fbtn { background: #1e2330; color: #ddd; border: 1px solid #333a4a; border-radius: 4px; padding: 3px 6px; font-size: 11px; text-align: left; cursor: pointer; min-width: 112px; }
+    .fbtn b { color: #fff; margin-right: 4px; }
+    .fbtn.on { background: #c9a23a; color: #111; border-color: #c9a23a; }
+    .fbtn.on b { color: #111; }
+    #roles { bottom: 12px; right: 12px; display: flex; gap: 4px; padding: 6px; flex-wrap: wrap; max-width: 560px; justify-content: flex-end; }
+    #roles button { background: #1e2330; color: #ddd; border: 1px solid #333a4a; border-radius: 4px; padding: 4px 7px; font-size: 11px; cursor: pointer; }
+    #roles button.on { background: #2e7bd6; color: #fff; }
+    #prompt { left: 50%; top: 62%; transform: translateX(-50%); font-size: 15px; }
+    #toast { left: 50%; top: 18%; transform: translateX(-50%); font-size: 15px; max-width: 70vw; text-align: center; }
+    #perf { bottom: 270px; left: 12px; font-family: monospace; font-size: 12px; }
+    #elevator { left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: 420px; padding: 16px; }
+    #elevator h3 { margin: 0; color: #c9a23a; }
+    #elevator .sub { font-size: 12px; color: #aaa; margin-bottom: 10px; }
+    .stops { display: flex; flex-direction: column; gap: 4px; }
+    .stops button { text-align: left; background: #1e2330; color: #fff; border: 1px solid #333a4a; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+    .stops button:hover:not(:disabled) { background: #2e3850; }
+    .stops button:disabled { opacity: .55; cursor: not-allowed; }
+    .stops button.here { border-color: #c9a23a; }
+    .stops b { display: inline-block; min-width: 54px; color: #c9a23a; }
+    .lock { display: block; font-size: 11px; color: #ff8a8a; margin-left: 58px; }
+    #help { left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 520px; line-height: 1.5; }
+    #help h3 { margin-top: 0; color: #c9a23a; }
+    #help-btn { position: fixed; top: 12px; left: 290px; background: #1e2330; color: #ddd; border: 1px solid #c9a23a; border-radius: 4px; cursor: pointer; padding: 4px 8px; }
+    #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .3s; }
+    #fade.on { opacity: 1; }
+    #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; }
+    #notice { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #bbb; text-shadow: 0 1px 2px #000; }
+    .hidden { display: none !important; }
+    body.nohud .panel, body.nohud #minimap, body.nohud #help-btn, body.nohud #cross, body.nohud #notice { display: none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="cross"></div>
+  <div id="loc" class="panel">
+    <div class="t" id="loc-tower"></div>
+    <div class="f" id="loc-floor"></div>
+    <div class="r" id="loc-room"></div>
+    <div class="role">Role: <span id="loc-role"></span></div>
+  </div>
+  <button id="help-btn">H · Help</button>
+  <div id="floors" class="panel" title="Review teleport — click any floor"></div>
+  <div id="roles" class="panel"></div>
+  <canvas id="minimap" width="240" height="240"></canvas>
+  <div id="perf" class="panel hidden"></div>
+  <div id="prompt" class="panel hidden"></div>
+  <div id="toast" class="panel hidden"></div>
+  <div id="elevator" class="panel hidden"></div>
+  <div id="help" class="panel">
+    <h3>Phase 0 — Greybox layout review</h3>
+    Click the view to look around (Esc releases the mouse).<br />
+    <b>W A S D</b> move · <b>Shift</b> run · <b>E</b> on a yellow landing pad = choose your floor, a car is assigned and comes to you · <b>E</b> inside a car = floor panel<br />
+    <b>1–5</b> switch role (Visitor, Cleared visitor, Tour, Admin, CEO) — gates turn green when you may pass<br />
+    <b>Floor list</b> (top right) = review teleport to any floor · <b>F3</b> frame-rate overlay · <b>H</b> this help<br /><br />
+    Everything here is placeholder: boxes, capsule employees, demo screens. No real data, no sign-in.
+    <br /><br /><i>Press H to close.</i>
+  </div>
+  <div id="fade"></div>
+  <div id="notice">All balances are notional. No real currency is accepted, held or paid out. · Greybox demo — layout only</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
