@@ -254,3 +254,9 @@ and a top-down map with rooms, lift shafts and landing zones.
   follows them (dressing room tunnel → runway → ring). The 16 beams in `floors/pavilion.js` are
   already separate meshes (from the truss ring at r 36 towards the ring), so each can be re-aimed
   every frame at its fighter's position along `floor.walkout`.
+- `VT-01` Executive Leisure Suite content (user, 2026-11-06): it should hold the usual Las Vegas
+  floor staples — **big progressive-jackpot slot banks in the style of Megabucks** (towering linked
+  cabinets with a giant shared jackpot meter overhead; own name/branding, not the real trademark),
+  **roulette (top priority: plenty of tables, prominent placement)**, **blackjack**, and **poker**
+  (Card Salon). In-world names stay euphemistic per `voice-and-satire` (e.g. Automated Yield
+  Terminals, Rotational Variance Instruments, Twenty-One Advisory Tables, Strategic Negotiation).
