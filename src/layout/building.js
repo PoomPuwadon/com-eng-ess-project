@@ -201,7 +201,7 @@ export const FLOORS = [
   {
     id: 'OT-02', tower: 'OT', short: 'Prob. Inst.', sign: 'Probability Research Institute', elevation: 27, height: 10,
     bounds: OT_B, area: 'ot_view',
-    rooms: [{ id: 'lottery_institute', sign: 'Probability Research Institute', short: 'Prob. Inst.', ...OT_MAIN, full: true }],
+    rooms: [{ id: 'lottery_institute', sign: 'Probability Research Institute', short: 'Prob. Inst.', ...OT_MAIN, full: true, noSign: true }],
     props: 'lottery',
   },
   {

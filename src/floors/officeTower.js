@@ -47,56 +47,7 @@ export function department(ctx) {
   }
 }
 
-// ---------------------------------------------------------------- OT-02 Probability Research Institute
-// Thai lottery run like a quant shop: rows of quants at triple monitors, walls of equations,
-// probability heat-maps and "predictive models" — all dead serious. X -109..-50.5, 10 m tall.
-let eqTex = null;
-function equationTexture() {
-  if (eqTex) return eqTex;
-  const c = document.createElement('canvas');
-  c.width = 1024; c.height = 512;
-  const g = c.getContext('2d');
-  g.fillStyle = '#f8f8f4'; g.fillRect(0, 0, 1024, 512);
-  g.fillStyle = '#1b2a6b'; g.font = 'italic 34px Georgia, serif';
-  const eqs = ['P(N=n) = 1/10⁶', 'E[R] = Σ pᵢ·vᵢ = 0.60', 'σ² = E[X²] − μ²', '∂L/∂θ = 0 (vibes)', 'H = −Σ p log p',
-    'P(last2 | moon) ≈ 0.01', 'β = Cov(r, lotto)/Var', 'lim n→∞ hope = 0', 'Bayes: P(A|B)P(B)=P(B|A)P(A)', '6,000,000 × 10⁻⁶'];
-  eqs.forEach((t, i) => g.fillText(t, 30 + (i % 2) * 500, 60 + Math.floor(i / 2) * 95));
-  eqTex = new THREE.CanvasTexture(c);
-  eqTex.colorSpace = THREE.SRGBColorSpace;
-  return eqTex;
-}
-export function lottery(ctx) {
-  const e = ctx.e;
-  ctx.deco(-109, -50.5, 0.012, 0.025, -39, 39, 0xdfe5ec);
-  let quants = 0;
-  for (let zz = -32; zz <= 32; zz += 5) {
-    if (Math.abs(zz) < 4) continue; // aisle from the lift hall portal
-    for (let x = -103; x <= -57; x += 3.3) {
-      ctx.box(x - 1.3, x + 1.3, 0, 0.75, zz - 0.5, zz + 0.5, 0x444b55);
-      for (let k = -1; k <= 1; k++) ctx.screen(x + k * 0.8, 1.15, zz - 0.4, 0, 0.75, 0.5, [CH.LOTTO, CH.CHART, CH.LOTTO][k + 1]);
-      ctx.npc(x, zz + 1.0, 0x2b3a55, Math.PI);
-      quants++;
-    }
-  }
-  const mat = new THREE.MeshBasicMaterial({ map: equationTexture() });
-  for (const [x, zz, yaw, w] of [[-108.9, 0, Math.PI / 2, 70], [-80, -38.9, 0, 54]]) {
-    const g = new THREE.PlaneGeometry(w, 6);
-    const m = new THREE.Mesh(g, mat);
-    m.position.set(x, e + 5, zz); m.rotation.y = yaw;
-    ctx.add(m, g);
-  }
-  ctx.screen(-88, 5.4, 38.9, Math.PI, 34, 6.5, CH.LOTTO); // draw results wall
-  // probability heat-map (south wall, east end)
-  for (let i = 0; i < 10; i++) for (let j = 0; j < 6; j++) {
-    const v = Math.abs(Math.sin(i * 1.7 + j * 2.3));
-    ctx.deco(-68 + i * 1.5, -66.6 + i * 1.5, 2.5 + j * 1.1, 3.5 + j * 1.1, 38.85, 38.95, v > 0.8 ? 0xd62839 : v > 0.55 ? 0xf28c28 : v > 0.3 ? 0xf6d55c : 0x3d8fd6);
-  }
-  ctx.sign('Probability Heat-Map — last two digits', -61, 9.4, 38.4, { size: 0.6, gold: false });
-  // free-standing whiteboards along the aisle
-  for (const x of [-96, -82, -68]) for (const zz of [-3.6, 3.6]) ctx.box(x - 2, x + 2, 0.6, 2.6, zz - 0.05, zz + 0.05, 0xffffff, { collide: false });
-  ctx.sign(`${quants} quants · 1 lottery · 0 doubts`, -80, 7.6, 0, { size: 1.0, gold: false });
-  ctx.sign('Next draw: 1st & 16th · Results: Government Lottery Office (placeholder)', -88, 9.2, 38.4, { size: 0.6, gold: false });
-}
+// OT-02 Probability Research Institute: see probability.js
 
 // ---------------------------------------------------------------- OT-05 Executive Floor (old tower coords, shifted +30)
 export function control(ctx) {
