@@ -2,7 +2,7 @@ import { buildBase, finalize } from './base.js';
 import { buildScreens } from '../world/screens.js';
 import { shiftedCtx } from '../world/geom.js';
 import { lobby, plaza } from './lobby.js';
-import { department, control, lottery } from './officeTower.js';
+import { department, control, lottery, outreach } from './officeTower.js';
 import { trading } from './tradingFloor.js';
 import { racing } from './visitorsTower.js';
 import { leisure } from './leisureSuite.js';
@@ -12,7 +12,7 @@ import { hall } from './halls.js';
 import { basement, bridge } from './basementBridge.js';
 
 const PROPS = {
-  lobby, plaza, trading, department, control, lottery,
+  lobby, plaza, trading, department, control, lottery, outreach,
   leisure, football: sportsArena, muaythai, racing,
   basement, bridge,
 };

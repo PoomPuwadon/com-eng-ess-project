@@ -52,7 +52,7 @@ export const BRIDGE_Y = 15; // rev 10: The Link joins the Trading Floor and the 
 // ---------------------------------------------------------------- elevator banks
 // Every car runs in its own shaft. Shafts sit on the tower facade that faces the atrium.
 // side(floor): which face of the car opens at that stop ('e' or 'w').
-const OT_FLOORS = ['OT-01', 'OT-02', 'OT-04', 'OT-05']; // OT-03 (Thai Markets Desk) removed by the user, 2026-11-06; ids kept stable
+const OT_FLOORS = ['OT-01', 'OT-02', 'OT-03', 'OT-04', 'OT-05']; // OT-03 = Global Client Outreach Centre (user, 2026-11-06)
 const VT_FLOORS = ['VT-01', 'VT-02', 'VT-03', 'VT-04'];
 const otSide = (f) => (f === 'L0' || f === 'B1' ? 'e' : 'w');
 const vtSide = (f) => (f === 'L0' || f === 'B1' ? 'w' : 'e');
@@ -64,7 +64,7 @@ export const BANKS = {
     cars: 4, shaft: { x0: -34, x1: -30, z0: -38.6, pitch: 3.2 }, speed: 5, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
   ot_high: {
-    name: 'Office High-Rise', label: 'Floors L · 4–5 (express)', tower: 'OT', stops: ['L0', 'OT-04', 'OT-05'],
+    name: 'Office High-Rise', label: 'Floors L · 3–5 (express)', tower: 'OT', stops: ['L0', 'OT-03', 'OT-04', 'OT-05'],
     stopArea: { L0: 'staff_side', 'OT-05': 'control', default: 'ot_view' }, side: otSide,
     cars: 4, shaft: { x0: -34, x1: -30, z0: -21, pitch: 3.2 }, speed: 7, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
@@ -204,9 +204,24 @@ export const FLOORS = [
     rooms: [{ id: 'lottery_institute', sign: 'Probability Research Institute', short: 'Prob. Inst.', ...OT_MAIN, full: true }],
     props: 'lottery',
   },
-  deptFloor('OT-04', 42, 'security_hq', 'Asset Protection HQ', 'Security HQ'),
   {
-    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 47, height: 8,
+    // Global Client Outreach Centre (user, 2026-11-06, greybox from the user's reference images).
+    // The lift hall is at 52 m; its portal opens onto a bridge to the TOP tier of a four-level
+    // operator structure standing in a 15 m-deep pit (the whole main space is sunk to 37 m, the
+    // Probability Research Institute's ceiling). Zig-zag stairs down the structure's east face link
+    // the tiers (0 / -5 / -10) and the pit floor (-15). See floors/officeTower.js outreach().
+    id: 'OT-03', tower: 'OT', short: 'Outreach', sign: 'Global Client Outreach Centre', elevation: 52, height: 10,
+    below: 15, slabHoleRect: r(-109, -50, -39, 39),
+    bounds: OT_B, area: 'ot_view', slabColor: 0x252b38, ceilColor: 0x161a24,
+    rooms: [
+      { id: 'outreach_centre', sign: 'Global Client Outreach Centre', short: 'Outreach', ...OT_MAIN, full: true, noSign: true },
+      // (no greybox zones here: their floor tiles sit at slab level, i.e. over the pit)
+    ],
+    props: 'outreach',
+  },
+  deptFloor('OT-04', 62, 'security_hq', 'Asset Protection HQ', 'Security HQ'),
+  {
+    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 67, height: 8,
     bounds: OT_B, area: 'control',
     rooms: [
       { id: 'ceo_office', sign: 'Office of the Chief Executive', short: 'CEO Office', ...r(-108, -83, 18, 38), h: 6, doors: ['n', 'e'], doorWidth: 4 },
@@ -308,6 +323,7 @@ export const FLOORS = [
 const HALLS = {
   'OT-01': ['trading', "Trading Floor — Members' Lift Hall", 16, 8],
   'OT-02': ['quant', 'Probability Research Institute — Lift Hall', 14, 7],
+  'OT-03': ['outreach', 'Global Client Outreach Centre — Lift Hall', 12, 6],
   'OT-04': ['security', 'Asset Protection — Screening Hall', 12, 4.2],
   'OT-05': ['executive', 'Executive Reception', 10, 5.5],
   'VT-01': ['portal', 'Executive Leisure Suite — Grand Hall', 18, 12],
@@ -395,7 +411,7 @@ export function findRoom(roomId) {
 }
 
 export const FLOOR_LIST = {
-  OT: ['OT-05', 'OT-04', 'OT-02', 'OT-01'],
+  OT: ['OT-05', 'OT-04', 'OT-03', 'OT-02', 'OT-01'],
   VT: ['VT-04', 'VT-03', 'VT-02', 'VT-01'],
   shared: ['BRIDGE', 'L0', 'PLAZA', 'B1'],
 };

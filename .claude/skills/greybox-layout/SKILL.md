@@ -3,7 +3,7 @@ name: greybox-layout
 description: Building layout source of truth for the firm — scale rules, massing (Office Tower | atrium Grand Lobby | Wellness Tower), the floor-by-floor room table with dimensions and elevations, the lift banks and shafts, room/floor naming conventions, and lift/bridge access rules by role. Use whenever creating, moving, resizing, labelling or connecting any floor, room, lift, bridge or minimap entry.
 ---
 
-# Greybox Layout (rev 10 — 2026-11-06)
+# Greybox Layout (rev 12 — 2026-11-06)
 
 This file is the spec. The code's layout data lives ONLY in `src/layout/building.js` and must
 match this file. If the user approves a layout change, update this file and the layout data in
@@ -19,6 +19,11 @@ removed; the Probability Research Institute moved into the Office Tower (OT-02);
 to 15 m so it joins the Trading Floor and the Leisure Suite (sky lobbies removed); every floor's
 boxy foyer replaced by a full-depth lift hall with a big themed portal; floors renumbered
 OT-01…OT-05 and VT-01…VT-04.
+
+Rev 12 changes, requested by the user (2026-11-06): a new `OT-03` **Global Client Outreach Centre**
+(greybox, from the user's reference images). Its lift hall is at 52 m and the portal opens onto the
+**top tier of a four-level operator structure standing in a 15 m-deep pit** (the whole main space sinks
+to 37 m). `OT-04` and `OT-05` move up to 62 and 67; the Office Tower now tops out at 75 m.
 
 ## 1. Scale rules
 
@@ -54,7 +59,7 @@ Never shrink a room below its minimum to make it fit. Make the footprint bigger 
 ```
    X: -110 ......... -30 | -30 ...... 30 | 30 .............. 210
       OFFICE TOWER (OT)  |  GRAND LOBBY  |  WELLNESS TOWER (VT)
-      80 × 80, to 55 m   |  60 × 70 m,   |  180 × 120, to 112 m
+      80 × 80, to 75 m   |  60 × 70 m,   |  180 × 120, to 112 m
       lift shafts on     |  48 m tall    |  lift shafts on
       the east facade →  |  The Link at  | ← the west facade
                          |  15 m (60 m)  |
@@ -126,10 +131,11 @@ Elevation = Y of the floor slab. H = floor-to-floor height. W × D in metres.
 | --- | --- | --- | --- | --- | --- |
 | `OT-01` | 15 | 12 | `trading_floor` (+ `ot_bridge_checkpoint` −38…−31; −6…6; the guest viewing gallery was removed in Phase 1) | Trading Floor | Open plan. **Exchange floor, rebuilt from the user's photo of a real exchange**: 9 big hollow-ring trading posts (12 m across: X −97/−80/−63 × Z −29/−12.5/12.5) + 2 medium (9 m: X −97/−80, Z 26.8); aisle |Z| < 6 from the portal. Each post: lettered dark base wall → ring counter (blue-lit edge, monitors on arms, keyboards, stools) → open gap on thin supports → raised crown of 16 data screens tilted down → sloped member-logo band → grey ring deck (open centre, railing, cable trays), cable drops to the ceiling. Basket-weave parquet with inlaid blue/black stripes; glass TV booth on a platform (X −67…−55, Z 20.5…30.5) with rope stanchions; steel roof grid; tall blue window wall + bell balcony (W); firm banner (N), flag (S). **The Link enters here.** |
 | `OT-02` | 27 | 10 | `lottery_institute` | Probability Research Institute | Open plan. Moved here from the Wellness Tower (rev 10). 12 rows of quant desks (triple monitors) with an aisle at Z 0, equation walls (W, N), draw-results wall + probability heat-map (S), whiteboards |
-| `OT-04` | 42 | 5 | `security_hq` | Asset Protection HQ | Open plan: CCTV desks (N), lockers, roll-call benches + guards (S) |
-| `OT-05` | 47 | 8 | Executive Floor rooms below | Executive Floor | |
+| `OT-03` | **52** | 10 (+15 below) | `outreach_centre` | Global Client Outreach Centre | **Sunken tiered structure (greybox, rev 12)** from the user's reference images. Only the lift hall has a slab at 52 m: the whole main space (X −109…−50, Z −39…39, `slabHoleRect`) is a **pit** whose floor is at 37 m (on top of OT-02's ceiling); the pit walls are built by `outreach()` (the shell only builds walls above the slab). The 12 × 6 m portal opens onto the **Arrival Bridge** (X −62…−50, Z −6…6) straight onto the **top tier** of the **Outreach Tower** (footprint X −100…−62, Z −26…26). **Levels**: tiers at 0 / −5 / −10 (relative to 52) + the pit floor at −15; each tier has a central **void** (X −88…−74, Z −9…9) with glass rails, neon fascias (cyan / magenta / blue), edge rails and ~40–60 headset operators at triple-monitor desks. **Stairs**: zig-zag flights on the east face, mirrored north and south of the bridge — F1 column A (X −62…−59) Z 6→13 to tier −5, landing Z 13…16, F2 column B (X −59…−56) Z 13→6 to tier −10, landing Z 3…6, F3 column A Z 6→13 to the pit floor (20 × 0.25 m risers, 7 m run); tall glass panes stop anyone stepping off a flight. **Top tier**: canopy at +5 with the floor name facing the portal ("GLOBAL CLIENT OUTREACH CENTRE", "REVENUE GENERATION", "GLOBAL FINANCE"), 3 glass **Senior Relationship Management** offices on the west side. Level signs: CALL CENTRE 7 · CLIENT OUTREACH (−5), REMOTE DEVICE ASSISTANCE (−10), REVENUE GENERATION · LIQUIDITY OPERATIONS (pit). **Liquidity Transfer Core** (6 × 6 m) rises from the pit floor through the void to a four-sided **Global Outreach Status** screen under the ceiling. **Pit floor**: server racks round the moat (N, S, W), cable runs, desks under the bridge, people milling, **Operator Assistance** booth at the foot of the south stairs; **Client Journey whiteboard** on the N pit wall (FIRST CONTACT → … → LIQUIDITY EVENT), **Top Closers** board on the W wall. The player's ground over `slabHoleRect` comes only from colliders (`player.js`). Plain name in code comments only: the scam call centre. |
+| `OT-04` | 62 | 5 | `security_hq` | Asset Protection HQ | Open plan: CCTV desks (N), lockers, roll-call benches + guards (S) |
+| `OT-05` | 67 | 8 | Executive Floor rooms below | Executive Floor | |
 
-Removed in rev 10 (user, 2026-11-06): Sports Desk, Leisure Operations, both sky lobbies. Removed later the same day (user): `OT-03` Thai Markets Desk; the other floor ids are kept stable, so Y 37–42 is an empty plenum the lifts pass through.
+Removed in rev 10 (user, 2026-11-06): Sports Desk, Leisure Operations, both sky lobbies. Removed later the same day (user): the old `OT-03` Thai Markets Desk; its id was reused for the Global Client Outreach Centre (rev 12).
 
 `OT-05` rooms: `ceo_office` −108…−83; 18…38 · `boardroom` −79…−52; 23…38 ·
 `cfo_office` −62…−52; −38…−26 · `legal` / `it` / `hr` −108…−88; −38…−23 / −19…−4 / 0…14 ·
@@ -160,6 +166,7 @@ space. Generated in `building.js` (`HALLS`), dressed in `src/floors/halls.js`. L
 | --- | --- | --- | --- | --- |
 | OT-01 | Trading Floor — Members' Lift Hall | Phase 1 (`tradingFloor.js`, `customHall`) | 16 × 8 | cream + gunmetal, navy dado, terrazzo; **Link checkpoint in a recess in the core** (see Phase 1 — OT-01) |
 | OT-02 | Probability Research Institute — Lift Hall | `quant` | 14 × 7 | white/navy, lottery screen on the lintel, whiteboards, quant desks |
+| OT-03 | Global Client Outreach Centre — Lift Hall | `outreach` | 12 × 6 | dark slate, cyan accent, neon cyan / magenta jambs, chart band on the lintel |
 | OT-04 | Asset Protection — Screening Hall | `security` | 12 × 4.2 | hazard-striped jambs, blast-door leaves parked open, body scanner, CCTV |
 | OT-05 | Executive Reception | `executive` | 10 × 5.5 | fluted marble + gold, reception desk, art |
 | VT-01 | Executive Leisure Suite — Grand Hall | `portal` | 18 × 12 | gold arch with marquee bulbs, red carpet into the promenade, fountain, lanterns, **Link checkpoint** |
@@ -181,7 +188,7 @@ it takes you there. Inside a car, E gives the floor panel.
 | Bank | Cars | Shafts (X; Z) | Stops | Speed |
 | --- | --- | --- | --- | --- |
 | `ot_low` Office Low-Rise | 4 (OT-L1…4) | −34…−30; −38.6…−25.8 | B1, L0, OT-01, OT-02 | 5 m/s |
-| `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-04, OT-05 (express past 1–2) | 7 m/s |
+| `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-03, OT-04, OT-05 (express past 1–2) | 7 m/s |
 | `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (into the vault), L0 (tours board here), OT-01…OT-05 (every Office floor) | 7 m/s |
 | `freight_ot` | 1 (OT-F1) | −35…−30; 21…26 | B1 (vault), OT-01…OT-05 | 3 m/s |
 | `vt_low` Wellness Low-Rise | 4 (VT-L1…4) | 30…34; −38.6…−25.8 | L0, VT-01, VT-02 | 5 m/s |
@@ -196,7 +203,7 @@ OT-01 → The Link → VT-01 Leisure Suite.
 
 ## 5. Naming conventions
 
-- **Floor IDs**: `PLAZA`, `B1`, `L0`, `OT-01`, `OT-02`, `OT-04`, `OT-05`, `VT-01`…`VT-04`, `BRIDGE`. Never "Casino Tower".
+- **Floor IDs**: `PLAZA`, `B1`, `L0`, `OT-01`…`OT-05`, `VT-01`…`VT-04`, `BRIDGE`. Never "Casino Tower".
 - **Room IDs**: `snake_case`, globally unique, stable once shipped (future DB keys).
   Full address form: `FLOOR/room`, e.g. `OT-05/ceo_office`.
 - **Three labels per room**: `id` (code), `sign` (in-world corporate euphemism; see
@@ -219,6 +226,7 @@ OT-01 → The Link → VT-01 Leisure Suite.
 | Glass Bridge | no | yes | yes | yes | yes | yes |
 | `OT-01` trading floor | no | watch only | yes | yes | yes | yes |
 | `OT-02` Probability Research Institute (cleared-only by decision, 2026-11-06) | no | yes | yes | yes | yes | yes |
+| `OT-03` | no | yes (view) | yes | yes | yes | yes |
 | `OT-04` | no | yes (view) | yes | yes | yes | yes |
 | `OT-05` | no | no | yes | yes | yes | yes |
 | `B1` | no | no | yes (CEO lift) | yes | yes | yes |

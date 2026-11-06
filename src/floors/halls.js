@@ -14,6 +14,7 @@ const THEMES = {
   quant: { floor: 0xe8eef5, accent: 0x1b2a6b, runner: 0xc9d4e3, pil: 0xffffff, light: 0xffffff },
   sky: { floor: 0xcfd8e3, accent: 0x8fb8de, runner: 0xaebfd3, pil: 0x9aa7b8, light: 0xf0f8ff },
   thai: { floor: 0x7a4a24, accent: 0xd8a02a, runner: 0x8a1b1b, pil: 0xc0262d, light: 0xffe2a8 },
+  outreach: { floor: 0x252b38, accent: 0x2fe0e0, runner: 0x181c26, pil: 0x2a3140, light: 0xa8f0ff },
   security: { floor: 0x3a3f47, accent: 0xffd400, runner: 0x2a2e35, pil: 0x2a2e35, light: 0xdde6ff },
   executive: { floor: 0xf2efe8, accent: GOLD, runner: 0x2b1d4a, pil: 0xf7f3ea, light: 0xfff6e0 },
   portal: { floor: 0xe9dcc0, accent: GOLD, runner: 0xb3171f, pil: 0xc9a23a, light: 0xffe9a8 },
@@ -154,6 +155,11 @@ const PORTALS = {
     // marquee bulbs around the arch
     for (const zc of [-w / 2 - 0.7, w / 2 + 0.7]) for (let y = 0.8; y < ph - 0.4; y += 0.8) ctx.deco(...X(18.75, 18.88), y, y + 0.22, zc - 0.11, zc + 0.11, 0xfff3a0);
     for (let z = -w / 2 - 0.6; z <= w / 2 + 0.6; z += 0.8) ctx.deco(...X(18.75, 18.88), top + 0.5, top + 0.72, z - 0.11, z + 0.11, 0xfff3a0);
+  },
+  outreach(ctx, { D, X, w, top, yawHall }) {
+    // neon jambs (cyan / magenta) and a live chart band across the lintel
+    for (const [zc, c] of [[-w / 2 - 0.7, 0x2fe0e0], [w / 2 + 0.7, 0xff3fb4]]) ctx.deco(...X(18.75, 18.88), 0.4, top, zc - 0.12, zc + 0.12, c);
+    ctx.screen(D(18.8), top + 0.6, 0, yawHall, w * 0.7, 0.7, CH.CHART);
   },
   sky() {},
   shrine(ctx, { X, w, top }) {

@@ -104,7 +104,10 @@ export class Player {
     // current height; never snap up to a stale floor.
     let g = this.pos.y;
     const f = locateFloor(this.pos.x, this.pos.y + 0.3, this.pos.z);
-    if (f && f.elevation <= this.pos.y + STEP) g = f.elevation;
+    const h = f && f.slabHoleRect; // over a sunken pit there is no slab: colliders carry you (or you fall)
+    const overHole = h && this.pos.x > h.x0 && this.pos.x < h.x1 && this.pos.z > h.z0 && this.pos.z < h.z1;
+    if (overHole) g = f.elevation - (f.below || 0); // look all the way down to the pit floor
+    else if (f && f.elevation <= this.pos.y + STEP) g = f.elevation;
     const r = 0.15;
     for (const c of colliders) {
       if (c.lock && !canAccess(this.role, c.lock)) continue;

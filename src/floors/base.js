@@ -74,7 +74,8 @@ export function buildBase(floor) {
 
   // slab + ceiling, with holes where shafts pass
   const slabHoles = inShafts.filter((c) => shaftExtent(c).y0 < e - 0.1);
-  const slabRects = floor.slabHoleCircle ? circleHoleRows(floor.bounds, floor.slabHoleCircle).flatMap((rc) => subtractRects(rc, slabHoles)) : subtractRects(floor.bounds, slabHoles);
+  const slabRects = floor.slabHoleCircle ? circleHoleRows(floor.bounds, floor.slabHoleCircle).flatMap((rc) => subtractRects(rc, slabHoles))
+    : subtractRects(floor.bounds, [...slabHoles, ...(floor.slabHoleRect ? [floor.slabHoleRect] : [])]); // slabHoleRect: a sunken pit (OT-03)
   for (const rc of slabRects) ctx.deco(rc.x0, rc.x1, floor.tower === 'BRIDGE' ? -0.5 : -0.1, 0, rc.z0, rc.z1, floor.slabColor ?? P.floor);
   if (floor.glassRoof) {
     ctx.glassBox(x0, x1, H - 0.2, H, z0, z1, 0xcfe8ff, false);
