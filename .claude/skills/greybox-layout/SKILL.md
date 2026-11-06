@@ -85,7 +85,7 @@ Elevation = Y of the floor slab. H = floor-to-floor height. W × D in metres.
 
 | Floor ID | Room ID | Sign label | Rect (X; Z) | Notes |
 | --- | --- | --- | --- | --- |
-| `B1` (Y −10, H 10) | `vault` | Treasury Reserve | −29…21; −7.5…32.5 (50 × 40) | The CEO private lift and Office freight lift open straight into it (west wall). North door to the corridor |
+| `B1` (Y −10, H 10) | `vault` | Treasury Reserve | −29…21; −25.2…32.5 (50 × 57.7) | The Office Chief Executive Lift (door at Z −23.4) and the Office freight lift (Z 23.5) open straight into it (west wall). North door to the corridor |
 | `B1` | `server_room` | Infrastructure Core (IT) | −78…−38; 5…35 (40 × 30) | Rack rows |
 | `B1` | `cash_robot_depot` | Autonomous Liquidity Courier Depot | 40…70; −38…−18 (30 × 20) | Charging bays |
 | `B1` | `b1_service_corridor` | — | whole floor | Office low-rise lifts open at X −60, Wellness freight at X 60 |
@@ -182,11 +182,12 @@ it takes you there. Inside a car, E gives the floor panel.
 
 | Bank | Cars | Shafts (X; Z) | Stops | Speed |
 | --- | --- | --- | --- | --- |
-| `ot_low` Office Low-Rise | 4 (OT-L1…4) | −34…−30; −37…−24.2 | B1, L0, OT-01, OT-02 | 5 m/s |
+| `ot_low` Office Low-Rise | 4 (OT-L1…4) | −34…−30; −38.6…−25.8 | B1, L0, OT-01, OT-02 | 5 m/s |
 | `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-03…OT-05 (express past 1–2) | 7 m/s |
-| `ceo` Private Lift | 1 (OT-X1, 8 × 8 m cab) | −39…−30; 8…17 | OT-05 ⇄ B1 (non-stop, opens into the vault) | 8 m/s |
+| `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (into the vault), L0 (tours board here), OT-05 | 7 m/s |
 | `freight_ot` | 1 (OT-F1) | −35…−30; 21…26 | B1 (vault), OT-01…OT-05 | 3 m/s |
-| `vt_low` Wellness Low-Rise | 4 (VT-L1…4) | 30…34; −37…−24.2 | L0, VT-01, VT-02 | 5 m/s |
+| `vt_low` Wellness Low-Rise | 4 (VT-L1…4) | 30…34; −38.6…−25.8 | L0, VT-01, VT-02 | 5 m/s |
+| `ceo_vt` Chief Executive Lift (Wellness) | 1 (VT-X1, ~8.5 × 3.9 m cab, 15+ people) | 30…39; −25.6…−21.2 (between low- and high-rise) | L0, VT-01…VT-04 | 7 m/s |
 | `vt_high` Wellness High-Rise | 4 (VT-H1…4) | 30…34; −21…−8.2 | L0, VT-03, VT-04 (express) | 8 m/s |
 | `freight_vt` | 1 (VT-F1) | 30…35; 21…26 | B1, VT-01…VT-04 | 3 m/s |
 
@@ -260,3 +261,37 @@ and a top-down map with rooms, lift shafts and landing zones.
   **roulette (top priority: plenty of tables, prominent placement)**, **blackjack**, and **poker**
   (Card Salon). In-world names stay euphemistic per `voice-and-satire` (e.g. Automated Yield
   Terminals, Rotational Variance Instruments, Twenty-One Advisory Tables, Strategic Negotiation).
+
+## Phase 1 — ground floor (2026-11-06)
+
+The Grand Lobby (`L0`), the Entrance Plaza and The Link are the first floors rebuilt in the Phase 1
+look (`lux: true` on the floor). Everything else is still greybox. See `verification/phase-1-ground-floor/`.
+
+- **Look**: warm polished marble, dark walnut panelling (side walls panelled to the roof), bronze,
+  tinted glass; cube-crystal chandeliers; warm lamps and sconces. Physically based materials
+  (`src/world/lux.js`), image-based reflections, filmic tone mapping, soft sun shadows and a bloom
+  pass, all switched on only for the ground floor (`setLook` in `main.js`: indoor / outdoor profiles).
+- **Lobby layout** (same as the greybox): revolving doors → glass-sided 2-lane security (walk-through
+  arches at X ±2.5 + bag x-ray machines) → hall with two lounges and the reflection pool (gold
+  sculpture, jets) → curved walnut reception desk in front of a back-lit onyx wall, under the new
+  **Members' Mezzanine** (Z −39…−33, Y 6.5; escalators west, marble stair east; lounge + bar).
+  Concierge at X 15–19, Z −31.
+- **Lifts**: every car has a Phase 1 cabin (walnut, mirror, bronze rail and frame, marble floor, lit
+  ceiling, brushed-bronze doors). Lobby landings are complete portals: dark shaft enclosure behind
+  the wall (0–15 m), bronze reveals through the wall, bronze sill, granite architrave, live floor
+  indicator, call buttons. The two **Chief Executive Lifts** (above) are tour/staff/CEO only
+  (`ceo_lift` area).
+- **Screens**: ground-floor screens use their own canvases at their true aspect ratio and size
+  (`src/world/lobbyScreens.js`): the 56 × 31.5 m market dashboard, market boards over the lift
+  banks, x-ray and reception monitors. Prices are simulated until Phase 3.
+- **Plaza**: granite paving, red carpet with brass stanchions, cantilevered glass canopy, bronze
+  curtain-wall entrance facade, fountains with jets, waving flags, sculpted hedges, trees, lamps,
+  supercars at the drop-off, monument sign; street and distant skyline beyond.
+
+## Notes for future phases (user)
+
+- **Third-person gameplay only.** The current player character model is a placeholder.
+- **Screens elsewhere**: the shared screen atlas (`src/world/screens.js`) overlaps text — ticker
+  labels (~230 px) are spaced 150 px apart and text is not clipped to its cell, so it bleeds into
+  neighbouring channels. Fix building-wide (measure text, clip each cell) when each floor gets its
+  Phase 1 pass; the ground floor already uses its own displays.

@@ -136,10 +136,11 @@ export function buildBase(floor) {
     const col = { x0: xPlane - 0.15, x1: xPlane + 0.15, z0: zc - c.doorW / 2 - 0.1, z1: zc + c.doorW / 2 + 0.1, y0: e, y1: e + c.doorH, landing: rec };
     col.openFn = () => rec.open > 0.9;
     ctx.colliders.push(col);
-    ctx.sign(`${c.label}`, xPlane + (side === 'w' ? -0.3 : 0.3), c.doorH + 0.45, zc, { size: 0.32, gold: false });
+    if (!floor.lux) ctx.sign(`${c.label}`, xPlane + (side === 'w' ? -0.3 : 0.3), c.doorH + 0.45, zc, { size: 0.32, gold: false });
   }
   if (doorRecs.length) {
-    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: DOOR }), doorRecs.length * 2);
+    const doorMat = floor.lux ? new THREE.MeshStandardMaterial({ color: 0xb4894e, metalness: 0.95, roughness: 0.28 }) : new THREE.MeshLambertMaterial({ color: DOOR });
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), doorMat, doorRecs.length * 2);
     mesh.frustumCulled = false;
     ctx.add(mesh, mesh.geometry, mesh.material);
     ctx.landing = { mesh, recs: doorRecs, e };
@@ -149,9 +150,9 @@ export function buildBase(floor) {
   for (const lz of floor.elevators) {
     const b = BANKS[lz.bank];
     const cx = lz.side === 'w' ? lz.x0 + 2 : lz.x1 - 2;
-    ctx.sign(b.name, cx, Math.min(4.2, H - 0.6), (lz.z0 + lz.z1) / 2, { size: 0.55, sub: b.label });
+    if (!floor.lux) ctx.sign(b.name, cx, Math.min(4.2, H - 0.6), (lz.z0 + lz.z1) / 2, { size: 0.55, sub: b.label }); // lux floors carry real wall signage
     const g = new THREE.PlaneGeometry(lz.x1 - lz.x0, lz.z1 - lz.z0);
-    const m = new THREE.Mesh(g, MAT.elevatorZone);
+    const m = new THREE.Mesh(g, floor.lux ? MAT.elevatorZoneLux : MAT.elevatorZone);
     m.rotation.x = -Math.PI / 2;
     m.position.set((lz.x0 + lz.x1) / 2, e + 0.03, (lz.z0 + lz.z1) / 2);
     ctx.add(m, g);
@@ -161,6 +162,7 @@ export function buildBase(floor) {
   for (const rm of floor.rooms) {
     const cx = (rm.x0 + rm.x1) / 2, cz = (rm.z0 + rm.z1) / 2;
     const w = rm.x1 - rm.x0, d = rm.z1 - rm.z0;
+    if (floor.lux && (rm.full || rm.zone)) continue; // Phase 1 floors: no greybox zone tiles or floating labels
     if (rm.full) {
       if (!rm.noSign) ctx.sign(rm.sign, cx, Math.min(H - 1.5, Math.max(4, Math.min(H * 0.55, 14))), cz, { size: Math.min(4, Math.max(1.2, w / 40)) });
       continue;
@@ -218,8 +220,8 @@ export function setLandingDoors(landing, force = false) {
 // Finalise: merged meshes, instanced screens and NPCs.
 export function finalize(ctx, buildScreens) {
   const s = ctx.solid.build(MAT.solid);
-  if (s) ctx.add(s, s.geometry);
-  const g = ctx.glass.build(MAT.glass);
+  if (s) { ctx.add(s, s.geometry); if (ctx.floor.lux || ctx.floor.castShadows) { s.castShadow = true; s.receiveShadow = true; } }
+  const g = ctx.glass.build(ctx.floor.lux ? MAT.glassLux : MAT.glass);
   if (g) { g.renderOrder = 5; ctx.add(g, g.geometry); }
   if (ctx.screens.length) for (const m of buildScreens(ctx.screens)) ctx.add(m, m.geometry);
   if (ctx.npcs.length) {

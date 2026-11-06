@@ -24,6 +24,7 @@ export const AREA_ACCESS = {
   basement: ['tour', 'admin', 'ceo'], // B1 via CEO private elevator
   staff_b1: ['admin', 'ceo'], // B1 via the staff low-rise bank
   freight: ['admin', 'ceo'], // freight lifts (riding with the robots)
+  ceo_lift: ['tour', 'admin', 'ceo'], // the Chief Executive Lifts (tours board in the lobby)
   backstage: ['admin', 'ceo'], // Combat Pavilion: service corridor, dressing rooms, walkout tunnel, ringside
 };
 export const canAccess = (role, area) => (AREA_ACCESS[area] || []).includes(role);
@@ -36,6 +37,7 @@ export const REFUSALS = {
   basement: 'The Treasury Reserve is viewable on Executive Tours only.',
   staff_b1: 'The Treasury Reserve is viewable on Executive Tours only.',
   freight: 'This lift is reserved for Autonomous Liquidity Couriers.',
+  ceo_lift: 'The Chief Executive Lift operates by invitation only.',
   backstage: 'Competitors and officials only beyond this point.',
 };
 
@@ -59,17 +61,19 @@ export const BANKS = {
   ot_low: {
     name: 'Office Low-Rise', label: 'Floors B1 · L · 1–2', tower: 'OT', stops: ['B1', 'L0', 'OT-01', 'OT-02'],
     stopArea: { B1: 'staff_b1', L0: 'staff_side', default: 'ot_view' }, side: otSide,
-    cars: 4, shaft: { x0: -34, x1: -30, z0: -37, pitch: 3.2 }, speed: 5, carH: 2.8, doorW: 1.8, doorH: 2.5,
+    cars: 4, shaft: { x0: -34, x1: -30, z0: -38.6, pitch: 3.2 }, speed: 5, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
   ot_high: {
     name: 'Office High-Rise', label: 'Floors L · 3–5 (express)', tower: 'OT', stops: ['L0', 'OT-03', 'OT-04', 'OT-05'],
     stopArea: { L0: 'staff_side', 'OT-05': 'control', default: 'ot_view' }, side: otSide,
     cars: 4, shaft: { x0: -34, x1: -30, z0: -21, pitch: 3.2 }, speed: 7, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
+  // Chief Executive Lifts (rev 12): one big car (9 x 4.4 m, 15+ people) per tower, between the
+  // low-rise and high-rise banks. Office: Treasury Reserve ⇄ Lobby ⇄ Executive Floor (tours).
   ceo: {
-    name: 'Private Lift', label: 'Executive Floor ⇄ Treasury Reserve (non-stop)', tower: 'OT', stops: ['B1', 'OT-05'],
-    stopArea: { 'OT-05': 'control', B1: 'basement' }, side: otSide,
-    cars: 1, shaft: { x0: -39, x1: -30, z0: 8, pitch: 9 }, speed: 8, carH: 3.6, doorW: 4, doorH: 3.2,
+    name: 'Chief Executive Lift', label: 'Treasury Reserve · Lobby · Executive Floor', tower: 'OT', stops: ['B1', 'L0', 'OT-05'],
+    stopArea: { 'OT-05': 'control', B1: 'basement', L0: 'ceo_lift' }, side: otSide,
+    cars: 1, shaft: { x0: -39, x1: -30, z0: -25.6, pitch: 4.4 }, speed: 7, carH: 3.6, doorW: 3.2, doorH: 3.0,
   },
   freight_ot: {
     name: 'Freight Lift — Office Tower', label: 'ALC service', tower: 'OT', stops: ['B1', ...OT_FLOORS],
@@ -79,7 +83,12 @@ export const BANKS = {
   vt_low: {
     name: 'Wellness Low-Rise', label: 'Floors L · 1–2', tower: 'VT', stops: ['L0', 'VT-01', 'VT-02'],
     stopArea: { default: 'public' }, side: vtSide,
-    cars: 4, shaft: { x0: 30, x1: 34, z0: -37, pitch: 3.2 }, speed: 5, carH: 2.8, doorW: 1.8, doorH: 2.5,
+    cars: 4, shaft: { x0: 30, x1: 34, z0: -38.6, pitch: 3.2 }, speed: 5, carH: 2.8, doorW: 1.8, doorH: 2.5,
+  },
+  ceo_vt: {
+    name: 'Chief Executive Lift — Wellness', label: 'Lobby · Wellness floors 1–4', tower: 'VT', stops: ['L0', 'VT-01', 'VT-02', 'VT-03', 'VT-04'],
+    stopArea: { default: 'ceo_lift' }, side: vtSide,
+    cars: 1, shaft: { x0: 30, x1: 39, z0: -25.6, pitch: 4.4 }, speed: 7, carH: 3.6, doorW: 3.2, doorH: 3.0,
   },
   vt_high: {
     name: 'Wellness High-Rise', label: 'Floors L · 3–4 (express)', tower: 'VT', stops: ['L0', 'VT-03', 'VT-04'],
@@ -135,8 +144,8 @@ export const FLOORS = [
     id: 'B1', tower: 'B1', short: 'Basement', sign: 'Basement', elevation: -10, height: 10,
     bounds: r(-80, 130, -40, 40), area: 'basement',
     rooms: [
-      { id: 'vault', sign: 'Treasury Reserve', short: 'Vault', ...r(-29, 21, -7.5, 32.5), h: 9.5,
-        doors: [{ side: 'n', width: 8 }, { side: 'w', at: 12.5, width: 5 }, { side: 'w', at: 23.5, width: 4 }] },
+      { id: 'vault', sign: 'Treasury Reserve', short: 'Vault', ...r(-29, 21, -25.2, 32.5), h: 9.5,
+        doors: [{ side: 'n', width: 8 }, { side: 'w', at: -23.4, width: 3.4 }, { side: 'w', at: 23.5, width: 4 }] }, // CEO lift + freight open straight in
       { id: 'server_room', sign: 'Infrastructure Core (IT)', short: 'Server Room', ...r(-78, -38, 5, 35), h: 6, doors: ['n', 'e'], doorWidth: 4 },
       { id: 'cash_robot_depot', sign: 'Autonomous Liquidity Courier Depot', short: 'ALC Depot', ...r(40, 70, -38, -18), h: 6, doors: ['n', 'w'], doorWidth: 6 },
       { id: 'b1_service_corridor', sign: 'Service Corridor', short: 'Corridor', ...r(-80, 130, -40, 40), full: true },
@@ -146,21 +155,23 @@ export const FLOORS = [
   // ------------------------------------------------------------ grand lobby (atrium between the towers)
   {
     id: 'L0', tower: 'L0', short: 'Grand Lobby', sign: 'Grand Lobby', elevation: 0, height: ATRIUM.height,
-    bounds: r(ATRIUM.x0, ATRIUM.x1, ATRIUM.z0, ATRIUM.z1), area: 'public', glassRoof: true,
+    bounds: r(ATRIUM.x0, ATRIUM.x1, ATRIUM.z0, ATRIUM.z1), area: 'public', glassRoof: true, lux: true, // Phase 1 look
     openings: [{ side: 'w', from: -3, to: 3, y0: BRIDGE_Y, y1: BRIDGE_Y + 4 }, { side: 'e', from: -3, to: 3, y0: BRIDGE_Y, y1: BRIDGE_Y + 4 },
       { side: 's', from: -5, to: 5, y1: 6 }], // main entrance from the plaza
     rooms: [
       { id: 'grand_lobby', sign: 'Grand Lobby', short: 'Grand Lobby', ...r(-30, 30, -40, 30), full: true, noSign: true },
-      { id: 'security_checkpoint', sign: 'Asset Protection Screening', short: 'Screening', ...r(-5, 5, 22, 27), zone: true },
-      { id: 'seating_west', sign: 'Lobby Seating', short: 'Seating', ...r(-20, -8, 9, 19), zone: true },
-      { id: 'seating_east', sign: 'Lobby Seating', short: 'Seating', ...r(8, 20, 9, 19), zone: true },
+      { id: 'security_checkpoint', sign: 'Asset Protection Screening', short: 'Screening', ...r(-4.8, 4.8, 22, 28.6), zone: true },
+      { id: 'seating_west', sign: 'Lobby Lounge', short: 'Lounge', ...r(-20, -9, 9.5, 18.5), zone: true },
+      { id: 'seating_east', sign: 'Lobby Lounge', short: 'Lounge', ...r(9, 20, 9.5, 18.5), zone: true },
       { id: 'lobby_water_feature', sign: 'Reflection Pool (beneath The Link)', short: 'Water Feature', ...r(-8, 8, -5, 5), zone: true },
-      { id: 'reception_desk', sign: 'Reception', short: 'Reception', ...r(-12, 12, -34, -27), zone: true },
-      { id: 'concierge', sign: 'Concierge', short: 'Concierge', ...r(13, 19, -34, -27), zone: true },
+      { id: 'reception_desk', sign: 'Reception', short: 'Reception', ...r(-7, 7, -23.5, -19.5), zone: true },
+      { id: 'concierge', sign: 'Concierge', short: 'Concierge', ...r(14, 19.5, -30, -26.5), zone: true },
+      { id: 'mezzanine_lounge', sign: "Members' Mezzanine", short: 'Mezzanine', ...r(-29, 29, -39, -33), zone: true },
+      { id: 'lobby_escalators', sign: 'Escalators to the Mezzanine', short: 'Escalators', ...r(-14.4, -10.4, -33, -19.5), zone: true },
       { id: 'staff_turnstiles', sign: 'Staff Access', short: 'Staff Gates', ...r(-23, -19, -25, -19), zone: true },
       { id: 'visitor_gates', sign: 'Guest Access', short: 'Guest Gates', ...r(19, 23, -25, -19), zone: true },
-      { id: 'staff_elevator_bank', sign: 'Office Tower Lifts (Staff)', short: 'Office Lifts', ...r(-30, -22, -37, -8), zone: true },
-      { id: 'visitor_elevator_bank', sign: 'Wellness Tower Lifts (Guests)', short: 'Wellness Lifts', ...r(22, 30, -37, -8), zone: true },
+      { id: 'staff_elevator_bank', sign: 'Office Tower Lifts (Staff)', short: 'Office Lifts', ...r(-30, -22, -38.6, -8), zone: true },
+      { id: 'visitor_elevator_bank', sign: 'Wellness Tower Lifts (Guests)', short: 'Wellness Lifts', ...r(22, 30, -38.6, -8), zone: true },
     ],
     props: 'lobby',
     spawn: { x: 0, z: 27.5, yaw: Math.PI }, // review spawn: arrival foyer, facing north
@@ -168,7 +179,7 @@ export const FLOORS = [
   // ------------------------------------------------------------ entrance plaza (outdoors)
   {
     id: 'PLAZA', tower: 'PLAZA', short: 'Plaza', sign: 'Entrance Plaza', elevation: 0, height: 6, // low volume: its bounds overlap the towers' corners above the plinths
-    bounds: r(-40, 40, 30, 62), area: 'public', outdoor: true,
+    bounds: r(-40, 40, 30, 62), area: 'public', outdoor: true, lux: true,
     rooms: [
       { id: 'entrance_plaza', sign: 'Entrance Plaza', short: 'Plaza', ...r(-40, 40, 30, 62), full: true, noSign: true },
       { id: 'drop_off', sign: 'Arrivals Drop-off', short: 'Drop-off', ...r(-34, 34, 49, 55), zone: true },
@@ -216,7 +227,7 @@ export const FLOORS = [
   // ------------------------------------------------------------ bridge (spans the atrium)
   {
     id: 'BRIDGE', tower: 'BRIDGE', short: 'The Link', sign: 'The Link', elevation: BRIDGE_Y, height: 4,
-    bounds: r(-30, 30, -3, 3), area: 'bridge',
+    bounds: r(-30, 30, -3, 3), area: 'bridge', castShadows: true, lux: true, // Phase 1 (seen from the lobby)
     rooms: [{ id: 'glass_bridge', sign: 'The Link — Authorised Synergy Only', short: 'Glass Bridge', ...r(-30, 30, -3, 3), full: true }],
     props: 'bridge',
   },

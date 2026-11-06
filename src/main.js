@@ -7,6 +7,12 @@ import { ElevatorSystem, zoneAt, rideCheck } from './elevators.js';
 import { Life } from './life.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
+
 
 // ---------------------------------------------------------------- renderer / scene
 const canvas = document.getElementById('c');
@@ -14,15 +20,59 @@ const SHOTS = new URLSearchParams(location.search).has('shots'); // dev: keep fr
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: SHOTS });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false; // the ground floor is static: shadows are re-drawn on demand, not every frame
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 1200);
+
+// Phase 1 look (ground floor only for now): filmic tone mapping, sun shadows, bloom on the lights.
+// Greybox floors render exactly as before (no tone mapping, no post-processing).
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 2 }));
+const DPR = Math.min(devicePixelRatio, 1.5), LUX_DPR = Math.min(devicePixelRatio, 1.25); // Phase 1 effects run at a capped pixel density
+const renderPass = new RenderPass(scene, camera);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.35, 1.0);
+composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 });
 
-buildExterior(scene);
+const ext = buildExterior(scene, renderer);
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE'];
+// Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
+// only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
+const LOOKS = {
+  off: { tone: THREE.NoToneMapping, exp: 1, env: 0.75, sun: 1.4, sunCol: 0xffffff, hemi: 1.6, sky: 0xffffff, gnd: 0x777766, shadow: false },
+  indoor: { tone: THREE.ACESFilmicToneMapping, exp: 0.82, env: 0.5, sun: 0.15, sunCol: 0xffe9cf, hemi: 0.05, sky: 0xfff4e6, gnd: 0x8a6f52, shadow: true },
+  outdoor: { tone: THREE.ACESFilmicToneMapping, exp: 0.9, env: 0.5, sun: 1.1, sunCol: 0xfff0dc, hemi: 0.35, sky: 0xdfeaff, gnd: 0x8a7a62, shadow: true },
+};
+let luxOn = null, lookName = null;
+const PERF_OPT = { glow: true, shadows: true, lights: true }; // Perf tests panel switches
+function setLook(name) {
+  if (name === lookName) return;
+  const L = LOOKS[name], wasTone = renderer.toneMapping;
+  lookName = name; luxOn = name !== 'off';
+  renderer.toneMapping = L.tone; renderer.toneMappingExposure = L.exp;
+  scene.environmentIntensity = L.env;
+  ext.sun.castShadow = L.shadow && PERF_OPT.shadows; ext.sun.intensity = L.sun; ext.sun.color.set(L.sunCol);
+  ext.hemi.intensity = L.hemi; ext.hemi.color.set(L.sky); ext.hemi.groundColor.set(L.gnd);
+  if (wasTone !== L.tone) scene.traverse((o) => { if (o.material && o.material.isMaterial) o.material.needsUpdate = true; });
+  const dpr = luxOn ? LUX_DPR : DPR;
+  if (renderer.getPixelRatio() !== dpr) { renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(innerWidth, innerHeight); }
+  renderer.shadowMap.needsUpdate = true;
+}
+let shadowFloor = null;
+function renderFrame(cam = camera) {
+  if (floors.current !== shadowFloor) {
+    shadowFloor = floors.current; renderer.shadowMap.needsUpdate = true;
+    if (!PERF_OPT.lights) scene.traverse((o) => { if (o.isPointLight) o.visible = false; });
+  } // re-draw shadows when the loaded floors change
+  setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : floors.current === 'PLAZA' ? 'outdoor' : 'indoor');
+  if (luxOn) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
+}
 const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
@@ -247,11 +297,19 @@ window.__debug = {
   seatCounts: () => Object.fromEntries([...floors.loaded].filter(([, c]) => c.seatCount).map(([id, c]) => [id, c.seatCount])),
   setHud: (v) => document.body.classList.toggle('nohud', !v),
   // advance the world N steps of 1/60 s without rendering (player stays put), then render one frame
-  _three: { scene, renderer, floors, elev }, // dev-only profiling access
+  _three: { scene, renderer, floors, elev, composer }, // dev-only profiling access
+  bigScreenVideo: (url) => playBigScreenVideo(url), // dev: play a video on the lobby's big screen (null = dashboard)
+  // dev: render one frame from an arbitrary camera and hold it on screen (for screenshots)
+  shot: (pos, look, fov = 70, holdMs = 4000) => {
+    const cam = new THREE.PerspectiveCamera(fov, innerWidth / innerHeight, 0.1, 1500);
+    cam.position.set(...pos); cam.lookAt(...look);
+    updateScreens(0.2); renderFrame(cam); shotHold = performance.now() + holdMs; shotCam = cam;
+    return { drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+  },
   simTick: (n = 1) => { for (let i = 0; i < n; i++) tick(DT); return state(); },
   advance: (n = 60) => { for (let i = 0; i < n; i++) tick(DT, false); return window.__debug.render(); },
   render: () => {
-    updateScreens(0.2); renderer.render(scene, camera);
+    updateScreens(0.2); renderFrame();
     Object.assign(perf.stats, { drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles });
     hud.update(player, perf.stats, uiState()); return state();
   },
@@ -282,7 +340,37 @@ async function bench(secs) {
 window.__debug.bench = bench;
 
 // ---------------------------------------------------------------- keys
+// ---------------------------------------------------------------- Perf tests panel (dev): F4 or the button
+const perfPanel = (() => {
+  const btn = document.createElement('button');
+  btn.textContent = 'Perf tests (F4)';
+  btn.style.cssText = 'position:fixed;left:16px;top:104px;z-index:30;font:600 12px system-ui;padding:5px 10px;border-radius:6px;border:1px solid #b8924a;background:#14110dcc;color:#e3c27a;cursor:pointer';
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:16px;top:138px;z-index:30;display:none;width:236px;padding:12px 14px;border-radius:10px;border:1px solid #b8924a;background:#14110de6;color:#eee;font:13px system-ui;line-height:1.5';
+  const opt = PERF_OPT;
+  const row = (label, html) => `<div style="margin:6px 0"><div style="color:#b8a27a;font-size:11px;text-transform:uppercase;letter-spacing:.06em">${label}</div>${html}</div>`;
+  const seg = ['live', 'frozen', 'hidden'].map((m) => `<button data-screen="${m}" style="margin:2px 3px 0 0;padding:3px 8px;border-radius:5px;border:1px solid #6b5a3a;background:#221c14;color:#ddd;cursor:pointer">${m}</button>`).join('');
+  const chk = (k, l) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-opt="${k}" checked> ${l}</label>`;
+  box.innerHTML = `<div style="font-weight:700;color:#e3c27a">Perf tests (ground floor)</div>
+    <div id="pt-fps" style="font:600 15px ui-monospace,monospace;margin:4px 0 2px">— fps</div>
+    ${row('Screens', seg)}${row('Effects', chk('glow', 'Glow (bloom)') + chk('shadows', 'Sun shadows') + chk('lights', 'Chandelier / desk lights'))}
+    <div style="color:#8a8070;font-size:11px">Press Esc to free the mouse, then click.</div>`;
+  document.body.append(btn, box);
+  const paint = () => box.querySelectorAll('[data-screen]').forEach((b) => { const on = b.dataset.screen === SCREEN_CTRL.mode; b.style.background = on ? '#b8924a' : '#221c14'; b.style.color = on ? '#111' : '#ddd'; });
+  const apply = () => {
+    bloom.enabled = opt.glow;
+    ext.sun.castShadow = opt.shadows && luxOn; renderer.shadowMap.needsUpdate = true;
+    scene.traverse((o) => { if (o.isPointLight) o.visible = opt.lights; });
+  };
+  box.addEventListener('click', (e) => { const m = e.target.dataset && e.target.dataset.screen; if (m) { setScreenMode(m); paint(); } });
+  box.addEventListener('change', (e) => { const k = e.target.dataset && e.target.dataset.opt; if (k) { opt[k] = e.target.checked; apply(); } });
+  const toggle = () => { box.style.display = box.style.display === 'none' ? 'block' : 'none'; paint(); };
+  btn.addEventListener('click', toggle);
+  return { toggle, opt, apply, fps: (st) => { const el = box.querySelector('#pt-fps'); if (el && box.style.display !== 'none') el.textContent = `${st.fps.toFixed(0)} fps · 1% low ${st.fps1Low.toFixed(0)} · ${st.frameMs.toFixed(1)} ms`; } };
+})();
+
 addEventListener('keydown', (e) => {
+  if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
@@ -303,6 +391,7 @@ else teleport('PLAZA'); // the journey starts outside
 if (params.get('hud') === '0') document.body.classList.add('nohud');
 
 let last = performance.now();
+let shotHold = 0, shotCam = null; // dev screenshots: render from a custom camera for a moment
 let hudAcc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -313,7 +402,7 @@ function frame(now) {
   if (!simWalking) tick(dt);
   updateScreens(dt);
   updateTicker(dt);
-  renderer.render(scene, camera);
+  renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);
   const ui = uiState();
   if (ui.car) {
     const c = ui.car;
@@ -326,7 +415,7 @@ function frame(now) {
   } else hud.prompt('');
   const stats = perf.tick(now, rawMs, performance.now() - t0);
   hudAcc += dt;
-  if (hudAcc > 0.15) { hudAcc = 0; hud.update(player, stats, ui); }
+  if (hudAcc > 0.15) { hudAcc = 0; hud.update(player, stats, ui); perfPanel.fps(stats); }
   while (frameWaiters.length) frameWaiters.shift()();
 }
 requestAnimationFrame(frame);

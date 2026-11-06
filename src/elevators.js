@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BANKS, CARS, FLOOR_BY_ID, stopArea, canAccess, REFUSALS, landingZone } from './layout/building.js';
+import { luxMaterials } from './world/lux.js';
 
 // Physically moving lifts. Every car travels in its own shaft between its bank's stops,
 // with sliding car doors + landing doors. Calls use destination dispatch: you pick your
@@ -32,11 +34,59 @@ function setBox(mesh, i, x0, x1, y0, y1, z0, z1) {
   mesh.setMatrixAt(i, _m);
 }
 
+// ---------------------------------------------------------------- Phase 1 cabin model
+// Car-local coordinates: x across the car (doors on both x faces — through-cars), z along the bank,
+// y = 0 at the cabin floor. Merged per material.
+const cabinKey = (c) => [c.x1 - c.x0, c.z1 - c.z0, c.carH, c.doorW, c.doorH].join('x');
+function cabinGeometry(c) {
+  // Built from pieces that only touch (never overlap or share a visible face) — no z-fighting.
+  const w = c.x1 - c.x0 - 2 * (SW + GAP), d = c.z1 - c.z0 - 2 * (SW + GAP), H = c.carH, dw = c.doorW, dh = c.doorH;
+  const hx = w / 2, hz = d / 2, T = WALL, parts = {};
+  const box = (mat, x0, x1, y0, y1, z0, z1) => {
+    const g = new THREE.BoxGeometry(Math.max(0.002, x1 - x0), Math.max(0.002, y1 - y0), Math.max(0.002, z1 - z0));
+    g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    (parts[mat] ||= []).push(g.index ? g.toNonIndexed() : g);
+  };
+  box('marble', -hx + T, hx - T, -0.15, 0, -hz, hz); // floor (stops at the door walls; sills fill those)
+  box('walnut', -hx, hx, H, H + 0.1, -hz, hz); // ceiling slab
+  box('downlight', -hx + 0.4, hx - 0.4, H - 0.03, H, -hz + 0.4, hz - 0.4); // lit panel hung below it
+  // side walls (z faces): walnut dado, walnut frame around a mirror infill of the same thickness
+  for (const sz of [-1, 1]) {
+    const za = sz < 0 ? -hz : hz - T, zb = za + T, inner = sz < 0 ? zb : za, dirIn = -sz;
+    box('walnut', -hx, hx, 0, 0.95, za, zb);
+    box('walnut', -hx, hx, H - 0.18, H, za, zb);
+    box('walnut', -hx, -hx + 0.14, 0.95, H - 0.18, za, zb); box('walnut', hx - 0.14, hx, 0.95, H - 0.18, za, zb);
+    box('mirror', -hx + 0.14, hx - 0.14, 0.95, H - 0.18, za, zb);
+    const zr0 = inner + dirIn * 0.05, zr1 = inner + dirIn * 0.09; // handrail stands off the wall on brackets
+    box('bronze', -hx + 0.3, hx - 0.3, 0.88, 0.93, Math.min(zr0, zr1), Math.max(zr0, zr1));
+    for (const xx of [-hx + 0.4, hx - 0.4]) box('bronze', xx - 0.02, xx + 0.02, 0.89, 0.92, Math.min(inner, zr0), Math.max(inner, zr0));
+    const zk = inner + dirIn * 0.015; box('bronze', -hx, hx, 0, 0.1, Math.min(inner, zk), Math.max(inner, zk)); // kick plate
+  }
+  // door walls (x faces): walnut piers + header; bronze frame and fittings stand proud on the inside
+  for (const sx of [-1, 1]) {
+    const xa = sx < 0 ? -hx : hx - T, xb = xa + T, xi = sx < 0 ? xb : xa, din = -sx;
+    const pro = (dx0, dx1) => [Math.min(xi + din * dx0, xi + din * dx1), Math.max(xi + din * dx0, xi + din * dx1)];
+    box('walnut', xa, xb, 0, H, -hz + T, -dw / 2); box('walnut', xa, xb, 0, H, dw / 2, hz - T);
+    box('walnut', xa, xb, dh, H, -dw / 2, dw / 2);
+    box('bronze', ...pro(0, 0.03), 0, dh + 0.08, -dw / 2 - 0.08, -dw / 2); box('bronze', ...pro(0, 0.03), 0, dh + 0.08, dw / 2, dw / 2 + 0.08);
+    box('bronze', ...pro(0, 0.03), dh, dh + 0.08, -dw / 2, dw / 2);
+    box('lampWarm', ...pro(0, 0.02), dh + 0.14, dh + 0.24, -0.25, 0.25); // floor indicator strip
+    box('blackMetal', ...pro(0, 0.025), 0.9, 1.5, dw / 2 + 0.16, dw / 2 + 0.42); // operating panel
+    for (let r = 0; r < 4; r++) box('downlight', ...pro(0.025, 0.035), 0.98 + r * 0.12, 1.04 + r * 0.12, dw / 2 + 0.24, dw / 2 + 0.31);
+    box('bronze', xa, xb, -0.15, 0, -dw / 2, dw / 2); // car sill (threshold) under the doorway
+    box('walnut', xa, xb, -0.15, 0, -hz, -dw / 2); box('walnut', xa, xb, -0.15, 0, dw / 2, hz); // floor edge under the piers
+  }
+  return Object.fromEntries(Object.entries(parts).map(([k, list]) => [k, mergeGeometries(list)]));
+}
+
+// Registry so floor displays (lift indicators) can read live car state.
+export const LIFT = { sys: null };
+
 export class ElevatorSystem {
   constructor(scene) {
     this.cars = CARS.map((c) => {
       const b = BANKS[c.bank];
-      const start = c.bank === 'ceo' ? 'OT-05' : c.bank.startsWith('freight') ? 'B1' : b.stops.includes('L0') ? 'L0' : b.stops[0];
+      const start = c.bank.startsWith('freight') ? 'B1' : b.stops.includes('L0') ? 'L0' : b.stops[0];
       return {
         ...c, speed: b.speed,
         ix0: c.x0 + SW + GAP, ix1: c.x1 - SW - GAP, iz0: c.z0 + SW + GAP, iz1: c.z1 - SW - GAP, zc: (c.z0 + c.z1) / 2,
@@ -44,10 +94,23 @@ export class ElevatorSystem {
       };
     });
     this.byId = Object.fromEntries(this.cars.map((c) => [c.id, c]));
+    LIFT.sys = this;
     const n = this.cars.length;
-    this.parts = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xd9c48c }), n * 10);
-    this.panels = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xa9abb3 }), n * 4);
-    for (const m of [this.parts, this.panels]) { m.frustumCulled = false; scene.add(m); }
+    // Phase 1 cabins: one model per cabin size (walnut, mirror, bronze, marble, lit ceiling), instanced.
+    this.cabins = [];
+    const groups = new Map();
+    this.cars.forEach((c) => { const k = cabinKey(c); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); });
+    for (const list of groups.values()) {
+      const parts = cabinGeometry(list[0]);
+      const meshes = Object.entries(parts).map(([mat, geo]) => {
+        const m = new THREE.InstancedMesh(geo, luxMaterials()[mat], list.length);
+        m.frustumCulled = false; m.receiveShadow = true; scene.add(m); return m;
+      });
+      list.forEach((c, i) => { c.cabin = { meshes, i }; });
+      this.cabins.push(meshes);
+    }
+    this.panels = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), luxMaterials().brushedBronze, n * 4);
+    this.panels.frustumCulled = false; scene.add(this.panels);
     this.occupied = () => false;
     this.syncMeshes(true);
   }
@@ -129,16 +192,10 @@ export class ElevatorSystem {
       if (!force && !c.dirty) return;
       c.dirty = false; dirty = true;
       const y = c.y, H = c.carH, dw = c.doorW, dh = c.doorH;
-      const i = k * 10, j = k * 4;
-      setBox(this.parts, i, c.ix0, c.ix1, y - 0.15, y, c.iz0, c.iz1); // floor
-      setBox(this.parts, i + 1, c.ix0, c.ix1, y + H, y + H + 0.1, c.iz0, c.iz1); // ceiling
-      setBox(this.parts, i + 2, c.ix0, c.ix1, y, y + H, c.iz0, c.iz0 + WALL); // north
-      setBox(this.parts, i + 3, c.ix0, c.ix1, y, y + H, c.iz1 - WALL, c.iz1); // south
-      const ga = c.zc - dw / 2, gb = c.zc + dw / 2;
-      [[c.ix0, c.ix0 + WALL], [c.ix1 - WALL, c.ix1]].forEach(([xa, xb], s) => {
-        setBox(this.parts, i + 4 + s * 3, xa, xb, y, y + H, c.iz0 + WALL, ga);
-        setBox(this.parts, i + 5 + s * 3, xa, xb, y, y + H, gb, c.iz1 - WALL);
-        setBox(this.parts, i + 6 + s * 3, xa, xb, y + dh, y + H, ga, gb);
+      const j = k * 4;
+      _m.makeTranslation((c.ix0 + c.ix1) / 2, y, c.zc);
+      for (const m of c.cabin.meshes) m.setMatrixAt(c.cabin.i, _m);
+      [0, 1].forEach((s) => {
         const open = c.openSide === (s ? 'e' : 'w') ? c.door : 0;
         const slide = open * dw / 2;
         const px = s ? c.ix1 - WALL - 0.05 : c.ix0 + WALL + 0.05;
@@ -146,7 +203,7 @@ export class ElevatorSystem {
         setBox(this.panels, j + s * 2 + 1, px - 0.03, px + 0.03, y, y + dh, c.zc + slide, c.zc + dw / 2 + slide);
       });
     });
-    if (dirty) { this.parts.instanceMatrix.needsUpdate = true; this.panels.instanceMatrix.needsUpdate = true; }
+    if (dirty) { for (const ms of this.cabins) for (const m of ms) m.instanceMatrix.needsUpdate = true; this.panels.instanceMatrix.needsUpdate = true; }
   }
 
   // Colliders of cars near height y (walls + closed doors).

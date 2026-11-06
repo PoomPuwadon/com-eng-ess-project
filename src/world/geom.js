@@ -10,6 +10,8 @@ export const MAT = {
   barrierLocked: new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: 0.45, depthWrite: false }),
   barrierOpen: new THREE.MeshBasicMaterial({ color: 0x33dd77, transparent: true, opacity: 0.25, depthWrite: false }),
   elevatorZone: new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.35, depthWrite: false }),
+  glassLux: new THREE.MeshStandardMaterial({ color: 0x8fa7b3, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.1, depthWrite: false, envMapIntensity: 0.35 }),
+  elevatorZoneLux: new THREE.MeshBasicMaterial({ color: 0xe0b860, transparent: true, opacity: 0.16, depthWrite: false }), // subtle gold pad on Phase 1 floors
   emissive: new THREE.MeshBasicMaterial({ color: 0xfff2c0 }),
 };
 

@@ -1,3 +1,4 @@
+import { plaque, Lux } from '../world/lux.js';
 import { CH } from '../world/screens.js';
 import { MAT, instancedBoxes, chunked } from '../world/geom.js';
 
@@ -30,17 +31,30 @@ export function basement(ctx) {
 }
 
 // The Link — glass skybridge across the atrium between the Trading Floor (OT-01) and the Leisure Suite (VT-01), 15 m up
+// Phase 1: walnut-and-bronze glass bridge with a dark granite deck, glass roof on bronze ribs,
+// warm LED strips and a bronze underside (it is seen from the Grand Lobby, 15 m below).
 export function bridge(ctx) {
   const { x0, x1 } = ctx.floor.bounds;
-  ctx.glassBox(x0, x1, 0, 4, -3, -2.85);
-  ctx.glassBox(x0, x1, 0, 4, 2.85, 3);
-  ctx.glassBox(x0, x1, 3.9, 4, -3, 3, 0x9fd8ff, false);
-  ctx.deco(x0, x1, -0.75, -0.5, -3.1, 3.1, 0xd8dde6); // slim deck edge (rev 10: The Link now crosses in front of the lobby screen)
-  for (let x = x0; x <= x1; x += 5) {
-    ctx.deco(x - 0.08, x + 0.08, 0, 4, -3.05, -2.85, 0xc9a23a);
-    ctx.deco(x - 0.08, x + 0.08, 0, 4, 2.85, 3.05, 0xc9a23a);
-    ctx.deco(x - 0.08, x + 0.08, 3.9, 4.05, -3, 3, 0xc9a23a);
+  const L = new Lux(ctx);
+  L.floor(x0, x1, -2.85, 2.85, 0.01, 'granite');
+  L.box(x0, x1, 0.01, 0.025, -0.4, 0.4, 'walnut'); // centre runner
+  for (const sz of [-1, 1]) {
+    L.box(x0, x1, 0, 0.12, sz * 2.85 - 0.12, sz * 2.85 + 0.12, 'bronze'); // kick rail
+    L.box(x0, x1, 0, 3.9, sz * 2.92 - 0.04, sz * 2.92 + 0.04, 'glass'); // side glazing
+    ctx.colliders.push({ x0, x1, z0: sz > 0 ? 2.85 : -3, z1: sz > 0 ? 3 : -2.85, y0: ctx.e, y1: ctx.e + 4 });
+    L.box(x0, x1, 1.05, 1.12, sz * 2.78 - 0.04, sz * 2.78 + 0.04, 'bronze'); // handrail
+    L.box(x0, x1, 3.78, 3.82, sz * 2.7 - 0.04, sz * 2.7 + 0.04, 'ledStrip'); // LED cove strips (soft)
   }
-  ctx.sign('THE LINK — Authorised Synergy Only', 0, 3.2, 0, { size: 0.6 });
-  ctx.npc(-20, 1.5, 0x050505, Math.PI / 2); ctx.npc(20, -1.5, 0x050505, -Math.PI / 2);
+  L.box(x0, x1, 3.92, 3.96, -2.95, 2.95, 'glass'); // glass roof
+  for (let x = x0; x <= x1 + 0.01; x += 3) {
+    for (const sz of [-1, 1]) L.box(x - 0.07, x + 0.07, 0, 4.0, sz * 2.95 - 0.08, sz * 2.95 + 0.08, 'bronze');
+    L.box(x - 0.07, x + 0.07, 3.9, 4.06, -3, 3, 'bronze');
+  }
+  L.box(x0, x1, -0.75, -0.02, -3.1, 3.1, 'bronze'); // underside seen from the lobby
+  L.box(x0, x1, -0.78, -0.75, -0.3, 0.3, 'ledStrip');
+  plaque(ctx, 'THE LINK — Authorised Synergy Only', 0, 3.4, 3.0, 0, { h: 0.3 });
+  plaque(ctx, 'THE LINK — Authorised Synergy Only', 0, 3.4, -3.0, Math.PI, { h: 0.3 });
+  L.person(-20, 1.5, { yaw: Math.PI / 2, suit: 0x141518, hair: 0x0e0e0e });
+  L.person(20, -1.5, { yaw: -Math.PI / 2, suit: 0x141518, hair: 0x0e0e0e });
+  L.build();
 }

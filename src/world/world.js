@@ -3,18 +3,25 @@ import { FLOOR_BY_ID, neighbourFloors, canAccess, visibleWith, ATRIUM, BRIDGE_Y 
 import { buildFloor } from '../floors/index.js';
 import { setLandingDoors } from '../floors/base.js';
 import { MAT, BoxBatch } from './geom.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { LM, Lux } from './lux.js';
 import { setScreensActive } from './screens.js';
 
 // ---------------------------------------------------------------- exterior massing
 // One box per tower whose faces point outward: from inside they are back faces and
 // culled, so they only show from the bridge / outside. Holes where the bridge enters.
+let UVS = null; // when set, quads also get world-metre UVs (facade texture)
 function quad(pos, nor, col, idx, a, b, c, d, n, color) {
   const base = pos.length / 3;
-  for (const v of [a, b, c, d]) { pos.push(...v); nor.push(...n); col.push(color.r, color.g, color.b); }
+  for (const v of [a, b, c, d]) {
+    pos.push(...v); nor.push(...n); col.push(color.r, color.g, color.b);
+    if (UVS) UVS.push(Math.abs(n[0]) > 0.5 ? v[2] / 12 : v[0] / 12, v[1] / 15);
+  }
   idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
-function massing(x0, x1, y0, y1, z0, z1, colorHex, hole = null) {
+function massing(x0, x1, y0, y1, z0, z1, colorHex, hole = null, { skipSouth = false, material = null } = {}) {
   const pos = [], nor = [], col = [], idx = [];
+  UVS = material ? [] : null;
   const c = new THREE.Color(colorHex);
   const shade = (k) => c.clone().multiplyScalar(k);
   // +X face (east), split around hole if hole.side === 'e'
@@ -32,42 +39,77 @@ function massing(x0, x1, y0, y1, z0, z1, colorHex, hole = null) {
   faceX(x1, 1, hole && hole.side === 'e' ? hole : null);
   faceX(x0, -1, hole && hole.side === 'w' ? hole : null);
   quad(pos, nor, col, idx, [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], shade(1));
-  quad(pos, nor, col, idx, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], shade(0.75));
+  if (!skipSouth) quad(pos, nor, col, idx, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], shade(0.75));
   quad(pos, nor, col, idx, [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], shade(0.75));
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  if (UVS) g.setAttribute('uv', new THREE.Float32BufferAttribute(UVS, 2));
   g.setIndex(idx);
-  return new THREE.Mesh(g, MAT.solid);
+  UVS = null;
+  return new THREE.Mesh(g, material || MAT.solid);
 }
 
-export function buildExterior(scene) {
-  scene.background = new THREE.Color(0xbfd9f2);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x777766, 1.6));
+// Sky: vertical gradient as the background (screen-aligned, cheap).
+function skyTexture() {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+  const g = c.getContext('2d'), grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0, '#5f8fc4'); grd.addColorStop(0.55, '#a9c8e6'); grd.addColorStop(0.85, '#f1dcc0'); grd.addColorStop(1, '#e8c9a2');
+  g.fillStyle = grd; g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+export function buildExterior(scene, renderer) {
+  scene.background = skyTexture();
+  scene.fog = new THREE.Fog(0xd9cbb4, 260, 900);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x777766, 1.6);
+  scene.add(hemi);
+  // Sun: warm, high in the south-east; casts shadows only in the Phase 1 "lux" view (ground floor).
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-  sun.position.set(80, 200, 120);
-  scene.add(sun);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial({ color: 0x8e9a7e }));
+  sun.position.set(70, 150, 110);
+  sun.target.position.set(0, 0, 10);
+  scene.add(sun, sun.target);
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, near: 20, far: 420 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+  // Image-based reflections for the physically based (Phase 1) materials; Lambert ignores it.
+  if (renderer) {
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.75;
+    pm.dispose();
+  }
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshStandardMaterial({ color: 0x7f8a6c, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.3;
+  ground.receiveShadow = true;
   scene.add(ground);
   const o = 0.6;
   const A = ATRIUM;
-  scene.add(massing(A.x0 - o, A.x1 + o, 0, A.height, A.z0 - o, A.z1 + o, 0xe6dccb)); // atrium lobby
-  scene.add(massing(-110 - o, -30 + o, 15, 55, -40 - o, 40 + o, 0x8f9bb0, { side: 'e', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 })); // Office Tower
-  scene.add(massing(30 - o, 210 + o, 15, 112, -60 - o, 60 + o, 0xc8ad86, { side: 'w', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 })); // Visitors' Tower
+  const lux = new Lux({ e: 0, colliders: [], add: (m, ...d) => scene.add(m), onUpdate: () => {} });
+  // atrium: its south face is the Phase 1 entrance facade (built with the plaza), so no massing face there
+  scene.add(massing(A.x0 - o, A.x1 + o, 0, A.height, A.z0 - o, A.z1 + o, 0xe6dccb, null, { skipSouth: true }));
+  const ot = massing(-110 - o, -30 + o, 15, 55, -40 - o, 40 + o, 0xffffff, { side: 'e', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
+  const vt = massing(30 - o, 210 + o, 15, 112, -60 - o, 60 + o, 0xffffff, { side: 'w', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
+  scene.add(ot, vt); // Office Tower, Wellness Tower (curtain-wall facades)
   // tower plinths below 15 m (leaving the lift-core strip open so cars are visible through their doors)
-  const plinths = new BoxBatch();
-  plinths.add(-110 - o, -40, 0, 15, -40 - o, 40 + o, 0xb8b0a0);
-  plinths.add(-40, -30 - o, 0, 15, -40 - o, -37.5, 0xb8b0a0);
-  plinths.add(-40, -30 - o, 0, 15, 30.6, 40 + o, 0xb8b0a0);
-  plinths.add(40, 210 + o, 0, 15, -60 - o, 60 + o, 0xb8b0a0);
-  plinths.add(30 + o, 40, 0, 15, -60 - o, -37.5, 0xb8b0a0);
-  plinths.add(30 + o, 40, 0, 15, 30.6, 60 + o, 0xb8b0a0);
-  scene.add(plinths.build());
-  // rooftop name boards
-  return { sun };
+  for (const [x0, x1, z0, z1] of [[-110 - o, -40, -40 - o, 40 + o], [-40, -30 - o, -40 - o, -37.5], [-40, -30 - o, 30.6, 40 + o],
+    [40, 210 + o, -60 - o, 60 + o], [30 + o, 40, -60 - o, -37.5], [30 + o, 40, 30.6, 60 + o]]) lux.box(x0, x1, 0, 15, z0, z1, 'stone');
+  for (const [x0, x1, z0, z1] of [[-110 - o, -30 - o, 40, 41.4], [30 + o, 210 + o, 60, 61.4]]) lux.box(x0, x1, 14.6, 15.4, z0, z1, 'bronze'); // plinth cornice
+  // the street beyond the plaza + a distant skyline
+  lux.floor(-400, 400, 64, 80, -0.25, 'asphalt');
+  lux.floor(-400, 400, 62, 64, -0.2, 'paving'); lux.floor(-400, 400, 80, 83, -0.2, 'paving');
+  for (let x = -396; x < 400; x += 9) lux.box(x, x + 4.5, -0.24, -0.23, 71.85, 72.15, 'paint', { color: 0xeeeeee });
+  const r = (s) => () => { s = (s * 16807) % 2147483647; return s / 2147483647; }, rn = r(4);
+  for (let i = 0; i < 70; i++) {
+    const a = Math.PI * 0.15 + rn() * Math.PI * 1.7, d = 330 + rn() * 320, w = 30 + rn() * 50, h = 50 + rn() * 190;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d + 60;
+    if (z < 120 && Math.abs(x) < 260) continue;
+    lux.box(x - w / 2, x + w / 2, 0, h, z - w / 2, z + w / 2, 'facade');
+  }
+  lux.build();
+  return { sun, hemi };
 }
 
 // ---------------------------------------------------------------- floor streaming
