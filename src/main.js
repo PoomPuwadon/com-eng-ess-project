@@ -41,8 +41,8 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'VT-01'];
-const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'VT-01': 'leisure' };
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'VT-01', 'VT-02', 'VT-03'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
@@ -52,6 +52,12 @@ const LOOKS = {
   // trading floor (reference: bright, warm, even light from the ceiling panels; no sun inside)
   // leisure suite (reference: warm gold from above, orange glow bouncing off the red carpet onto the ceilings)
   leisure: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.45, sun: 0, sunCol: 0xfff0dc, hemi: 0.95, sky: 0xffdcae, gnd: 0xff8a50, shadow: false },
+  // sports arena (reference: dark indigo hall; the warm-gold ceiling rings, blue neon bands and the screens
+  // carry the light; low cool fill; stronger bloom so the light lines glow)
+  arena: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.28, sun: 0, sunCol: 0xfff0dc, hemi: 0.34, sky: 0xa8b2ff, gnd: 0x1c1f36, shadow: false, bloom: 0.55 },
+  // combat pavilion (reference: a dark stadium under a glowing red-gold dome; warm red fill from above, the
+  // crown lamps, beams, towers and screens carry the light)
+  pavilion: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.22, sun: 0, sunCol: 0xfff0dc, hemi: 0.28, sky: 0xff9a78, gnd: 0x1a0e14, shadow: false, bloom: 0.45 },
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
@@ -63,6 +69,7 @@ function setLook(name) {
   renderer.toneMapping = L.tone; renderer.toneMappingExposure = L.exp;
   scene.environmentIntensity = L.env;
   ext.sun.castShadow = L.shadow && PERF_OPT.shadows; ext.sun.intensity = L.sun; ext.sun.color.set(L.sunCol);
+  bloom.strength = L.bloom ?? 0.22;
   ext.hemi.intensity = L.hemi; ext.hemi.color.set(L.sky); ext.hemi.groundColor.set(L.gnd);
   if (wasTone !== L.tone) scene.traverse((o) => { if (o.material && o.material.isMaterial) o.material.needsUpdate = true; });
   const dpr = luxOn ? LUX_DPR : DPR;

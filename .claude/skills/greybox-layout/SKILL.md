@@ -143,8 +143,8 @@ into the Executive Reception lift hall.
 | Floor ID | Elev. | H | Room ID | Sign label | Rect / notes |
 | --- | --- | --- | --- | --- | --- |
 | `VT-01` | 15 | **22** | `leisure_suite` (+ `vt_bridge_checkpoint` 31…38; −6…6) | Executive Leisure Suite | **The Link enters here.** The lift-hall portal (18 m wide, Z −9…9) opens **straight onto the grand promenade**: red carpet with gold medallions, purple borders, cream marble walkways (Z −9.5…9.5) running to a focal screen on the east wall; columns at Z ±10.6; chandeliers down the centre under an orange/red coffered vault; lower purple soffits with glowing edges (15 m) over the gaming floor; pendant lamps; cream chairs at the tables. Zones: Yield Terminals 52…116; −56…−12 · Rotational 120…206; −56…−12 · Twenty-One 52…96; 12…56 · Private Banking 98…124 · Kinetic Pit 126…148 · **`card_salon` (walled) 152…206; 12…56** with `card_salon_high_limit` 193…205; 43…55 |
-| `VT-02` | **53.5** | 13.5 (+16.5 below) | `football_arena` | Sports Analytics Arena | **Theatre-style box arena (DEMO rev 4 of the arena)**. Lifts stop at the concourse (53.5 m); the lift hall has no wall, so you walk straight to the **14 m-wide portal** (6 m high, gold/navy frame) in the outer wall and then **down**; the bowl sinks to the pit at 37 m (the Leisure Suite's ceiling). Wall radius 58 m. Levels L4 0 / L3 −4.5 / L2 −9 / L1 −13.5 / pit −16.5; fronts r 50/40/30/20. **Ramps flank the entrance** (centred ±0.36 rad either side of it, tops nearest the portal). 114 open boxes with hanging TV + 2 dashboards each. **Centre stack from the roof to the pit floor**: 3 tall eight-sided tiers (matches · odds + matches · matches), each screen ~12 m wide (16:9), LED rings between them, solid plinth; pit desks round its base at r 17. **Wrap-around LED ribbon** under the roof (Y 8.4…10.6) and **LED boards on every tier front**, one shared scrolling texture. **Hanging screens for the upper levels**: 12 double-sided at r 34 (for L3) and 16 at r 44.5 (for L4). Race feed = **F1 Grand Prix** (live timing tower + circuit map; simulated in Phase 0). Pop-ups: settlement (+/−, green/red, room-wide sound) **and every new position opened** (gold, "New position · Box … · team", short chime; simulated every 1.8–5 s in Phase 0). No ceiling screen |
-| `VT-03` | 67 | 25 | `muay_thai_arena` (+ `ringside`, `pavilion_entry`, `pavilion_service_corridor`, `pavilion_backstage`, `red_corner_room`, `blue_corner_room`) | Combat Sports Analytics Pavilion | **Realistic Muay Thai stadium (rev 11, `floors/pavilion.js`)**, round bowl centred (120, 0). **Ring** 11 m platform (10 m inside 4 ropes), 1.2 m high, steps on the east (walkout) side; **ringside floor** r < 14 (officials' table, pi-phat musicians, cameras, LED boards) — staff/competitors only. **Lower bowl** 15 rows r 14–27.5 (front row 1.6 m above the floor, glass front, so no way down); **cross-aisle** r 27.5–29.5 at 6.1 m; **upper bowl** 14 rows r 29.5–42.4 to 12 m, gold-glass skyboxes on the back wall; **concourse** r 42.8–51.4 at 6.1 m with position windows. **7 vomitories** (sections 101–128) link the concourse to the cross-aisle. ~7,500 seats. **Spectator route**: narrow arrivals hall (X 30–44) → ticket gates + box office (X 44–55) → 8 m grand stairs up to the concourse → vomitory → seats. **Walkout**: Red/Blue dressing rooms (backstage X > 172) → tunnel under the concourse → lit runway (Z ±2.5, red/blue LED edges) through the seats → ring steps → corner; routes in `floor.walkout`. Backstage reached by the service corridor (Z < −53.4) through a locked door in the arrivals hall (`backstage` access). Atmosphere: glowing **sak yant ceiling** (r 47), two zig-zag truss rings, 16 light beams on the ring, 6 big screens. One height field with two levels (the tunnel under the concourse) — shapes get the walker's y |
+| `VT-02` | **53.5** | 13.5 (+16.5 below) | `football_arena` | Sports Analytics Arena | **Theatre-style box arena (DEMO rev 5 of the arena, user 2026-11-06)**. Bowl centred **(108, 0)**, wall radius 58 m, so the wall touches the arrivals hall's east wall at X 50. Lifts stop in a **compact walled arrivals hall** (X 30…50, Z −40…30); its exit **is** the arena's **14 m-wide portal** (6 m high) — no concourse in between. Inside the portal there are **no boxes**: a **grand stair** (radial aisle ±0.125 rad, ~14.5 m wide at the top, ~4.8 m at the pit) runs straight down — top landing r 54–58, flights r 54→47 / 44→37 / 34→27 / 24→19.3 (0.18 m risers, ~0.28 m treads, glass balustrades + gold rail), landings on the L3/L2/L1 walkways (r 44–47 / 34–37 / 24–27) — to the pit at 37 m (the Leisure Suite's ceiling). Levels L4 0 / L3 −4.5 / L2 −9 / L1 −13.5 / pit −16.5; fronts r 50/40/30/20. **No ramps** (removed by the user, rev 6): the grand stair is the only way between levels and the boxes run continuously round each level from one side of the stair to the other. Open boxes, each with its own TV, 2 recliners and a position console per seat. **Centre stack from the roof to the pit floor**: 3 tall eight-sided tiers (matches · odds + matches · matches), each screen ~12 m wide (16:9), LED rings between them, solid plinth; pit desks round its base at r 17. **Wrap-around LED ribbon** under the roof (Y 8.4…10.6) and **LED boards on every tier front**, one shared scrolling texture. **Hanging screens for the upper levels**: big double-sided screens (7.2 m at r 34 for L3, 8 m at r 44.5 for L4) on the line of **every third box divider**, i.e. between two box TVs. Race feed = **F1 Grand Prix** (live timing tower + circuit map; simulated in Phase 0). Pop-ups: settlement (+/−, green/red, room-wide sound) **and every new position opened** (gold, "New position · Box … · team", short chime; simulated every 1.8–5 s in Phase 0). No ceiling screen |
+| `VT-03` | 67 | 25 | `muay_thai_arena` (+ `ringside`, `pavilion_entry`, `pavilion_service_corridor`, `pavilion_backstage`, `focus_room`) | Combat Sports Analytics Pavilion | **Realistic Muay Thai stadium (rev 11, `floors/pavilion.js`)**, round bowl centred (120, 0). **Ring** 11 m platform (10 m inside 4 ropes), 1.2 m high, steps on the east (walkout) side; **ringside floor** r < 14 (officials' table, pi-phat musicians, cameras, LED boards) — staff/competitors only. **Lower bowl** 15 rows r 14–27.5 (front row 1.6 m above the floor, glass front, so no way down); **cross-aisle** r 27.5–29.5 at 6.1 m; **upper bowl** 14 rows r 29.5–42.4 to 12 m, gold-glass skyboxes on the back wall; **concourse** r 42.8–51.4 at 6.1 m (a plain corridor: the position windows were removed by the user, 2026-11-06). **7 vomitories** (sections 101–128) link the concourse to the cross-aisle. ~7,500 seats. **Spectator route**: narrow arrivals hall (X 30–44) → ticket gates + box office (X 44–55) → 8 m grand stairs up to the concourse → vomitory → seats. **Walkout**: the small black **`focus_room`** "Competitors' Focus Room" (X 172–180, Z −4…4, 4.2 m high, black walls/floor/ceiling, one cold light, a bench each side; both fighters wait here; the dressing rooms were removed by the user, 2026-11-06) opens straight onto the walkout road → tunnel under the concourse → lit runway (Z ±2.5, red/blue LED edges) through the seats → ring steps → corner; routes in `floor.walkout`. A 2 m door at the back of the focus room leads to backstage (X > 172), reached by the service corridor (Z < −53.4) through a locked door in the arrivals hall (`backstage` access). Atmosphere: glowing **sak yant ceiling** (r 47), two zig-zag truss rings, 16 light beams on the ring, 6 big screens. One height field with two levels (the tunnel under the concourse) — shapes get the walker's y |
 | `VT-04` | 92 | 20 | `racing_hall` | Equine Performance Centre | Open plan; the **30 m-wide portal** opens straight onto the track. Track centres (98, 0) and (162, 0), outer R 42, inner R 30. Grandstand 80…180 north side. Tote 54…76; −59…−53 |
 
 ### Lift halls (rev 10 — replace the old foyers)
@@ -165,8 +165,8 @@ space. Generated in `building.js` (`HALLS`), dressed in `src/floors/halls.js`. L
 | OT-04 | Asset Protection — Screening Hall | `security` | 12 × 4.2 | hazard-striped jambs, blast-door leaves parked open, body scanner, CCTV |
 | OT-05 | Executive Reception | `executive` | 10 × 5.5 | fluted marble + gold, reception desk, art |
 | VT-01 | Executive Leisure Suite — Grand Hall | `portal` | 18 × 12 | gold arch with marquee bulbs, red carpet into the promenade, fountain, lanterns, **Link checkpoint** |
-| VT-02 | Sports Analytics Arena — Concourse | `concourse` | no wall | flows straight into the arena portal; light blades + terminals at the hall ends |
-| VT-03 | Combat Pavilion — Arrivals | `shrine` | 8 × 7 | **narrow hall** (X 30–44, Z −40…30) — portal straight onto the ticket gates and stairs; locked competitors' door in the north wall |
+| VT-02 | Sports Analytics Arena | Phase 1 (`sportsArena.js`, `customHall`) | 14 × 6 | **compact hall** (X 30–50, Z −40…30, rev 5) — the portal is the arena entrance itself, straight onto the head of the grand stair (see Phase 1 — VT-02) |
+| VT-03 | Combat Sports Analytics Pavilion (arrivals) | Phase 1 (`combatPavilion.js`, `customHall`) | 8 × 7 | **narrow hall** (X 30–44, Z −40…30) built by `luxLiftHall` with `depth: 14` and an `endDoor` gap for the locked competitors' door in the north wall; portal straight onto the ticket gates and stairs (see Phase 1 — VT-03) |
 | VT-04 | Equine Centre — Paddock Hall | `paddock` | 30 × 12 | white rails, race + odds screens on the lintel, horse statue |
 
 **Link checkpoint** (OT-01 and VT-01): a glass vestibule round the bridge mouth (d 1…8, Z −6…6) with
@@ -224,7 +224,7 @@ OT-01 → The Link → VT-01 Leisure Suite.
 | `OT-03…04` | no | yes (view) | yes | yes | yes | yes |
 | `OT-05` | no | no | yes | yes | yes | yes |
 | `B1` | no | no | yes (CEO lift) | yes | yes | yes |
-| `VT-03` ringside, walkout, backstage, dressing rooms | no | no | no | yes | yes | — |
+| `VT-03` ringside, walkout, backstage, focus room | no | no | no | yes | yes | — |
 | Freight lifts | no | no | no | yes | yes | yes |
 
 - Enforced by colliders (locked barriers are solid) and by the lift kiosks and car panels.
@@ -252,7 +252,7 @@ and a top-down map with rooms, lift shafts and landing zones.
   ceiling could flare with each level.
 - `VT-03` walkout spotlights (user, 2026-11-06): during the fighters' walkout, the spotlights swing
   off the ring and **track the walking fighters** — **each spotlight is assigned to one fighter** and
-  follows them (dressing room tunnel → runway → ring). The 16 beams in `floors/pavilion.js` are
+  follows them (focus room → tunnel → runway → ring). The 16 beams in `floors/pavilion.js` are
   already separate meshes (from the truss ring at r 36 towards the ring), so each can be re-aimed
   every frame at its fighter's position along `floor.walkout`.
 - `VT-01` Executive Leisure Suite content (user, 2026-11-06): it should hold the usual Las Vegas
@@ -321,3 +321,88 @@ lighting profile `trading` in `main.js`). See `verification/phase-1-ot01/`.
   labels (~230 px) are spaced 150 px apart and text is not clipped to its cell, so it bleeds into
   neighbouring channels. Fix building-wide (measure text, clip each cell) when each floor gets its
   Phase 1 pass; the ground floor already uses its own displays.
+
+## Phase 1 — VT-02 Sports Analytics Arena (2026-11-06, rev 2)
+
+Rebuilt from scratch in `src/floors/sportsArena.js` (lux floor, `customHall`, lighting profile `arena`
+in `main.js`). The greybox `arena.js` is only the **placement guide**: its layout data (bowl centre
+(108, 0), level radii/heights, `BOXES`, `FLIGHTS`), its walkable shape and its live layer (`arenaLive`:
+broadcast screens, pop-ups, sounds, simulated positions) are reused; every visible surface is new.
+`ARENA.ramps = false` (user, rev 2): no ramps.
+
+- **Lighting** (user's reference image: dark indigo hall, warm-gold ceiling halo, blue neon): dark
+  lattice roof trusses (24, with diagonal braces) over a navy ceiling; **7 concentric rings of warm-gold
+  light segments** between the trusses and a double gold halo over the screen stack; blue neon bands
+  on the outer wall (y 7.6 and 11.6), under every tier front and under each stack tier; glossy terrazzo
+  walkways; low cool fill (`arena` look: hemi 0.34 indigo, exposure 1.0, bloom 0.55; `bloom` is now a
+  per-look setting).
+- **Outer wall**: walnut dado + warm cove light, navy skin with dark pilasters every 6 m, the 360° ribbon
+  in a gold frame, **5 big lit "SPORTS ANALYTICS" signs** (football icon) each flanked by two screens.
+- **Tiers**: one continuous terrazzo floor per level (box band + walkway, tucked under the walls); tier
+  fronts = walnut panelling with sconces under a navy fascia carrying the LED board, blue neon line
+  under it, gold top trim.
+- **Boxes**: carpet per box, glass front with a brass rail, frosted dividers on walnut posts, glass back
+  rail with the door gap, **2 leather recliners** (instanced, cognac / cream / espresso / claret) with a
+  walnut side table, **a position console per seat** (pedestal + screen tilted up to the sitter; atlas
+  cells 20–23: market, 1/X/2 pricing, allocation chips, Open Position, notional balance) and the box
+  **TV facing the seats** on a black gantry.
+- **Grand stair**: marble treads with brass nosing, navy risers with a gold step light, navy runner,
+  glass balustrades with brass rails; **continuous walnut cheek walls** following the pitch line (no
+  per-step sawtooth); walnut "LEVEL n" pylons at the front edge of each landing.
+- **No-holes construction**: floors run 0.3 m under the walls they meet, walls start 0.3 m below the
+  floor they stand on, treads tuck under the cheek walls, the cheek walls step up 6 cm before each level
+  edge (closing the corner behind the tier fascia), and a dark backstop (`arCatch`) closes the bowl's
+  underside. Verified with a **magenta hole test** (background + backstop painted magenta, 44 views:
+  top-down, walkways on every level, stair sides, corners): 0 magenta pixels.
+- **Screens/text**: every label in the broadcast atlas is fitted and clipped per cell (scoreboard bug
+  rebuilt: [kit|HOME| 1 - 0 |AWAY|kit][clock] … [LIVE]); the LED ribbon texture sizes each message to its
+  measured width and keeps true letter proportions on every band height; closed rings use whole repeats.
+- **Pit**, **stack** and **arrivals hall**: as rev 1 (crest-inlaid pit, analyst desks, black/gold stack,
+  shared `luxLiftHall` with `z0`/`z1` and `link: null`).
+- **Perf** (dev machine, worst view): 178 draw calls incl. bloom passes, 631k triangles, ~1.6 ms.
+
+## Phase 1 — VT-03 Combat Sports Analytics Pavilion (2026-11-06)
+
+Rebuilt from scratch in `src/floors/combatPavilion.js` to the user's reference photo (lux floor,
+`customHall`, lighting profile `pavilion` in `main.js`: hemi 0.28 warm red, exposure 1.0, bloom 0.45).
+The greybox `pavilion.js` is only the **placement guide**: its layout data (`PAV`: ring, bowl radii and
+row heights, cross-aisle, vomitories, concourse, entrance, stairs, walkout, focus room) and its walkable
+height field (`pavilionShape`) are reused, so every route and collision is unchanged.
+
+- **Dome**: a shallow dome over the whole bowl and concourse (edge r 51.7 at 19.9 m, centre 24.5 m) with a
+  2048 px sak yant texture: glowing red-gold script rings (Thai numerals in the band), 12 oval cartouches
+  of script, unalome loops, a spiral of script and nine spires in the centre. It still **breathes**
+  (`ctx.breath`, ~5 s, colour scalar 0.35–1.15). The texture is mirrored in u so it reads correctly from below.
+- **Crown + beams**: a jagged truss crown at r 45.2 (48 up/down members, 2 chords top and bottom, hung on
+  steel rods), a lamp at each low point; 16 additive beams (white / blue / green, opacity 0.028) from the
+  lamps onto the ring. **20 LED light towers** stand on the skybox roof round the rim (clear of the gate).
+- **Ring**: dark platform with blue LED edge lines, blue canvas with a gold Thai border and crest, gold
+  posts with red / blue / white pads, 4 ropes (red, white, blue, white), steps on the walkout side; a
+  **square lighting rig** (13 m, 24 lamps) hung over it; fighters, referee, officials' table, pi-phat
+  musicians, 4 camera positions.
+- **Bowl**: concrete treads with dark risers; red lacquer front barrier with glass, gold rail, blue LED
+  line and ringside LED boards; stair aisles with warm step lights; cross-aisle with glass ends;
+  ~7,000 **instanced red seats** (16 sectors × 2 tiers) and a **standing night crowd** (34 % of seats,
+  mostly dark / white shirts); vomitory portals with gold lintels and section plaques; a band of
+  **gold-lit skyboxes** (glass, lit interiors, gold mullions, people) along the top of the bowl.
+- **The stage (fighters' gate, east)**: gold pillars with red / blue corner lights over the tunnel mouth,
+  a red-lacquer panel with the Pavilion crest screen, and above it the **three-screen stage** of the
+  reference: a centre fight screen crowned by three tiers of pointed gold gables (hang hong finials,
+  chofa spire) flanked by two big screens (card, scorecard) in ornate gold frames.
+- **Concourse**: stone floor, red lacquer walls with a gold lai-thai lattice, gold friezes, warm sconces,
+  dark ceiling at 10.6 m with warm downlights, walkers; no position windows.
+- **Entrance**: lacquer corridor with walnut dado, gold pilasters, warm LED line, coffered ceiling, steel
+  and gold ticket gates, walnut box office, gold header plaque, stone grand stairs with gold nosing, red
+  runner and gold handrails.
+- **Walkout**: black runway with red / blue LED edges and warm centre dashes, LED lines along the trench
+  walls and the tunnel, tunnel lamps; the black focus room (benches, one cold light, both fighters).
+- **Screens**: own atlas `src/world/fightScreens.js` (2 × 2 cells, 6 Hz while visible): live fight feed
+  (simulated bout, round / clock, names, camps), tonight's card with pricing, official scorecard, Pavilion
+  brand. Every label fitted and clipped per cell. Simulated bouts use invented real-style names.
+- **Checks**: magenta hole test, 34 views (ringside, cross-aisle, top rows, vomitories, concourse,
+  entrance, stairs, tunnel, focus room): 0 pixels. Walk: lift hall → entrance → stairs → concourse →
+  vomitory → cross-aisle → down to the front row (stopped at the barrier); focus room → tunnel → ring;
+  visitors still locked out of backstage.
+- **Perf** (dev machine): worst view 178 draw calls incl. bloom passes, 1.12 M triangles (mostly the
+  crowd), ~3.6 ms.
+

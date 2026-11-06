@@ -6,14 +6,14 @@ import { department, control, lottery } from './officeTower.js';
 import { trading } from './tradingFloor.js';
 import { racing } from './visitorsTower.js';
 import { leisure } from './leisureSuite.js';
-import { pavilion as muaythai } from './pavilion.js';
-import { arena } from './arena.js';
+import { combatPavilion as muaythai } from './combatPavilion.js';
+import { sportsArena } from './sportsArena.js';
 import { hall } from './halls.js';
 import { basement, bridge } from './basementBridge.js';
 
 const PROPS = {
   lobby, plaza, trading, department, control, lottery,
-  leisure, football: arena, muaythai, racing,
+  leisure, football: sportsArena, muaythai, racing,
   basement, bridge,
 };
 

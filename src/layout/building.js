@@ -25,7 +25,7 @@ export const AREA_ACCESS = {
   staff_b1: ['admin', 'ceo'], // B1 via the staff low-rise bank
   freight: ['admin', 'ceo'], // freight lifts (riding with the robots)
   ceo_lift: ['tour', 'admin', 'ceo'], // the Chief Executive Lifts (tours board in the lobby)
-  backstage: ['admin', 'ceo'], // Combat Pavilion: service corridor, dressing rooms, walkout tunnel, ringside
+  backstage: ['admin', 'ceo'], // Combat Pavilion: service corridor, backstage, focus room, walkout tunnel, ringside
 };
 export const canAccess = (role, area) => (AREA_ACCESS[area] || []).includes(role);
 
@@ -250,14 +250,15 @@ export const FLOORS = [
   },
   {
     id: 'VT-02', tower: 'VT', short: 'Sports Arena', sign: 'Sports Analytics Arena', elevation: 53.5, height: 13.5,
-    // Entrance concourse at 53.5 m (lifts stop here); the bowl sinks 16.5 m below it (theatre-style),
-    // down to the Leisure Suite's ceiling at 37 m.
-    below: 16.5, slabHoleCircle: { cx: 125, cz: 0, r: 58 },
-    bounds: VT_B, area: 'public',
+    // Compact arrivals hall at 53.5 m (lifts stop here) whose exit IS the arena portal; the bowl
+    // (centre X 108, wall r 58 touching the hall's east wall) sinks 16.5 m to the Leisure Suite's
+    // ceiling at 37 m. A grand stair runs from the portal straight down to the pit.
+    below: 16.5, slabHoleCircle: { cx: 108, cz: 0, r: 58 },
+    bounds: VT_B, area: 'public', lux: true, customHall: true, // Phase 1 look (sportsArena.js)
     rooms: [
       { id: 'football_arena', sign: 'Sports Analytics Arena', short: 'Sports Arena', ...VT_MAIN, full: true, noSign: true },
-      { id: 'arena_floor', sign: 'Analytics Pit', short: 'Arena Pit', ...r(115, 135, -10, 10), zone: true },
-      { id: 'arena_portal', sign: 'Arena Entrance — Level 4', short: 'Arena Entry', ...r(58, 66, -7, 7), zone: true, noSign: true },
+      { id: 'arena_floor', sign: 'Analytics Pit', short: 'Arena Pit', ...r(98, 118, -10, 10), zone: true },
+      { id: 'arena_grand_stair', sign: 'Grand Stair', short: 'Grand Stair', ...r(50, 89, -7, 7), zone: true, noSign: true },
     ],
     slabColor: 0x1d2433, ceilColor: 0x10151f,
     props: 'football',
@@ -265,23 +266,25 @@ export const FLOORS = [
   {
     // A realistic stadium (rev 11, see floors/pavilion.js): narrow arrivals hall → ticket gates →
     // grand stairs up to the spectator concourse (6.1 m) → vomitories → cross-aisle → seats. The
-    // ringside floor, walkout tunnel, dressing rooms and service corridor are staff/competitors only.
+    // ringside floor, walkout tunnel, the black focus room at its end, backstage and the service corridor
+    // are staff/competitors only. (User, 2026-11-06: dressing rooms and concourse position windows removed.)
     id: 'VT-03', tower: 'VT', short: 'Combat Pav.', sign: 'Combat Sports Analytics Pavilion', elevation: 67, height: 25,
-    bounds: VT_B, area: 'public', slabColor: 0x1c1a1f, ceilColor: 0x120d0b,
+    bounds: VT_B, area: 'public', slabColor: 0x1c1a1f, ceilColor: 0x120d0b, lux: true, customHall: true, // Phase 1 look (combatPavilion.js)
     rooms: [
       { id: 'muay_thai_arena', sign: 'Combat Sports Analytics Pavilion', short: 'Combat Pav.', ...r(44, 172, -53.4, 53.4), full: true, noSign: true },
       { id: 'ringside', sign: 'Ringside (officials & competitors)', short: 'Ringside', ...r(106, 134, -14, 14), full: true, noSign: true },
       { id: 'pavilion_entry', sign: 'Pavilion Entrance', short: 'Entrance', ...r(44, 55.2, -4, 4), full: true, noSign: true },
       { id: 'pavilion_service_corridor', sign: 'Service Corridor', short: 'Service', ...r(44, 209, -59, -53.4), full: true, noSign: true },
       { id: 'pavilion_backstage', sign: "Competitors' Quarters", short: 'Backstage', ...r(172, 209, -53.4, 59), full: true, noSign: true },
-      { id: 'red_corner_room', sign: 'Red Corner — Dressing Room', short: 'Red Corner', ...r(182, 206, -40, -12), h: 4, doors: [{ side: 'w', at: -20, width: 3 }] },
-      { id: 'blue_corner_room', sign: 'Blue Corner — Dressing Room', short: 'Blue Corner', ...r(182, 206, 12, 40), h: 4, doors: [{ side: 'w', at: 20, width: 3 }] },
+      // small black room at the end of the walkout road: the tunnel opens straight into it (west side),
+      // a door at the back leads to backstage / the service corridor
+      { id: 'focus_room', sign: "Competitors' Focus Room", short: 'Focus Room', ...r(172, 180, -4, 4), h: 4.2, open: ['w'], doors: [{ side: 'e', at: 0, width: 2, top: 3 }], color: 0x0b0b0d, floorColor: 0x050506, noSign: true, noDoorSigns: true },
     ],
-    // Fighter walkout routes (for the planned "put players in the ring" feature): dressing room →
-    // backstage → tunnel under the concourse → lit walkway through the seats → ring steps → corner.
+    // Fighter walkout routes (for the planned "put players in the ring" feature): black focus room →
+    // tunnel under the concourse → lit walkway through the seats → ring steps → corner.
     walkout: {
-      red: [[194, -26], [179, -20], [177, 0], [128, 0], [126.6, 0], [124, 0], [115.6, -4.4]],
-      blue: [[194, 26], [179, 20], [177, 0], [128, 0], [126.6, 0], [124, 0], [124.4, 4.4]],
+      red: [[178, -1.6], [175, -1.2], [128, -1.2], [126.6, 0], [124, 0], [115.6, -4.4]],
+      blue: [[178, 1.6], [175, 1.2], [128, 1.2], [126.6, 0], [124, 0], [124.4, 4.4]],
     },
     props: 'muaythai',
   },
@@ -310,7 +313,7 @@ const HALLS = {
   'OT-04': ['security', 'Asset Protection — Screening Hall', 12, 4.2],
   'OT-05': ['executive', 'Executive Reception', 10, 5.5],
   'VT-01': ['portal', 'Executive Leisure Suite — Grand Hall', 18, 12],
-  'VT-02': ['concourse', 'Sports Analytics Arena — Concourse', 0, 0],
+  'VT-02': ['concourse', 'Sports Analytics Arena', 14, 6, { rect: r(30, 50, -40, 30), open: ['w'] }],
   'VT-03': ['shrine', 'Combat Pavilion — Arrivals', 8, 7, { rect: r(30, 44, -40, 30), open: ['w'], extraDoors: [{ side: 'n', at: 40, width: 3 }], narrow: true }],
   'VT-04': ['paddock', 'Equine Centre — Paddock Hall', 30, 12],
 };

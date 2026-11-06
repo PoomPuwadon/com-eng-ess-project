@@ -57,15 +57,16 @@
       "renderMs": 1.02
     },
     "VT-02": {
-      "drawCalls": 108,
-      "triangles": 13654,
-      "renderMs": null
+      "drawCalls": 178,
+      "triangles": 631354,
+      "renderMs": 1.62,
+      "note": "Phase 1 rev 2 (2026-11-06): ramps removed, 2 recliners + 2 position consoles per box, lighting revamp. Worst view = overview from the far Level-4 walkway; drawCalls include the bloom/composer passes. Other views: stair head 156 / 631k / 1.43 ms, Level-4 near the stair 152 / 558k / 1.44 ms, pit 139 / 290k / 1.57 ms, arrivals hall 120 / 286k / 1.67 ms. 20 forced renders + gl.finish, same dev machine (not an average laptop)."
     },
     "VT-03": {
-      "drawCalls": 55,
-      "triangles": 69696,
-      "renderMs": 1.24,
-      "note": "rev 5 theatre-style arena (entrance at top, open boxes, pop-ups); worst view = level-3 box"
+      "drawCalls": 178,
+      "triangles": 1123718,
+      "renderMs": 3.6,
+      "note": "Phase 1 (combatPavilion.js, 2026-11-06): ~7,000 instanced seats + ~2,500 people (34 % of seats filled, standing crowd), sak yant dome, crown, beams. drawCalls include the bloom/composer passes. Views: wide from the west top row 173 / 1.12M / 3.6 ms, top row side 178 / 1.12M / 2.4 ms, from the ring 115 / 0.91M / 2.15 ms, concourse 118 / 0.93M / 3.1 ms, arrivals hall 107 / 0.85M / 1.8 ms (the bowl still renders behind the hall walls). 20 forced renders + gl.finish, dev machine (not an average laptop). The crowd is most of the triangles: lower the fill rate first if a laptop struggles."
     },
     "VT-04": {
       "drawCalls": 21,

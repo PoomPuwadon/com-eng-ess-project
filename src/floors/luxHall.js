@@ -49,6 +49,10 @@ function fitFont(g, text, maxW, size, weight, family) {
  */
 export function luxLiftHall(ctx, L, o) {
   const { s, H, P } = o;
+  const Z0 = o.z0 ?? -38.9, Z1 = o.z1 ?? 38.9; // hall extent along the facade (VT-02's hall is shorter)
+  // hall depth from the facade (20 m normally; VT-03's arrivals hall is 14 m): everything placed relative
+  // to the portal wall moves with it
+  const DEPTH = o.depth ?? 20, PW = 30 + DEPTH - 0.4; // portal-wall face (49.6 for a 20 m hall)
   const PH = (o.portal?.half ?? 8) + 0.6, PT = (o.portal?.top ?? 8) + 0.6; // hall-side opening of the portal wall
   const X = (d) => s * d;
   const bx = (d0, d1, y0, y1, z0, z1, m, opt) => L.box(X(d0), X(d1), y0, y1, z0, z1, m, opt);
@@ -84,13 +88,15 @@ export function luxLiftHall(ctx, L, o) {
   // ---- core wall
   const gaps = coreCars.map((c) => portal(c, DF));
   for (const g of gaps) bx(DC, DB, g.top, SPLIT, g.z0, g.z1, P.wall);
-  gaps.push({ z0: CEO.z0, z1: CEO.z1 }, { z0: -RECESS.z - 0.06, z1: RECESS.z + 0.06 });
+  gaps.push({ z0: CEO.z0, z1: CEO.z1 });
+  if (o.link) gaps.push({ z0: -RECESS.z - 0.06, z1: RECESS.z + 0.06 });
   gaps.sort((a, b) => a.z0 - b.z0);
   const coreSpan = (za, zb) => { bx(DC, DB, 0, SPLIT, za, zb, P.wall, { collide: true }); dado(DC, DC, za, zb, 1); };
-  let z = -38.9;
+  let z = Z0;
   for (const g of gaps) { if (g.z0 - z > 0.02) coreSpan(z, g.z0); z = Math.max(z, g.z1); }
-  if (38.9 - z > 0.02) coreSpan(z, 38.9);
-  for (const [za, zb, y0] of [[-38.9, CEO.z0, SPLIT], [CEO.z1, -RECESS.z - 0.06, SPLIT], [RECESS.z + 0.06, 38.9, SPLIT], [-RECESS.z - 0.06, RECESS.z + 0.06, RECESS.top]]) {
+  if (Z1 - z > 0.02) coreSpan(z, Z1);
+  const upper = o.link ? [[Z0, CEO.z0, SPLIT], [CEO.z1, -RECESS.z - 0.06, SPLIT], [RECESS.z + 0.06, Z1, SPLIT], [-RECESS.z - 0.06, RECESS.z + 0.06, RECESS.top]] : [[Z0, CEO.z0, SPLIT], [CEO.z1, Z1, SPLIT]];
+  for (const [za, zb, y0] of upper) {
     bx(DC, DB, y0, H - 0.15, za, zb, P.wall);
     bx(DC + 0.1, DC, SPLIT - 0.05, SPLIT + 0.12, za, zb, P.frame);
     bx(DC + 0.12, DC, H - 0.75, H - 0.6, za, zb, P.frame);
@@ -116,10 +122,11 @@ export function luxLiftHall(ctx, L, o) {
     if (bankMid(id) != null) plaque(ctx, label, X(DC + 0.03), 4.75, zm, yawCore, { h: 0.3, color: P.ink });
     if (board && o.board) o.board(ctx, X(DC + 0.03), 7.9, zm, yawCore, 9.6, 2.7);
   }
-  for (const [id, floorsTxt] of o.kiosks) { const zm = bankMid(id); if (zm != null) for (const dz of [-3.2, 3.2]) kiosk(ctx, L, P, X(43.6), zm + dz, s, floorsTxt); }
+  for (const [id, floorsTxt] of o.kiosks) { const zm = bankMid(id); if (zm != null) for (const dz of [-3.2, 3.2]) kiosk(ctx, L, P, X(Math.min(43.6, PW - 1.6)), zm + dz, s, floorsTxt); }
 
-  // ---- The Link recess
+  // ---- The Link recess (bridge floors only)
   const R = RECESS;
+  if (o.link) {
   for (const sz of [-1, 1]) bx(DC, R.d, 0, R.top, sz * R.z - (sz > 0 ? 0 : 0.06), sz * R.z + (sz > 0 ? 0.06 : 0), P.wall);
   for (const [za, zb] of [[-R.z, -3.34], [3.34, R.z]]) bx(R.d + 0.06, R.d, 0, R.top, za, zb, P.wall);
   bx(R.d + 0.06, R.d, 4.34, R.top, -3.34, 3.34, P.wall);
@@ -146,43 +153,53 @@ export function luxLiftHall(ctx, L, o) {
   ctx.barrier(X(GATE_D - 0.15), X(GATE_D + 0.15), -3.0, 3.0, 1.2, 'bridge', o.link.id);
   ctx.barriers[ctx.barriers.length - 1].mesh.visible = false; // the speed gates are the visible gate
   for (const sz of [-1, 1]) L.person(X(36.8), sz * 4.6, { yaw: yawCore, suit: 0x111418, skin: sz < 0 ? 0xc68c62 : 0x8d5a3b, hair: 0x111111 });
+  }
 
   // ---- hall shell
-  for (const [d0, d1, z0, z1] of [[49.6, CEO.d, -38.9, 38.9], [CEO.d, DC, -38.9, CEO.z0], [CEO.d, DC, CEO.z1, 38.9], [DC, R.d, -R.z, R.z]]) L.floor(Math.min(X(d0), X(d1)), Math.max(X(d0), X(d1)), z0, z1, 0.012, P.floor, P.floorTile || 2);
+  for (const [d0, d1, z0, z1] of [[PW, CEO.d, Z0, Z1], [CEO.d, DC, Z0, CEO.z0], [CEO.d, DC, CEO.z1, Z1], ...(o.link ? [[DC, R.d, -R.z, R.z]] : [])]) L.floor(Math.min(X(d0), X(d1)), Math.max(X(d0), X(d1)), z0, z1, 0.012, P.floor, P.floorTile || 2);
   const runner = (d0, d1, z0, z1, alongX) => {
     const x0 = Math.min(X(d0), X(d1)), x1 = Math.max(X(d0), X(d1));
     L.box(x0, x1, 0.012, 0.022, z0, z1, P.runner);
     if (alongX) for (const zz of [z0 + 0.12, z1 - 0.2]) L.box(x0, x1, 0.012, 0.026, zz, zz + 0.08, P.edge);
     else for (const xx of [x0 + 0.12, x1 - 0.2]) L.box(xx, xx + 0.08, 0.012, 0.026, z0, z1, P.edge);
   };
-  runner(49.56, R.d, -2, 2, true);
-  runner(47.4, 45.4, -37, -2, false); runner(47.4, 45.4, 2, 37, false);
-  const HW0 = 49.66, HW1 = 49.6;
-  for (const [za, zb] of [[-38.9, -PH], [PH, 38.9]]) { bx(HW0, HW1, 0, H - 0.15, za, zb, P.wall); dado(HW1, HW1, za, zb, -1); }
+  runner(PW - 0.04, o.link ? R.d : DC, -2, 2, true);
+  runner(PW - 2.2, PW - 4.2, Z0 + 1.9, -2, false); runner(PW - 2.2, PW - 4.2, 2, Z1 - 1.9, false);
+  const HW0 = PW + 0.06, HW1 = PW;
+  for (const [za, zb] of [[Z0, -PH], [PH, Z1]]) { bx(HW0, HW1, 0, H - 0.15, za, zb, P.wall); dado(HW1, HW1, za, zb, -1); }
   bx(HW0, HW1, PT, H - 0.15, -PH, PH, P.wall);
-  for (const zz of [-34, -26, -18, 18, 26, 34]) bx(HW1, HW1 - 0.3, 0, H - 0.15, zz - 0.35, zz + 0.35, P.frame);
-  bx(HW1, HW1 - 0.12, H - 0.75, H - 0.6, -38.9, 38.9, P.frame);
-  for (const zz of [-38.96, 38.9]) {
+  for (const zz of [-34, -26, -18, 18, 26, 34].filter((v) => v > Z0 + 1 && v < Z1 - 1)) bx(HW1, HW1 - 0.3, 0, H - 0.15, zz - 0.35, zz + 0.35, P.frame);
+  bx(HW1, HW1 - 0.12, H - 0.75, H - 0.6, Z0, Z1, P.frame);
+  for (const zz of [Z0 - 0.06, Z1]) {
     const f = zz < 0 ? zz + 0.06 : zz, dz = zz < 0 ? 1 : -1;
-    bx(49.6, DC, 0, H - 0.15, zz, zz + 0.06, P.wall);
-    for (const [y0, y1, m, t] of [[0, 0.25, P.frame, 0.05], [0.25, 1.2, P.dado, 0.03], [1.2, 1.27, P.cap, 0.04]]) bx(49.6, DC, y0, y1, Math.min(f, f + dz * t), Math.max(f, f + dz * t), m);
+    const gap = o.endDoor && (o.endDoor.side < 0) === (zz < 0) ? o.endDoor : null; // { side, d0, d1, top }
+    const spans = gap ? [[PW, gap.d1], [gap.d0, DC]] : [[PW, DC]];
+    if (gap) {
+      bx(gap.d1, gap.d0, gap.top, H - 0.15, zz, zz + 0.06, P.wall);
+      for (const dd of [gap.d0, gap.d1]) bx(dd - 0.12, dd + 0.12, 0, gap.top + 0.12, Math.min(f, f + dz * 0.08), Math.max(f, f + dz * 0.08), P.frame);
+      bx(gap.d1, gap.d0, gap.top, gap.top + 0.12, Math.min(f, f + dz * 0.08), Math.max(f, f + dz * 0.08), P.frame);
+    }
+    for (const [a0, a1] of spans) {
+      bx(a0, a1, 0, H - 0.15, zz, zz + 0.06, P.wall);
+      for (const [y0, y1, m, t] of [[0, 0.25, P.frame, 0.05], [0.25, 1.2, P.dado, 0.03], [1.2, 1.27, P.cap, 0.04]]) bx(a0, a1, y0, y1, Math.min(f, f + dz * t), Math.max(f, f + dz * t), m);
+    }
   }
   const cx = (d0, d1) => [Math.min(X(d0), X(d1)), Math.max(X(d0), X(d1))];
-  ceiling(L, P, H, ...cx(49.6, CEO.d), -38.9, 38.9, 3.8);
-  ceiling(L, P, H, ...cx(CEO.d, DC), -38.9, CEO.z0, 3.8);
-  ceiling(L, P, H, ...cx(CEO.d, DC), CEO.z1, 38.9, 3.8);
+  ceiling(L, P, H, ...cx(PW, CEO.d), Z0, Z1, 3.8);
+  ceiling(L, P, H, ...cx(CEO.d, DC), Z0, CEO.z0, 3.8);
+  ceiling(L, P, H, ...cx(CEO.d, DC), CEO.z1, Z1, 3.8);
   plaque(ctx, o.portalText, X(HW1 - 0.04), PT + 0.9, 0, yawPortal, { h: 1.1, color: P.ink, sub: o.portalSub });
-  for (const zz of [-12, 12, -30, 30]) planter(L, P, X(48.7), zz, 2.4);
+  for (const zz of [-12, 12, -30, 30].filter((v) => v > Z0 + 2 && v < Z1 - 2)) planter(L, P, X(PW - 0.9), zz, 2.4);
   if (o.pylon) {
     const list = [];
     for (const zz of [-22, 22]) {
-      bx(49.0, 47.9, 0, 3.6, zz - 0.6, zz + 0.6, P.frame, { collide: true });
-      bx(49.05, 47.85, 3.6, 3.75, zz - 0.65, zz + 0.65, P.cap);
-      for (const y of [2.65, 1.55]) list.push({ x: X(47.89), y: ctx.e + y, z: zz, yaw: yawPortal, w: 1.0, h: 0.66, k: y > 2 ? 0 : 1 });
+      bx(PW - 0.6, PW - 1.7, 0, 3.6, zz - 0.6, zz + 0.6, P.frame, { collide: true });
+      bx(PW - 0.55, PW - 1.75, 3.6, 3.75, zz - 0.65, zz + 0.65, P.cap);
+      for (const y of [2.65, 1.55]) list.push({ x: X(PW - 1.71), y: ctx.e + y, z: zz, yaw: yawPortal, w: 1.0, h: 0.66, k: y > 2 ? 0 : 1 });
     }
     o.pylon(list);
   }
-  L.person(X(44.6), 0.5, { yaw: yawPortal, suit: P.hostSuit ?? 0x1c2a4e, skin: 0xc68c62, hair: 0x2a1a10 });
+  L.person(X(PW - 5), 0.5, { yaw: yawPortal, suit: P.hostSuit ?? 0x1c2a4e, skin: 0xc68c62, hair: 0x2a1a10 });
   return { X, bx, yawCore, yawPortal };
 }
 

@@ -3,9 +3,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BC, buildBroadcastScreens, updateBroadcast, setFeedListener, broadcastState } from '../world/broadcast.js';
 import { playGain, playLoss, playPosition } from '../world/sfx.js';
 
-// VT-02 Sports Analytics Arena — DEMO rev 4 (theatre-style box arena).
-// You enter at the TOP (the concourse where the lifts stop, Y = 0 here) through a portal in the
-// outer wall and walk DOWN: 4 levels step down towards a central pit 16.5 m below. The bowl is a
+// VT-02 Sports Analytics Arena — DEMO rev 5 (theatre-style box arena).
+// You enter at the TOP: the compact arrivals hall where the lifts stop (Y = 0 here) exits straight
+// through the portal in the bowl's outer wall, onto the head of the GRAND STAIR — a radial aisle
+// (no boxes) with a landing at every level, running all the way down to the pit 16.5 m below. The bowl is a
 // full circle. Each level has its own ring walkway; its inner edge is lined with OPEN private boxes
 // (no roof): low glass dividers, a glass-panel fence at the front, a hanging TV with a live game and
 // two position dashboards underneath. Every gain/loss of a box pops up above it with a room-wide
@@ -15,27 +16,48 @@ import { playGain, playLoss, playPosition } from '../world/sfx.js';
 // upper levels get their own big hanging screens. Ramps start right beside the entrance.
 
 export const ARENA = {
-  cx: 125, cz: 0,
+  cx: 108, cz: 0, // wall (r 58) touches the arrivals hall's east wall at X 50
   R: [0, 20, 30, 40, 50], // level front radii (0 = pit)
   Y: [-16.5, -13.5, -9, -4.5, 0], // level heights relative to the entrance concourse
   RWALL: 58, portalHalfM: 7, portalH: 6, portalA: Math.PI,
   boxDepth: 5, boxWidth: 7.5, doorHalfM: 0.8,
-  rampBand: 2.2, rampSlope: 3.5,
+  rampBand: 2.2, rampSlope: 3.5, rampA: 0.45, ramps: false, // rev 6 (user): ramps removed, boxes fill the levels; the grand stair serves every level
+  stairHalfA: 0.125, // grand stair: radial aisle ±0.125 rad from the portal (~14.5 m wide at the top, 4.8 m at the pit)
 };
 const A = ARENA;
 const TAU = Math.PI * 2;
 const A0 = Math.PI, A1 = A0 + TAU; // full circle (seam behind the portal)
 const norm = (a) => A0 + ((((a - A0) % TAU) + TAU) % TAU);
 const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
-const levelAt = (r) => (r >= A.R[4] ? 4 : r >= A.R[3] ? 3 : r >= A.R[2] ? 2 : r >= A.R[1] ? 1 : 0);
+export const levelAt = (r) => (r >= A.R[4] ? 4 : r >= A.R[3] ? 3 : r >= A.R[2] ? 2 : r >= A.R[1] ? 1 : 0);
 const inPortal = (a) => Math.abs(angDiff(a, A.portalA)) * A.RWALL < A.portalHalfM;
+
+// ---------------------------------------------------------------- grand stair (entrance aisle)
+// Flights [r top, r bottom, y top, y bottom]; between them a landing on each level's walkway.
+export const FLIGHTS = [[54, 47, 0, -4.5], [44, 37, -4.5, -9], [34, 27, -9, -13.5], [24, 19.3, -13.5, -16.5]];
+const RISE = 0.18;
+const inAisle = (a) => Math.abs(angDiff(a, A.portalA)) < A.stairHalfA;
+const inFlight = (r) => FLIGHTS.some(([ra, rb]) => r < ra && r >= rb);
+export const AISLE_CUTS = [[A0, A0 + A.stairHalfA], [A1 - A.stairHalfA, A1]];
+function stairY(r) {
+  let y = 0;
+  for (const [ra, rb, ya, yb] of FLIGHTS) {
+    if (r >= ra) return y;
+    if (r >= rb) {
+      const n = Math.round((ya - yb) / RISE);
+      return ya - (Math.min(n - 1, Math.floor(((ra - r) / (ra - rb)) * n)) + 1) * ((ya - yb) / n);
+    }
+    y = yb;
+  }
+  return y;
+}
 
 // ---------------------------------------------------------------- ramps (2 per level change)
 export const RAMPS = [];
-for (let t = 0; t < 4; t++) {
+for (let t = 0; t < (A.ramps ? 4 : 0); t++) {
   const rOut = A.R[t + 1], rIn = rOut - A.rampBand, rMid = rOut - A.rampBand / 2;
   const span = ((A.Y[t + 1] - A.Y[t]) * A.rampSlope) / rMid;
-  for (const [c, dir] of [[norm(Math.PI - 0.36), 1], [norm(Math.PI + 0.36), -1]]) { // flanking the entrance, tops nearest it
+  for (const [c, dir] of [[norm(Math.PI - A.rampA), 1], [norm(Math.PI + A.rampA), -1]]) { // flanking the grand stair, tops nearest it
     const lo = c - span / 2, hi = c + span / 2;
     RAMPS.push({ t, rIn, rOut, lo, hi, aLow: dir > 0 ? lo : hi, aTop: dir > 0 ? hi : lo, dir, y0: A.Y[t], y1: A.Y[t + 1] });
   }
@@ -46,8 +68,9 @@ const rampFrac = (rp, an) => Math.min(1, Math.max(0, (an - rp.aLow) / (rp.aTop -
 export function groundLocal(x, z) {
   const r = Math.hypot(x - A.cx, z - A.cz);
   if (r >= A.RWALL) return 0;
-  const k = levelAt(r);
   const an = norm(Math.atan2(z - A.cz, x - A.cx));
+  if (inAisle(an)) return stairY(r);
+  const k = levelAt(r);
   for (const rp of RAMPS) if (rp.t === k && r >= rp.rIn && r < rp.rOut && an >= rp.lo && an <= rp.hi) return rp.y0 + (rp.y1 - rp.y0) * rampFrac(rp, an);
   return A.Y[k];
 }
@@ -62,10 +85,10 @@ function aislesFor(k) {
 export const BOXES = [];
 for (let k = 1; k <= 4; k++) {
   const cuts = aislesFor(k).sort((p, q) => p[0] - q[0]);
-  let start = A0 + 0.002;
+  let start = A0 + A.stairHalfA; // no boxes in the grand-stair aisle
   const arcs = [];
   for (const [s, e] of cuts) { arcs.push([start, s]); start = e; }
-  arcs.push([start, A1 - 0.002]);
+  arcs.push([start, A1 - A.stairHalfA]);
   const rMid = A.R[k] + A.boxDepth / 2;
   let n0 = 1;
   for (const [s, e] of arcs) {
@@ -90,6 +113,7 @@ export function arenaShape(e, H) {
     blocks(px, pz, x, z, y) {
       const p0 = pol(px, pz), p1 = pol(x, z);
       if (inWall(p1, y) && !inWall(p0, y)) return true; // outer wall (portal open at the top level)
+      if (p1.r < A.RWALL && inAisle(p0.a) !== inAisle(p1.a) && (inFlight(p0.r) || inFlight(p1.r))) return true; // stair balustrades
       if (p1.r < A.RWALL) {
         const g = e + groundLocal(x, z);
         if (g > y + 0.45) return true; // riser / ramp side too high
@@ -139,7 +163,7 @@ function arcs(r, a0, a1, seg = 1.5) {
 const ringTop = (q, r0, r1, y, color, a0 = A0, a1 = A1) => { const as = arcs(r1, a0, a1); for (let i = 0; i < as.length - 1; i++) q.quad(P(r0, as[i], y), P(r1, as[i], y), P(r1, as[i + 1], y), P(r0, as[i + 1], y), color); };
 const ringWall = (q, r, y0, y1, color, a0 = A0, a1 = A1) => { const as = arcs(r, a0, a1); for (let i = 0; i < as.length - 1; i++) q.quad(P(r, as[i], y0), P(r, as[i + 1], y0), P(r, as[i + 1], y1), P(r, as[i], y1), color); };
 const radial = (q, a, r0, r1, y0, y1, color) => q.quad(P(r0, a, y0), P(r1, a, y0), P(r1, a, y1), P(r0, a, y1), color);
-function minus(a0, a1, cuts) {
+export function minus(a0, a1, cuts) {
   const out = [];
   let s = a0;
   for (const [c0, c1] of [...cuts].sort((p, q) => p[0] - q[0])) { if (c0 > s) out.push([s, Math.min(c0, a1)]); s = Math.max(s, c1); }
@@ -159,31 +183,39 @@ const mats = {
 let ledTex = null, ledCount = 0;
 function ledTexture() {
   if (ledTex) return ledTex;
-  const c = document.createElement('canvas');
-  c.width = 2048; c.height = 96;
-  const g = c.getContext('2d');
-  const segs = [['#0b1e5b', '#ffc65a', '{FIRM NAME} · SPORTS ANALYTICS'], ['#111827', '#3dff7a', 'LIVE ODDS · 1X2 · O/U 2.5 · BTTS'],
+  // every message gets a slot sized to its own measured width (+ padding), so nothing overlaps
+  const segs = [['#0b1e5b', '#ffc65a', '{FIRM_NAME} · SPORTS ANALYTICS'], ['#111827', '#3dff7a', 'LIVE PRICING · 1X2 · O/U 2.5 · BTTS'],
     ['#4b0f2e', '#ffffff', 'CHAMPIONS LEAGUE · LIVE'], ['#2a0606', '#ffffff', 'F1 GRAND PRIX · LIVE TIMING'], ['#1f2937', '#93c5fd', 'POSITIONS OPEN · 24/7'],
     ['#0b1e5b', '#ffffff', 'RESPONSIBLE RECREATION'], ['#3b0d0d', '#ffc65a', 'PREMIER LEAGUE · IN-PLAY'], ['#111827', '#ffffff', 'LIQUIDITY IS A LIFESTYLE']];
-  const w = c.width / segs.length;
+  const c = document.createElement('canvas'), g = c.getContext('2d'), H = 128, FONT = 'bold 64px sans-serif', PAD = 90;
+  g.font = FONT;
+  const widths = segs.map(([, , t]) => Math.ceil(g.measureText(t).width) + PAD * 2);
+  c.width = widths.reduce((a, b) => a + b, 0); c.height = H;
+  let x = 0;
   segs.forEach(([bg, fg, t], i) => {
-    g.fillStyle = bg; g.fillRect(i * w, 0, w, 96);
-    g.fillStyle = fg; g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(t, i * w + w / 2, 50);
-    g.fillStyle = '#ffc65a'; g.fillRect(i * w, 0, 3, 96);
+    g.fillStyle = bg; g.fillRect(x, 0, widths[i], H);
+    g.fillStyle = '#ffc65a'; g.fillRect(x, 0, 4, H);
+    g.font = FONT; g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(t, x + widths[i] / 2, H / 2 + 3);
+    x += widths[i];
   });
   ledTex = new THREE.CanvasTexture(c);
   ledTex.colorSpace = THREE.SRGBColorSpace;
   ledTex.wrapS = THREE.RepeatWrapping;
+  ledTex.anisotropy = 8;
+  ledTex.userData.aspect = c.width / c.height;
   return ledTex;
 }
 const ledMat = () => (ledMat.m ||= new THREE.MeshBasicMaterial({ map: ledTexture(), side: THREE.BackSide, toneMapped: false }));
 // Inward-facing band on a circle of radius r between angles a0..a1 (u scaled so text keeps its size).
-function ledBand(ctx, r, y0, y1, a0, a1, outward = false) {
+export function ledBand(ctx, r, y0, y1, a0, a1, outward = false) {
   const len = (a1 - a0) * r;
   const g = new THREE.CylinderGeometry(r, r, y1 - y0, Math.max(8, Math.ceil(len / 1.5)), 1, true, Math.PI / 2 - a1, a1 - a0);
   const uv = g.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setX(i, (outward ? 1 : -1) * uv.getX(i) * (len / 64));
+  const metresPerTex = ledTexture().userData.aspect * (y1 - y0); // keep the letters' true proportions on any band height
+  let reps = len / metresPerTex;
+  if (a1 - a0 > TAU - 1e-6) reps = Math.max(1, Math.round(reps)); // closed ring: whole repeats, so no cut-off message at the seam
+  for (let i = 0; i < uv.count; i++) uv.setX(i, (outward ? 1 : -1) * uv.getX(i) * reps);
   const m = new THREE.Mesh(g, outward ? (ledMat.o ||= new THREE.MeshBasicMaterial({ map: ledTexture(), side: THREE.FrontSide, toneMapped: false })) : ledMat());
   m.position.set(A.cx, ctx.e + (y0 + y1) / 2, A.cz);
   ctx.add(m, g);
@@ -258,11 +290,43 @@ export function arena(ctx) {
   for (let k = 1; k <= 4; k++) {
     const rEnd = k < 4 ? A.R[k + 1] : A.RWALL;
     const rIn = k < 4 ? rEnd - A.rampBand : rEnd;
-    ringTop(q, A.R[k], rIn, A.Y[k], STEP);
-    if (k < 4) for (const [s, en] of minus(A0, A1, RAMPS.filter((rp) => rp.t === k).map((rp) => [rp.lo, rp.hi]))) ringTop(q, rIn, rEnd, A.Y[k], STEP, s, en);
-    ringWall(q, A.R[k], A.Y[k - 1], A.Y[k], RISER);
-    ringWall(glow, A.R[k] - 0.03, A.Y[k] - 0.28, A.Y[k] - 0.06, GOLD);
+    for (const [s, en] of minus(A0, A1, AISLE_CUTS)) {
+      ringTop(q, A.R[k], rIn, A.Y[k], STEP, s, en);
+      ringWall(q, A.R[k], A.Y[k - 1], A.Y[k], RISER, s, en);
+      ringWall(glow, A.R[k] - 0.03, A.Y[k] - 0.28, A.Y[k] - 0.06, GOLD, s, en);
+    }
+    if (k < 4) for (const [s, en] of minus(A0, A1, [...AISLE_CUTS, ...RAMPS.filter((rp) => rp.t === k).map((rp) => [rp.lo, rp.hi])])) ringTop(q, rIn, rEnd, A.Y[k], STEP, s, en);
   }
+
+  // ---- grand stair: straight down from the portal to the pit, a landing on every level
+  const sa0 = Math.PI - A.stairHalfA, sa1 = Math.PI + A.stairHalfA;
+  const sideY = (r) => A.Y[levelAt(r)]; // floor height just outside the aisle
+  const side = (r0, r1, y) => { // stair side walls down/up to the neighbouring floor
+    const yl = sideY((r0 + r1) / 2);
+    if (Math.abs(yl - y) > 0.01) for (const a of [sa0, sa1]) radial(q, a, r0, r1, Math.min(y, yl), Math.max(y, yl), RISER);
+  };
+  let prevR = A.RWALL, prevY = 0;
+  for (const [ra, rb, ya, yb] of FLIGHTS) {
+    ringTop(q, ra, prevR, prevY, 0x3a2730, sa0, sa1); // landing (carpeted)
+    ringTop(glow, ra + 0.6, ra + 0.75, prevY + 0.01, GOLD, sa0, sa1);
+    for (let r = ra; r < prevR - 0.01; r += 1) side(r, Math.min(prevR, r + 1), prevY);
+    if (prevY < 0) { const [lx, , lz] = P(ra + 1.5, Math.PI, 0); ctx.sign(`LEVEL ${A.Y.indexOf(prevY)}`, lx, prevY + 3.2, lz, { size: 0.55, gold: false }); }
+    const n = Math.round((ya - yb) / RISE), run = (ra - rb) / n, rise = (ya - yb) / n;
+    for (let i = 0; i < n; i++) {
+      const r1 = ra - i * run, r0 = r1 - run, y = ya - (i + 1) * rise;
+      ringTop(q, r0, r1, y, i % 2 ? 0x2c3448 : 0x323b50, sa0, sa1);
+      ringWall(q, r1, y, y + rise, RISER, sa0, sa1);
+      ringTop(glow, r1 - 0.05, r1, y + 0.005, GOLD, sa0, sa1); // lit nosing
+      side(r0, r1, y);
+    }
+    // glass balustrades with a gold handrail along both sides of the flight
+    for (const a of [sa0, sa1]) {
+      glass.quad(P(ra, a, ya), P(rb, a, yb), P(rb, a, yb + 1.0), P(ra, a, ya + 1.0), GLASS);
+      glow.quad(P(ra, a, ya + 1.0), P(rb, a, yb + 1.0), P(rb, a, yb + 1.08), P(ra, a, ya + 1.08), GOLD);
+    }
+    prevR = rb; prevY = yb;
+  }
+  ringTop(q, A.R[1] - 0.7, prevR, prevY + 0.01, 0x3a2730, sa0, sa1); // foot of the stair on the pit floor
   for (const rp of RAMPS) {
     const as = arcs(rp.rOut, Math.min(rp.aLow, rp.aTop), Math.max(rp.aLow, rp.aTop), 1.0);
     const h = (an) => rp.y0 + (rp.y1 - rp.y0) * rampFrac(rp, an);
@@ -284,8 +348,7 @@ export function arena(ctx) {
   ringWall(q, A.RWALL, TOP, TOP + A.portalH, NAVY, A0 + ph, A1 - ph);
   for (const a of [A0 - ph, A0 + ph]) radial(glow, a, A.RWALL - 0.5, A.RWALL + 0.5, TOP, TOP + A.portalH, GOLD);
   ringWall(glow, A.RWALL + 0.02, TOP + A.portalH, TOP + A.portalH + 0.25, GOLD, A0 - ph, A0 + ph);
-  ringTop(q, A.RWALL, A.RWALL + 2.5, TOP + 0.01, 0x1b2438);
-  ringWall(glow, A.RWALL - 0.1, 4.5, 5.0, BLUE);
+  ringWall(glow, A.RWALL - 0.1, 4.5, 5.0, BLUE, A0 + ph, A1 - ph);
   ringWall(glow, A.RWALL - 0.1, 7.5, 7.9, GOLD);
 
   // ---- open private boxes
@@ -358,7 +421,7 @@ export function arena(ctx) {
   // ---- wrap-around ribbon screen under the roof + LED boards along every tier front
   ledBand(ctx, A.RWALL - 0.35, 8.4, 10.6, A0, A1);
   for (let k = 1; k <= 4; k++) {
-    const cuts = RAMPS.filter((rp) => rp.t === k - 1).map((rp) => [rp.lo, rp.hi]);
+    const cuts = [...AISLE_CUTS, ...RAMPS.filter((rp) => rp.t === k - 1).map((rp) => [rp.lo, rp.hi])];
     for (const [s0, s1] of minus(A0, A1, cuts)) ledBand(ctx, A.R[k] - 0.06, A.Y[k] - 1.25, A.Y[k] - 0.34, s0, s1);
   }
 
@@ -395,16 +458,8 @@ export function arena(ctx) {
     ctx.npc(x + 1.1 * Math.cos(a), z + 1.1 * Math.sin(a), 0xf0f0f0, yaw, Y0);
   }
 
-  // ---- concourse: the lift hall flows straight into the portal (top level)
-  const portalX = A.cx - Math.sqrt(A.RWALL * A.RWALL - 49);
-  ctx.deco(50, portalX + 0.5, 0.02, 0.035, -A.portalHalfM, A.portalHalfM, 0x1b2438);
-  for (const zz of [-A.portalHalfM, A.portalHalfM - 0.4]) ctx.deco(50, portalX + 0.5, 0.035, 0.045, zz, zz + 0.4, GOLD);
-  for (let x = 52; x < portalX - 1; x += 3) ctx.deco(x, x + 1.4, 0.035, 0.045, -0.2, 0.2, BLUE);
-  for (const sg of [-1, 1]) ctx.box(portalX - 0.9, portalX + 1.2, 0, A.portalH + 1.4, sg > 0 ? A.portalHalfM : -A.portalHalfM - 1.6, sg > 0 ? A.portalHalfM + 1.6 : -A.portalHalfM, 0x1b2438);
-  ctx.deco(portalX - 0.9, portalX + 1.2, A.portalH, A.portalH + 1.4, -A.portalHalfM, A.portalHalfM, 0x1b2438);
-  for (const sg of [-1, 1]) ctx.deco(portalX - 0.95, portalX - 0.9, 0.3, A.portalH + 1.2, sg * (A.portalHalfM + 0.8) - 0.15, sg * (A.portalHalfM + 0.8) + 0.15, GOLD);
-  ctx.deco(portalX - 0.95, portalX - 0.9, A.portalH + 0.5, A.portalH + 0.7, -A.portalHalfM - 1.4, A.portalHalfM + 1.4, BLUE);
-  ctx.sign('SPORTS ANALYTICS ARENA', portalX - 1.2, A.portalH + 2.4, 0, { size: 1.8, sub: 'Enter at Level 4 · ramps either side' });
+  // ---- head of the grand stair, just inside the portal (the arrivals hall frames the portal itself)
+  { const [x, , z] = P(A.RWALL - 2.5, Math.PI, 0); ctx.sign('GRAND STAIR', x, A.portalH + 1.2, z, { size: 0.9, sub: 'Levels 3 · 2 · 1 · Analytics Pit' }); }
   for (const a of [Math.PI / 2, -Math.PI / 2, 0]) { const [x, , z] = P(A.RWALL - 2, a, 0); ctx.sign('SPORTS ANALYTICS ARENA', x, 6.7, z, { size: 2.6 }); }
 
   for (const [qq, mat, order] of [[q, mats.chamber, 0], [glow, mats.glow, 0], [glass, mats.glass, 6]]) {
@@ -412,8 +467,15 @@ export function arena(ctx) {
     m.position.y = e; m.renderOrder = order;
     ctx.add(m, m.geometry);
   }
-  for (const m of buildBroadcastScreens(bc)) ctx.add(m, m.geometry);
   ctx.disposables.push(...parts);
+  arenaLive(ctx, bc);
+}
+
+// Broadcast screens + the live layer (pop-ups, sounds, simulated positions) + the walkable shape.
+// Shared by the greybox builder above and the Phase 1 arena (sportsArena.js).
+export function arenaLive(ctx, bc) {
+  const e = ctx.e, H = ctx.floor.height;
+  for (const m of buildBroadcastScreens(bc)) ctx.add(m, m.geometry);
 
   // ---- live gains / losses: every goal settles the boxes watching that match
   const pool = makePopupPool(ctx, 18);
@@ -460,6 +522,6 @@ export function arena(ctx) {
   ctx.shapes = [arenaShape(e, H)];
   ctx.boxCount = BOXES.length;
   ctx.ledBands = ledCount;
-  ctx.seatCount = BOXES.length * 3;
+  ctx.seatCount ??= BOXES.length * 3;
   ctx.bcScreens = bc.length;
 }

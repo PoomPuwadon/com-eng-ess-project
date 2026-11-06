@@ -10,7 +10,7 @@ import { MAT, instancedBoxes, chunked } from '../world/geom.js';
 //   CROSS-AISLE (r 27.5..29.5) → down to the lower bowl / up to the upper bowl. That is all a
 //   spectator can reach: the lower bowl's front row is 1.6 m above the ringside floor (no way down).
 // Competitors / officials (backstage access): hall north door → service corridor (Z < -53.4) →
-//   backstage (X > 172) with Red / Blue dressing rooms → WALKOUT tunnel under the concourse →
+//   backstage (X > 172) → the small black FOCUS ROOM at the end of the walkout road → WALKOUT tunnel under the concourse →
 //   lit walkway through the seats (Z -2.5..2.5) → ring steps (east side) → corner. See
 //   floor.walkout in building.js for the routes.
 //
@@ -30,8 +30,11 @@ const VOM_HALF = 1.5, AISLE_HALF = 0.6, WALK_HALF = 2.5;
 const ENTRY = { x0: 44, x1: 55.2, half: 4 };
 const STAIRS = { x0: 55.2, x1: 68, steps: 16 }; // rise CONC.y / 16 = 0.381 per step, 0.8 m treads
 const CORRIDOR_Z = -53.4, BACKSTAGE_X = 172;
+const FOCUS = { x0: 172, x1: 180, z0: -4, z1: 4, h: 4.2 }; // black focus room at the end of the walkout road (room 'focus_room')
 const WALL = 50;
 const lowTop = LOW.y0 + (LOW.rows - 1) * LOW.rise, upTop = UP.y0 + (UP.rows - 1) * UP.rise;
+// layout data shared with the Phase 1 build (combatPavilion.js), which uses this file only as its placement guide
+export const PAV = { C, RING, RS, LOW, XA, UP, BACK, CONC, OUTER, VOMS, VOM_HALF, AISLE_HALF, WALK_HALF, ENTRY, STAIRS, CORRIDOR_Z, BACKSTAGE_X, FOCUS, lowTop, upTop };
 
 const inVom = (dx, dz, half = VOM_HALF) => VOMS.some((v) => {
   const along = dx * Math.cos(v) + dz * Math.sin(v);
@@ -108,7 +111,7 @@ const wall = (q, r, y0, y1, a0, a1, c) => { const as = steps(r, a0, a1); for (le
 const radial = (q, a, r0, r1, y0, y1, c) => q.quad(P(r0, a, y0), P(r1, a, y0), P(r1, a, y1), P(r0, a, y1), c);
 const halfAng = (hw, r) => Math.asin(Math.min(0.99, hw / r));
 // Arcs of a full circle at radius r, minus gaps [{a, hw}] (hw = half width in metres).
-function arcs(r, gaps) {
+export function arcs(r, gaps) {
   const cuts = gaps.map(({ a, hw }) => { const d = halfAng(hw, r); return [a - d, a + d]; });
   // walk the circle starting just after the walkout (angle 0) gap if there is one
   let start = 0, end = Math.PI * 2;
@@ -259,7 +262,7 @@ export function pavilion(ctx) {
     wall(glow, BACK.r0 - 0.06, BACK.top - 0.3, BACK.top - 0.15, a0, a1, GOLD);
   }
 
-  // ---- concourse: floor, outer wall with the entrance, betting windows, section signs
+  // ---- concourse: floor, outer wall with the entrance (position windows removed by the user, 2026-11-06)
   top(q, CONC.r0, CONC.r1, CONC.y, 0, Math.PI * 2, CONC_C);
   top(q, CONC.r0, CONC.r1, CONC.y - 0.3, 0, Math.PI * 2, 0x1d181b); // underside (seen from the tunnel)
   const entA = halfAng(ENTRY.half, OUTER.r0);
@@ -267,14 +270,6 @@ export function pavilion(ctx) {
   for (const [a0, a1] of arcs(OUTER.r0 + 0.3, [WALK_GAP, { a: Math.PI, hw: ENTRY.half }])) wall(q, OUTER.r0 + 0.3, 0, CONC.y, a0, a1, 0x2b2226); // below the concourse, open for the tunnel
   wall(q, OUTER.r0 + 0.3, CONC.y + 6, H - 0.25, Math.PI - entA, Math.PI + entA, 0x2b2226);
   wall(glow, OUTER.r0 + 0.25, CONC.y + 5.9, CONC.y + 6.0, Math.PI - entA, Math.PI + entA, GOLD);
-  for (let i = 0; i < 12; i++) { // position windows (betting counters) on the outer wall
-    const a = Math.PI + (i < 6 ? -0.35 - i * 0.42 : 0.35 + (i - 6) * 0.42);
-    const [x, , z] = P(OUTER.r0 - 0.6, a, 0);
-    ctx.deco(x - 1.2, x + 1.2, CONC.y, CONC.y + 1.1, z - 1.2, z + 1.2, 0x5a3a20);
-    ctx.screen(...(() => { const [sx, , sz] = P(OUTER.r0 - 0.05, a, 0); return [sx, CONC.y + 2.6, sz]; })(), yawIn(a), 3.2, 1.6, i % 2 ? CH.FIGHT : CH.ODDS);
-    ctx.npc(...(() => { const [nx, , nz] = P(OUTER.r0 - 2.2, a, 0); return [nx, nz]; })(), 0xd0a070, yawIn(a) + Math.PI, CONC.y);
-  }
-  ctx.sign('Ringside Analytics Windows · positions open between rounds', ...(() => { const [x, , z] = P(OUTER.r0 - 0.4, Math.PI - 0.77, 0); return [x, CONC.y + 4.6, z]; })(), { size: 0.6 });
 
   // ---- entrance: corridor from the arrivals hall, ticket gates, grand stairs up to the concourse
   for (const sz of [-1, 1]) {
@@ -294,9 +289,10 @@ export function pavilion(ctx) {
 
   // ---- walkout: lit runway through the seats, tunnel under the concourse, backstage
   const xs = C.x + Math.sqrt(RS * RS - WALK_HALF * WALK_HALF), xt = C.x + Math.sqrt(CONC.r0 ** 2 - WALK_HALF ** 2);
+  const XR = FOCUS.x1 - 0.3; // the red / blue runway lines start inside the focus room
   ctx.deco(xs, BACKSTAGE_X, 0.02, 0.04, -WALK_HALF, WALK_HALF, 0x0c0c10);
-  ctx.deco(xs, BACKSTAGE_X, 0.04, 0.06, -WALK_HALF, -WALK_HALF + 0.25, 0xd22222);
-  ctx.deco(xs, BACKSTAGE_X, 0.04, 0.06, WALK_HALF - 0.25, WALK_HALF, 0x2244cc);
+  ctx.deco(xs, XR, 0.04, 0.06, -WALK_HALF, -WALK_HALF + 0.25, 0xd22222);
+  ctx.deco(xs, XR, 0.04, 0.06, WALK_HALF - 0.25, WALK_HALF, 0x2244cc);
   for (let x = xs + 1; x < xt; x += 3) ctx.deco(x, x + 1.2, 0.04, 0.06, -0.3, 0.3, 0xffd27a);
   for (const sz of [-1, 1]) ctx.deco(xt, BACKSTAGE_X, 0, CONC.y - 0.3, sz * WALK_HALF - 0.15 * sz, sz * WALK_HALF + 0.15 * sz, 0x1d181b); // tunnel walls
   for (let x = xt + 1; x < BACKSTAGE_X; x += 2.5) ctx.deco(x, x + 1.4, CONC.y - 0.45, CONC.y - 0.35, -1.2, 1.2, 0xfff0c8); // tunnel lights
@@ -304,14 +300,15 @@ export function pavilion(ctx) {
   ctx.deco(xt - 0.4, xt + 0.4, 4.2, 5.0, -WALK_HALF - 0.55, WALK_HALF + 0.55, 0x15171b);
   ctx.screen(xt - 0.45, 4.6, 0, -Math.PI / 2, 4.6, 0.7, CH.FIGHT);
   ctx.sign('WALKOUT — Red Corner · Blue Corner', xt - 1, 5.6, 0, { size: 0.7 });
-  // backstage wall (with the tunnel), dressing-room dressing, warm-up area
+  // backstage wall (with the tunnel opening into the focus room)
   for (const [z0, z1] of [[CORRIDOR_Z, -WALK_HALF], [WALK_HALF, 59]]) ctx.deco(BACKSTAGE_X - 0.3, BACKSTAGE_X, 0, H - 0.25, z0, z1, 0x2b2226);
   ctx.deco(BACKSTAGE_X - 0.3, BACKSTAGE_X, 4.2, H - 0.25, -WALK_HALF, WALK_HALF, 0x2b2226);
-  for (const [z, col] of [[-26, 0xd22222], [26, 0x2244cc]]) {
-    ctx.deco(186, 204, 0.01, 0.03, z - 10, z + 10, 0x26303a); // mats
-    for (let i = 0; i < 3; i++) ctx.deco(199.5 + i * 2 - 0.3, 199.5 + i * 2 + 0.3, 1.0, 2.6, z - 8, z - 7.4, col); // heavy bags
-    ctx.npc(190, z, col, -Math.PI / 2); ctx.npc(192, z + 2, 0x111111, -Math.PI / 2);
-  }
+  // the FOCUS ROOM (walls, floor, ceiling and back door come from the room in building.js): a small
+  // all-black room where both fighters wait; one cold light over the centre, a low bench along each side
+  ctx.deco(FOCUS.x0 + 0.3, FOCUS.x1 - 0.3, 0.015, 0.03, FOCUS.z0 + 0.3, FOCUS.z1 - 0.3, 0x050506);
+  ctx.deco((FOCUS.x0 + FOCUS.x1) / 2 - 0.6, (FOCUS.x0 + FOCUS.x1) / 2 + 0.6, FOCUS.h - 0.12, FOCUS.h - 0.05, -0.6, 0.6, 0xdfe8ff);
+  for (const sz of [-1, 1]) ctx.box(FOCUS.x0 + 2.2, FOCUS.x1 - 1.0, 0, 0.45, Math.min(sz * (FOCUS.z1 - 0.95), sz * (FOCUS.z1 - 0.35)), Math.max(sz * (FOCUS.z1 - 0.95), sz * (FOCUS.z1 - 0.35)), 0x141416);
+  ctx.npc(178, -1.6, 0xd22222, -Math.PI / 2); ctx.npc(178, 1.6, 0x2244cc, -Math.PI / 2);
   for (let i = 0; i < 4; i++) ctx.deco(176 + i * 3, 177.5 + i * 3, 0, 1.8, 50, 52, 0x3a3f47); // equipment cases
   // service corridor: walls + the locked door from the arrivals hall
   ctx.deco(ENTRY.x0, BACKSTAGE_X, 0, 6, CORRIDOR_Z, CORRIDOR_Z + 0.3, 0x2b2226);

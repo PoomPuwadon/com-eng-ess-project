@@ -9,8 +9,10 @@ import { chunked } from './geom.js';
 // Cells (16:9, 384 x 216):  0..14 = football matches (95 % of what is on screen)
 //                            15    = F1 Grand Prix with live timing tower + circuit map
 //                            16    = live scores ticker (all matches)
-const COLS = 4, ROWS = 5, CW = 384, CH_ = 216;
-export const BC = { MATCHES: 15, RACE: 15, SCORES: 16, DASH: 17, DASHES: 3 };
+//                            17..19 = box position dashboards
+//                            20..23 = per-seat position consoles (VT-02 boxes)
+const COLS = 4, ROWS = 6, CW = 384, CH_ = 216;
+export const BC = { MATCHES: 15, RACE: 15, SCORES: 16, DASH: 17, DASHES: 3, CONSOLE: 20, CONSOLES: 4 };
 
 // Events for the arena (box gain/loss pop-ups). One listener slot, replaced on floor rebuild.
 let listener = null;
@@ -21,6 +23,11 @@ const canvas = document.createElement('canvas');
 canvas.width = CW * COLS;
 canvas.height = CH_ * ROWS;
 const g = canvas.getContext('2d');
+// shrink a font until the text fits maxW (every label on a screen is fitted, nothing overlaps)
+function fit(text, maxW, size, weight = 'bold', family = 'sans-serif') {
+  let px = size;
+  do { g.font = `${weight} ${px}px ${family}`.trim(); px -= 1; } while (g.measureText(text).width > maxW && px > 7);
+}
 export const bcTexture = new THREE.CanvasTexture(canvas);
 bcTexture.colorSpace = THREE.SRGBColorSpace;
 bcTexture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -109,21 +116,25 @@ function drawMatch(m, cx, cy) {
   }
   const [bx, by] = pitchXY(cx, cy, m.ball.x, m.ball.y);
   g.fillStyle = '#fff'; g.beginPath(); g.arc(bx, by, 2.4, 0, Math.PI * 2); g.fill();
-  // live scoreboard bug
-  g.fillStyle = 'rgba(8,12,24,0.92)'; g.fillRect(cx + 8, cy + 8, 236, 32);
-  g.fillStyle = m.home[2]; g.fillRect(cx + 8, cy + 8, 6, 32);
-  g.fillStyle = m.away[2]; g.fillRect(cx + 132, cy + 8, 6, 32);
-  g.font = 'bold 18px sans-serif'; g.fillStyle = '#fff'; g.textBaseline = 'middle';
-  g.fillText(`${m.home[0]}  ${m.hs}`, cx + 20, cy + 25);
-  g.fillText(`${m.as}  ${m.away[0]}`, cx + 144, cy + 25);
-  g.fillStyle = '#ffc65a'; g.fillRect(cx + 196, cy + 8, 48, 32);
-  g.fillStyle = '#111'; g.font = 'bold 15px monospace'; g.fillText(clock(m), cx + 200, cy + 25);
+  // live scoreboard bug: [kit|HOME| 1 - 0 |AWAY|kit] [clock] ... [LIVE] (fixed slots, fitted text)
+  const bx0 = cx + 8, by0 = cy + 8, bh = 30;
+  g.fillStyle = 'rgba(8,12,24,0.92)'; g.fillRect(bx0, by0, 214, bh);
+  g.fillStyle = m.home[2]; g.fillRect(bx0, by0, 6, bh);
+  g.fillStyle = m.away[2]; g.fillRect(bx0 + 208, by0, 6, bh);
+  g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillStyle = '#fff';
+  fit(m.home[0], 56, 17); g.fillText(m.home[0], bx0 + 38, by0 + bh / 2 + 1);
+  fit(m.away[0], 56, 17); g.fillText(m.away[0], bx0 + 176, by0 + bh / 2 + 1);
+  g.fillStyle = '#1f2a44'; g.fillRect(bx0 + 72, by0 + 3, 70, bh - 6);
+  g.fillStyle = '#fff'; fit(`${m.hs} - ${m.as}`, 62, 18); g.fillText(`${m.hs} - ${m.as}`, bx0 + 107, by0 + bh / 2 + 1);
+  g.fillStyle = '#ffc65a'; g.fillRect(bx0 + 220, by0, 58, bh);
+  g.fillStyle = '#111'; fit(clock(m), 52, 15, 'bold', 'monospace'); g.fillText(clock(m), bx0 + 249, by0 + bh / 2 + 1);
   g.fillStyle = '#e11d48'; g.fillRect(cx + CW - 52, cy + 10, 44, 18);
-  g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.fillText(m.ft > 0 ? 'FULL' : 'LIVE', cx + CW - 46, cy + 19);
-  g.fillStyle = 'rgba(255,255,255,0.7)'; g.font = '11px sans-serif'; g.fillText(`${m.comp} · SIMULATED`, cx + 10, cy + CH_ - 6);
+  g.fillStyle = '#fff'; fit(m.ft > 0 ? 'FULL' : 'LIVE', 38, 12); g.fillText(m.ft > 0 ? 'FULL' : 'LIVE', cx + CW - 30, cy + 19.5);
+  g.textAlign = 'left';
+  g.fillStyle = 'rgba(255,255,255,0.7)'; fit(`${m.comp} · SIMULATED`, CW - 20, 11, ''); g.fillText(`${m.comp} · SIMULATED`, cx + 10, cy + CH_ - 8);
   if (m.goalFlash > 0 && Math.floor(m.goalFlash * 4) % 2) {
-    g.fillStyle = 'rgba(255,198,90,0.9)'; g.fillRect(cx + 110, cy + 90, 164, 40);
-    g.fillStyle = '#111'; g.font = 'bold 28px sans-serif'; g.fillText('GOAL!', cx + 150, cy + 110);
+    g.fillStyle = 'rgba(255,198,90,0.92)'; g.fillRect(cx + 110, cy + 90, 164, 40);
+    g.fillStyle = '#111'; g.textAlign = 'center'; fit('GOAL!', 150, 28); g.fillText('GOAL!', cx + 192, cy + 111); g.textAlign = 'left';
   }
   g.textBaseline = 'alphabetic';
 }
@@ -207,8 +218,9 @@ function drawRace(cx, cy) {
   // header
   g.fillStyle = '#e10600'; g.fillRect(cx, cy, CW, 22);
   g.fillStyle = '#fff'; g.font = 'bold 13px sans-serif'; g.textBaseline = 'middle';
-  g.fillText(`F1 · ${race.name} GP`, cx + 8, cy + 11);
-  g.fillText(race.done > 0 ? 'CHEQUERED FLAG' : `LAP ${leadLap}/${LAPS}`, cx + 270, cy + 11);
+  fit(`F1 · ${race.name} GP`, 230, 13); g.fillText(`F1 · ${race.name} GP`, cx + 8, cy + 11);
+  g.textAlign = 'right'; fit(race.done > 0 ? 'CHEQUERED FLAG' : `LAP ${leadLap}/${LAPS}`, 130, 13);
+  g.fillText(race.done > 0 ? 'CHEQUERED FLAG' : `LAP ${leadLap}/${LAPS}`, cx + CW - 8, cy + 11); g.textAlign = 'left';
   // timing tower: top 10
   g.fillStyle = 'rgba(20,22,30,0.95)'; g.fillRect(cx + 4, cy + 26, 190, CH_ - 30);
   order.slice(0, 10).forEach((c, i) => {
@@ -238,7 +250,7 @@ function drawRace(cx, cy) {
   g.fillText(lead.code, mx + lx * mw + 6, my + ly * mh - 6);
   // fastest lap + footer
   g.fillStyle = '#a855f7'; g.font = 'bold 10px sans-serif';
-  if (race.fastest) g.fillText(`FASTEST LAP ${race.fastest.code} ${fmtLap(race.fastest.t)}`, cx + 202, cy + CH_ - 22);
+  if (race.fastest) { fit(`FASTEST LAP ${race.fastest.code} ${fmtLap(race.fastest.t)}`, 176, 10); g.fillText(`FASTEST LAP ${race.fastest.code} ${fmtLap(race.fastest.t)}`, cx + 202, cy + CH_ - 22); }
   g.fillStyle = 'rgba(255,255,255,0.6)'; g.font = '10px sans-serif'; g.fillText('LIVE TIMING · SIMULATED', cx + 202, cy + CH_ - 8);
   g.fillStyle = '#e11d48'; g.fillRect(cx + CW - 50, cy + 28, 44, 16);
   g.fillStyle = '#fff'; g.font = 'bold 11px sans-serif'; g.fillText(race.done > 0 ? 'RESULT' : 'LIVE', cx + CW - 44, cy + 36);
@@ -265,8 +277,9 @@ function drawScores(cx, cy) {
 // Box position dashboards (shown under every box TV). Simulated stakes/prices.
 function drawDash(d, cx, cy) {
   g.fillStyle = '#0a0f1c'; g.fillRect(cx, cy, CW, CH_);
-  g.fillStyle = '#ffc65a'; g.font = 'bold 15px sans-serif'; g.fillText(`OPEN POSITIONS · DESK ${['A', 'B', 'C'][d]}`, cx + 10, cy + 22);
-  g.fillStyle = '#6b7280'; g.font = '11px sans-serif'; g.fillText('MARKET            PRICE   STAKE    P&L', cx + 10, cy + 42);
+  g.fillStyle = '#ffc65a'; fit(`OPEN POSITIONS · DESK ${['A', 'B', 'C'][d]}`, 200, 15); g.fillText(`OPEN POSITIONS · DESK ${['A', 'B', 'C'][d]}`, cx + 10, cy + 22);
+  g.fillStyle = '#6b7280'; g.font = 'bold 11px monospace';
+  for (const [t, x] of [['MARKET', 10], ['PRICE', 150], ['ALLOC', 200], ['P&L', 270]]) g.fillText(t, cx + x, cy + 44);
   let total = 0;
   for (let j = 0; j < 6; j++) {
     const m = matches[(d * 5 + j * 2) % BC.MATCHES];
@@ -284,16 +297,54 @@ function drawDash(d, cx, cy) {
     g.fillStyle = pnl >= 0 ? '#3dff7a' : '#ff4d5e'; g.fillText(`${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}`, cx + 270, y);
   }
   g.fillStyle = total >= 0 ? '#3dff7a' : '#ff4d5e'; g.font = 'bold 14px monospace';
-  g.fillText(`NET ${total >= 0 ? '+' : ''}${total.toLocaleString()}`, cx + 230, cy + 22);
+  g.textAlign = 'right'; fit(`NET ${total >= 0 ? '+' : ''}${total.toLocaleString()}`, 150, 14, 'bold', 'monospace');
+  g.fillText(`NET ${total >= 0 ? '+' : ''}${total.toLocaleString()}`, cx + CW - 10, cy + 22); g.textAlign = 'left';
   g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '10px sans-serif'; g.fillText('NOTIONAL · SIMULATED', cx + 10, cy + CH_ - 6);
+}
+
+// Per-seat position console (VT-02 boxes): one live market, pricing buttons, allocation chips,
+// the Open Position button and the seat's notional balance. 4 variants, one market each.
+function drawConsole(k, cx, cy) {
+  const m = matches[(k * 4 + 1) % BC.MATCHES];
+  const grd = g.createLinearGradient(cx, cy, cx, cy + CH_); grd.addColorStop(0, '#0d1838'); grd.addColorStop(1, '#070b1a');
+  g.fillStyle = grd; g.fillRect(cx, cy, CW, CH_);
+  g.fillStyle = '#2f7bff'; g.fillRect(cx, cy, CW, 4);
+  g.textBaseline = 'middle';
+  const head = `POSITION CONSOLE · SEAT ${'ABCD'[k]}`;
+  g.fillStyle = '#93c5fd'; fit(head, 250, 13); g.fillText(head, cx + 12, cy + 20);
+  g.fillStyle = '#ffc65a'; g.textAlign = 'right'; fit(clock(m), 80, 14, 'bold', 'monospace'); g.fillText(clock(m), cx + CW - 12, cy + 20); g.textAlign = 'left';
+  const title = `${m.home[1]} ${m.hs} - ${m.as} ${m.away[1]}`;
+  g.fillStyle = '#fff'; fit(title, CW - 24, 20); g.fillText(title, cx + 12, cy + 50);
+  const lead = m.hs - m.as, base = [1.9 - lead * 0.45, 3.3, 3.6 + lead * 0.8];
+  ['1', 'X', '2'].forEach((lab, i) => {
+    const x = cx + 12 + i * 122, y = cy + 72, price = Math.max(1.05, base[i] + Math.sin(tick / 6 + i + k) * 0.04);
+    const on = i === k % 3, name = lab === 'X' ? 'DRAW' : lab === '1' ? m.home[0] : m.away[0];
+    g.fillStyle = on ? '#1d4ed8' : '#16213f'; g.fillRect(x, y, 112, 46);
+    g.strokeStyle = on ? '#93c5fd' : '#2a3a66'; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, 110, 44);
+    g.fillStyle = '#9ca3af'; fit(name, 96, 12); g.fillText(name, x + 10, y + 13);
+    g.fillStyle = '#fff'; fit(price.toFixed(2), 96, 20, 'bold', 'monospace'); g.fillText(price.toFixed(2), x + 10, y + 32);
+  });
+  ['500', '1,000', '5,000', '25,000'].forEach((t, i) => {
+    const x = cx + 12 + i * 92, y = cy + 128, on = i === (k + 1) % 4;
+    g.fillStyle = on ? '#ffc65a' : '#1f2937'; g.fillRect(x, y, 84, 26);
+    g.fillStyle = on ? '#111' : '#d1d5db'; g.textAlign = 'center'; fit(t, 76, 13, 'bold', 'monospace'); g.fillText(t, x + 42, y + 13); g.textAlign = 'left';
+  });
+  g.fillStyle = '#16a34a'; g.fillRect(cx + 12, cy + 164, 196, 38);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; fit('OPEN POSITION', 180, 17); g.fillText('OPEN POSITION', cx + 110, cy + 183); g.textAlign = 'left';
+  g.fillStyle = '#6b7280'; fit('NOTIONAL BALANCE', 150, 10); g.fillText('NOTIONAL BALANCE', cx + 222, cy + 174);
+  const bal = 250000 + Math.round(Math.sin(tick / 23 + k) * 18000 + k * 41000);
+  g.fillStyle = '#e5e7eb'; fit(bal.toLocaleString(), 150, 16, 'bold', 'monospace'); g.fillText(bal.toLocaleString(), cx + 222, cy + 193);
+  g.textBaseline = 'alphabetic';
 }
 
 function drawAll() {
   tick++;
-  matches.forEach((m, i) => drawMatch(m, (i % COLS) * CW, Math.floor(i / COLS) * CH_));
-  drawRace((BC.RACE % COLS) * CW, Math.floor(BC.RACE / COLS) * CH_);
-  drawScores((BC.SCORES % COLS) * CW, Math.floor(BC.SCORES / COLS) * CH_);
-  for (let d = 0; d < BC.DASHES; d++) drawDash(d, ((BC.DASH + d) % COLS) * CW, Math.floor((BC.DASH + d) / COLS) * CH_);
+  const cell = (i, fn) => { const x = (i % COLS) * CW, y = Math.floor(i / COLS) * CH_; g.save(); g.beginPath(); g.rect(x, y, CW, CH_); g.clip(); fn(x, y); g.restore(); };
+  matches.forEach((m, i) => cell(i, (x, y) => drawMatch(m, x, y)));
+  cell(BC.RACE, drawRace);
+  cell(BC.SCORES, drawScores);
+  for (let d = 0; d < BC.DASHES; d++) cell(BC.DASH + d, (x, y) => drawDash(d, x, y));
+  for (let k = 0; k < BC.CONSOLES; k++) cell(BC.CONSOLE + k, (x, y) => drawConsole(k, x, y));
   bcTexture.needsUpdate = true;
 }
 drawAll();
@@ -316,7 +367,7 @@ bcMaterial.onBeforeCompile = (shader) => {
     .replace('#include <common>', '#include <common>\nattribute vec2 cellOffset;')
     .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vMapUv * vec2(${1 / COLS}, ${1 / ROWS}) + cellOffset;\n#endif`);
 };
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _e = new THREE.Euler(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 // items: {x,y,z,yaw,w,h,cell}
 export function buildBroadcastScreens(items) {
   return chunked(items, 40, (list) => {
@@ -325,7 +376,7 @@ export function buildBroadcastScreens(items) {
     list.forEach((s, i) => { offs[i * 2] = (s.cell % COLS) / COLS; offs[i * 2 + 1] = 1 - (Math.floor(s.cell / COLS) + 1) / ROWS; });
     geo.setAttribute('cellOffset', new THREE.InstancedBufferAttribute(offs, 2));
     const mesh = new THREE.InstancedMesh(geo, bcMaterial, list.length);
-    list.forEach((s, i) => { _q.setFromAxisAngle(_up, s.yaw); _m.compose(_p.set(s.x, s.y, s.z), _q, _s.set(s.w, s.h, 1)); mesh.setMatrixAt(i, _m); });
+    list.forEach((s, i) => { _q.setFromEuler(_e.set(s.tilt || 0, s.yaw, 0, 'YXZ')); _m.compose(_p.set(s.x, s.y, s.z), _q, _s.set(s.w, s.h, 1)); mesh.setMatrixAt(i, _m); });
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
     return mesh;

@@ -180,12 +180,13 @@ export function buildBase(floor) {
       return { from: at - dw / 2, to: at + dw / 2, top: d0.top ?? doorTop };
     });
     const open = rm.open || [];
-    if (!rm.hall) ctx.deco(rm.x0, rm.x1, 0, 0.015, rm.z0, rm.z1, P.room); // lift halls lay their own themed floor
-    if (!open.includes('n')) ctx.wallX(rm.x0, rm.x1, rm.z0, rm.z0 + INT, h, P.wall, gapsFor('n', rm.x0, rm.x1));
-    if (!open.includes('s')) ctx.wallX(rm.x0, rm.x1, rm.z1 - INT, rm.z1, h, P.wall, gapsFor('s', rm.x0, rm.x1));
-    if (!open.includes('w')) ctx.wallZ(rm.z0 + INT, rm.z1 - INT, rm.x0, rm.x0 + INT, h, P.wall, gapsFor('w', rm.z0, rm.z1));
-    if (!open.includes('e')) ctx.wallZ(rm.z0 + INT, rm.z1 - INT, rm.x1 - INT, rm.x1, h, P.wall, gapsFor('e', rm.z0, rm.z1));
-    if (h < H - 0.5) ctx.deco(rm.x0, rm.x1, h, h + 0.2, rm.z0, rm.z1, 0xf4f4f0);
+    const wallC = rm.color ?? P.wall; // a room may set its own wall / floor colour (e.g. VT-03's black focus room)
+    if (!rm.hall) ctx.deco(rm.x0, rm.x1, 0, 0.015, rm.z0, rm.z1, rm.floorColor ?? P.room); // lift halls lay their own themed floor
+    if (!open.includes('n')) ctx.wallX(rm.x0, rm.x1, rm.z0, rm.z0 + INT, h, wallC, gapsFor('n', rm.x0, rm.x1));
+    if (!open.includes('s')) ctx.wallX(rm.x0, rm.x1, rm.z1 - INT, rm.z1, h, wallC, gapsFor('s', rm.x0, rm.x1));
+    if (!open.includes('w')) ctx.wallZ(rm.z0 + INT, rm.z1 - INT, rm.x0, rm.x0 + INT, h, wallC, gapsFor('w', rm.z0, rm.z1));
+    if (!open.includes('e')) ctx.wallZ(rm.z0 + INT, rm.z1 - INT, rm.x1 - INT, rm.x1, h, wallC, gapsFor('e', rm.z0, rm.z1));
+    if (h < H - 0.5) ctx.deco(rm.x0, rm.x1, h, h + 0.2, rm.z0, rm.z1, rm.color ?? 0xf4f4f0);
     if (!rm.noSign) ctx.sign(rm.sign, cx, Math.min(h - 0.6, Math.max(2.8, h * 0.6)), cz, { size: Math.min(2.5, Math.max(0.8, Math.min(w, d) / 14)) });
     if (!rm.noDoorSigns) for (const d0 of doors) {
       const off = 0.8;
