@@ -331,7 +331,7 @@ async function bench(secs) {
   const out = [];
   const views = {
     B1: ['vault', Math.PI / 2], L0: ['grand_lobby', 0], 'OT-01': ['trading_floor', Math.PI / 2], 'OT-02': ['lottery_institute', Math.PI / 2],
-    'OT-03': ['thai_desk', Math.PI / 2], 'OT-04': ['security_hq', Math.PI / 2], 'OT-05': ['master_dashboards', Math.PI],
+    'OT-04': ['security_hq', Math.PI / 2], 'OT-05': ['master_dashboards', Math.PI],
     BRIDGE: ['glass_bridge', -Math.PI / 2], 'VT-01': ['leisure_suite', -Math.PI / 2],
     'VT-02': ['football_arena', -Math.PI / 2], 'VT-03': ['muay_thai_arena', -Math.PI / 2], 'VT-04': ['racing_hall', -Math.PI / 2],
   };

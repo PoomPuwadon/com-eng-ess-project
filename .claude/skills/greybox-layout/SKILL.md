@@ -126,11 +126,10 @@ Elevation = Y of the floor slab. H = floor-to-floor height. W × D in metres.
 | --- | --- | --- | --- | --- | --- |
 | `OT-01` | 15 | 12 | `trading_floor` (+ `ot_bridge_checkpoint` −38…−31; −6…6; the guest viewing gallery was removed in Phase 1) | Trading Floor | Open plan. **Exchange floor, rebuilt from the user's photo of a real exchange**: 9 big hollow-ring trading posts (12 m across: X −97/−80/−63 × Z −29/−12.5/12.5) + 2 medium (9 m: X −97/−80, Z 26.8); aisle |Z| < 6 from the portal. Each post: lettered dark base wall → ring counter (blue-lit edge, monitors on arms, keyboards, stools) → open gap on thin supports → raised crown of 16 data screens tilted down → sloped member-logo band → grey ring deck (open centre, railing, cable trays), cable drops to the ceiling. Basket-weave parquet with inlaid blue/black stripes; glass TV booth on a platform (X −67…−55, Z 20.5…30.5) with rope stanchions; steel roof grid; tall blue window wall + bell balcony (W); firm banner (N), flag (S). **The Link enters here.** |
 | `OT-02` | 27 | 10 | `lottery_institute` | Probability Research Institute | Open plan. Moved here from the Wellness Tower (rev 10). 12 rows of quant desks (triple monitors) with an aisle at Z 0, equation walls (W, N), draw-results wall + probability heat-map (S), whiteboards |
-| `OT-03` | 37 | 5 | `thai_desk` | Thai Markets Desk | Open plan, desk rows N and S of the Z 0 aisle |
 | `OT-04` | 42 | 5 | `security_hq` | Asset Protection HQ | Open plan: CCTV desks (N), lockers, roll-call benches + guards (S) |
 | `OT-05` | 47 | 8 | Executive Floor rooms below | Executive Floor | |
 
-Removed in rev 10 (user, 2026-11-06): Sports Desk, Leisure Operations, both sky lobbies.
+Removed in rev 10 (user, 2026-11-06): Sports Desk, Leisure Operations, both sky lobbies. Removed later the same day (user): `OT-03` Thai Markets Desk; the other floor ids are kept stable, so Y 37–42 is an empty plenum the lifts pass through.
 
 `OT-05` rooms: `ceo_office` −108…−83; 18…38 · `boardroom` −79…−52; 23…38 ·
 `cfo_office` −62…−52; −38…−26 · `legal` / `it` / `hr` −108…−88; −38…−23 / −19…−4 / 0…14 ·
@@ -161,7 +160,6 @@ space. Generated in `building.js` (`HALLS`), dressed in `src/floors/halls.js`. L
 | --- | --- | --- | --- | --- |
 | OT-01 | Trading Floor — Members' Lift Hall | Phase 1 (`tradingFloor.js`, `customHall`) | 16 × 8 | cream + gunmetal, navy dado, terrazzo; **Link checkpoint in a recess in the core** (see Phase 1 — OT-01) |
 | OT-02 | Probability Research Institute — Lift Hall | `quant` | 14 × 7 | white/navy, lottery screen on the lintel, whiteboards, quant desks |
-| OT-03 | Thai Markets Desk — Sala Hall | `thai` | 12 × 4.2 | red jambs with tiered gold gables, spirit house, orchids |
 | OT-04 | Asset Protection — Screening Hall | `security` | 12 × 4.2 | hazard-striped jambs, blast-door leaves parked open, body scanner, CCTV |
 | OT-05 | Executive Reception | `executive` | 10 × 5.5 | fluted marble + gold, reception desk, art |
 | VT-01 | Executive Leisure Suite — Grand Hall | `portal` | 18 × 12 | gold arch with marquee bulbs, red carpet into the promenade, fountain, lanterns, **Link checkpoint** |
@@ -183,7 +181,7 @@ it takes you there. Inside a car, E gives the floor panel.
 | Bank | Cars | Shafts (X; Z) | Stops | Speed |
 | --- | --- | --- | --- | --- |
 | `ot_low` Office Low-Rise | 4 (OT-L1…4) | −34…−30; −38.6…−25.8 | B1, L0, OT-01, OT-02 | 5 m/s |
-| `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-03…OT-05 (express past 1–2) | 7 m/s |
+| `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-04, OT-05 (express past 1–2) | 7 m/s |
 | `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (into the vault), L0 (tours board here), OT-01…OT-05 (every Office floor) | 7 m/s |
 | `freight_ot` | 1 (OT-F1) | −35…−30; 21…26 | B1 (vault), OT-01…OT-05 | 3 m/s |
 | `vt_low` Wellness Low-Rise | 4 (VT-L1…4) | 30…34; −38.6…−25.8 | L0, VT-01, VT-02 | 5 m/s |
@@ -193,12 +191,12 @@ it takes you there. Inside a car, E gives the floor panel.
 
 Landing (call) zones are 8 m deep in front of each bank's doors, all inside the lift hall. The
 bridge opening (Z −3…3, OT-01 / VT-01 only) sits between the high-rise bank and the CEO/freight
-shafts. Cash robots ride the freight lifts: ALC-01 vault → OT-03 Thai Markets Desk; ALC-02 vault →
+shafts. Cash robots ride the freight lifts: ALC-01 vault → OT-04 Asset Protection HQ; ALC-02 vault →
 OT-01 → The Link → VT-01 Leisure Suite.
 
 ## 5. Naming conventions
 
-- **Floor IDs**: `PLAZA`, `B1`, `L0`, `OT-01`…`OT-05`, `VT-01`…`VT-04`, `BRIDGE`. Never "Casino Tower".
+- **Floor IDs**: `PLAZA`, `B1`, `L0`, `OT-01`, `OT-02`, `OT-04`, `OT-05`, `VT-01`…`VT-04`, `BRIDGE`. Never "Casino Tower".
 - **Room IDs**: `snake_case`, globally unique, stable once shipped (future DB keys).
   Full address form: `FLOOR/room`, e.g. `OT-05/ceo_office`.
 - **Three labels per room**: `id` (code), `sign` (in-world corporate euphemism; see

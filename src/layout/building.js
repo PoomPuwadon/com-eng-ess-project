@@ -52,7 +52,7 @@ export const BRIDGE_Y = 15; // rev 10: The Link joins the Trading Floor and the 
 // ---------------------------------------------------------------- elevator banks
 // Every car runs in its own shaft. Shafts sit on the tower facade that faces the atrium.
 // side(floor): which face of the car opens at that stop ('e' or 'w').
-const OT_FLOORS = ['OT-01', 'OT-02', 'OT-03', 'OT-04', 'OT-05'];
+const OT_FLOORS = ['OT-01', 'OT-02', 'OT-04', 'OT-05']; // OT-03 (Thai Markets Desk) removed by the user, 2026-11-06; ids kept stable
 const VT_FLOORS = ['VT-01', 'VT-02', 'VT-03', 'VT-04'];
 const otSide = (f) => (f === 'L0' || f === 'B1' ? 'e' : 'w');
 const vtSide = (f) => (f === 'L0' || f === 'B1' ? 'w' : 'e');
@@ -64,7 +64,7 @@ export const BANKS = {
     cars: 4, shaft: { x0: -34, x1: -30, z0: -38.6, pitch: 3.2 }, speed: 5, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
   ot_high: {
-    name: 'Office High-Rise', label: 'Floors L · 3–5 (express)', tower: 'OT', stops: ['L0', 'OT-03', 'OT-04', 'OT-05'],
+    name: 'Office High-Rise', label: 'Floors L · 4–5 (express)', tower: 'OT', stops: ['L0', 'OT-04', 'OT-05'],
     stopArea: { L0: 'staff_side', 'OT-05': 'control', default: 'ot_view' }, side: otSide,
     cars: 4, shaft: { x0: -34, x1: -30, z0: -21, pitch: 3.2 }, speed: 7, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
@@ -204,7 +204,6 @@ export const FLOORS = [
     rooms: [{ id: 'lottery_institute', sign: 'Probability Research Institute', short: 'Prob. Inst.', ...OT_MAIN, full: true }],
     props: 'lottery',
   },
-  deptFloor('OT-03', 37, 'thai_desk', 'Thai Markets Desk', 'Thai Desk'),
   deptFloor('OT-04', 42, 'security_hq', 'Asset Protection HQ', 'Security HQ'),
   {
     id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 47, height: 8,
@@ -309,7 +308,6 @@ export const FLOORS = [
 const HALLS = {
   'OT-01': ['trading', "Trading Floor — Members' Lift Hall", 16, 8],
   'OT-02': ['quant', 'Probability Research Institute — Lift Hall', 14, 7],
-  'OT-03': ['thai', 'Thai Markets Desk — Sala Hall', 12, 4.2],
   'OT-04': ['security', 'Asset Protection — Screening Hall', 12, 4.2],
   'OT-05': ['executive', 'Executive Reception', 10, 5.5],
   'VT-01': ['portal', 'Executive Leisure Suite — Grand Hall', 18, 12],
@@ -397,7 +395,7 @@ export function findRoom(roomId) {
 }
 
 export const FLOOR_LIST = {
-  OT: ['OT-05', 'OT-04', 'OT-03', 'OT-02', 'OT-01'],
+  OT: ['OT-05', 'OT-04', 'OT-02', 'OT-01'],
   VT: ['VT-04', 'VT-03', 'VT-02', 'VT-01'],
   shared: ['BRIDGE', 'L0', 'PLAZA', 'B1'],
 };

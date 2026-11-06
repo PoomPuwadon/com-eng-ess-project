@@ -7,11 +7,11 @@ import { locateFloor, FLOOR_BY_ID } from './layout/building.js';
 // whether or not anyone is watching.
 const ROUTES = [
   {
-    name: 'ALC-01', amount: '250,000.00', dest: 'Thai Markets Desk',
+    name: 'ALC-01', amount: '250,000.00', dest: 'Asset Protection HQ',
     steps: [
       { walk: [[0, -10, 23.5], [-20, -10, 23.5], [-26, -10, 23.5]] },
-      { lift: 'freight_ot', from: 'B1', to: 'OT-03' },
-      { walk: [[-39, 37, 23.5], [-46, 37, 23.5], [-46, 37, 0], [-60, 37, 0], [-80, 37, 0]] },
+      { lift: 'freight_ot', from: 'B1', to: 'OT-04' },
+      { walk: [[-39, 42, 23.5], [-46, 42, 23.5], [-46, 42, 0], [-60, 42, 0], [-80, 42, 0]] },
       { wait: 5, label: 'DELIVERED' },
     ],
   },
