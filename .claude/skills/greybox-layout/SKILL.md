@@ -219,7 +219,7 @@ OT-01 → The Link → VT-01 Leisure Suite.
 | Glass Bridge | no | yes | yes | yes | yes | yes |
 | `OT-01` trading floor | no | watch only | yes | yes | yes | yes |
 | `OT-02` Probability Research Institute (cleared-only by decision, 2026-11-06) | no | yes | yes | yes | yes | yes |
-| `OT-03…04` | no | yes (view) | yes | yes | yes | yes |
+| `OT-04` | no | yes (view) | yes | yes | yes | yes |
 | `OT-05` | no | no | yes | yes | yes | yes |
 | `B1` | no | no | yes (CEO lift) | yes | yes | yes |
 | `VT-03` ringside, walkout, backstage, focus room | no | no | no | yes | yes | — |
