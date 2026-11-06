@@ -4,6 +4,7 @@ import { shiftedCtx } from '../world/geom.js';
 import { lobby, plaza } from './lobby.js';
 import { department, control, outreach } from './officeTower.js';
 import { lottery } from './probability.js';
+import { securityHQ } from './securityHQ.js';
 import { trading } from './tradingFloor.js';
 import { racing } from './visitorsTower.js';
 import { leisure } from './leisureSuite.js';
@@ -13,7 +14,7 @@ import { hall } from './halls.js';
 import { basement, bridge } from './basementBridge.js';
 
 const PROPS = {
-  lobby, plaza, trading, department, control, lottery, outreach,
+  lobby, plaza, trading, department, control, lottery, outreach, security: securityHQ,
   leisure, football: sportsArena, muaythai, racing,
   basement, bridge,
 };

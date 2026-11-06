@@ -30,15 +30,8 @@ function deskRows(ctx, x0, x1, z0, z1, { pitchX = 2, pitchZ = 5, channels = [CH.
 export function department(ctx) {
   const id = ctx.floor.id;
   const I = { x0: -109, x1: -50.5, z0: -39, z1: 39 };
-  if (id === 'OT-04') {
-    // Asset Protection HQ: CCTV desks (north), lockers, roll-call benches + standing guards (south)
-    deskRows(ctx, -104, -56, -32, -10, { pitchX: 2.4, pitchZ: 5.5, channels: [CH.SCORE, CH.TICKER], npcEvery: 2, aisleX: -80 });
-    for (let i = 0; i < 16; i++) { const x = I.x0 + 2 + i * 3.4; ctx.box(x, x + 2, 0, 2.2, I.z0 + 0.2, I.z0 + 1.2, 0x3b4048); }
-    for (let i = 0; i < 5; i++) ctx.box(-100, -62, 0, 0.5, 12 + i * 4, 12.8 + i * 4, 0x555);
-    for (let i = 0; i < 30; i++) ctx.npc(-96 + (i % 10) * 3.6, 33 + Math.floor(i / 10) * 1.6, 0x050505, Math.PI);
-    for (let i = 0; i < 8; i++) ctx.screen(-105 + i * 7, 2.8, I.z1 + 0.1, Math.PI, 6, 2.5, i % 8);
-    ctx.sign('Roll-call assembly area', -81, 3.6, 22, { size: 0.8, gold: false });
-  } else {
+  // (OT-04 Asset Protection HQ has its own builder since the 2026-11-06 redesign: securityHQ.js)
+  if (id) {
     const ch = [CH.FIGHT, CH.LOTTO, CH.RACE];
     deskRows(ctx, -105, -56, -33, -6, { pitchX: 2.2, pitchZ: 6.5, channels: ch, npcEvery: 2, aisleX: -80 });
     deskRows(ctx, -105, -56, 6, 33, { pitchX: 2.2, pitchZ: 6.5, channels: ch, npcEvery: 2, aisleX: -80 });

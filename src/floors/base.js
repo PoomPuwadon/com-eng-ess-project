@@ -169,6 +169,7 @@ export function buildBase(floor) {
       continue;
     }
     if (rm.zone) {
+      if (rm.noSign) continue; // dressed by the floor's own module (e.g. OT-04)
       ctx.deco(rm.x0, rm.x1, 0, 0.02, rm.z0, rm.z1, P.room);
       ctx.sign(rm.sign, cx, Math.min(H - 0.8, 4.6), cz, { size: 0.6 });
       continue;

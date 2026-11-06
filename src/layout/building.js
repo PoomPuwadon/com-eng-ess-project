@@ -132,11 +132,6 @@ export const OT_HALL = r(-50, -30, -40, 40);
 export const VT_HALL = r(30, 50, -60, 60);
 const OT_MAIN = r(-110, -50, -40, 40);
 const VT_MAIN = r(50, 210, -60, 60);
-const deptFloor = (id, elevation, roomId, sign, short) => ({
-  id, tower: 'OT', short, sign, elevation, height: 5, bounds: OT_B, area: 'ot_view',
-  rooms: [{ id: roomId, sign, short, ...OT_MAIN, full: true }],
-  props: 'department',
-});
 
 export const FLOORS = [
   // ------------------------------------------------------------ basement
@@ -219,9 +214,32 @@ export const FLOORS = [
     ],
     props: 'outreach',
   },
-  deptFloor('OT-04', 62, 'security_hq', 'Asset Protection HQ', 'Security HQ'),
   {
-    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 67, height: 8,
+    // Asset Protection HQ (redesign, user 2026-11-06): 12 m tall. Two portals from the lift hall:
+    // the LUXURY one (north, Z -14) into a five-star private-security agency (reception, client
+    // salon, guard lounge, deployment bay, cash-robot escort depot); the PROCESSING one (south, Z 14)
+    // straight through exit processing into the prison-style roll-call yard with glass holding
+    // cells, a beating area and steel catwalks at 6 m. No CCTV here (that stays on OT-05).
+    // Plain names in comments only: security HQ, firing, roll call, holding cells.
+    id: 'OT-04', tower: 'OT', short: 'Security HQ', sign: 'Asset Protection HQ', elevation: 62, height: 12,
+    bounds: OT_B, area: 'ot_view', customHall: true, slabColor: 0x6b6f76,
+    rooms: [
+      { id: 'security_hq', sign: 'Asset Protection HQ', short: 'Security HQ', ...OT_MAIN, full: true, noSign: true },
+      { id: 'sec_reception', sign: 'Asset Protection Services — Client Reception', short: 'Reception', ...r(-66, -50, -26, -12), zone: true, noSign: true },
+      { id: 'sec_client_salon', sign: 'Client Waiting Salon', short: 'Salon', ...r(-76, -60, -11, -3.3), zone: true, noSign: true },
+      { id: 'sec_guard_lounge', sign: "Protection Officers' Lounge", short: 'Guard Lounge', ...r(-76, -50, -39, -27), zone: true, noSign: true },
+      { id: 'sec_deployment_bay', sign: 'Rapid Alignment Deployment Bay', short: 'Deploy Bay', ...r(-109, -78, -39, -18), zone: true, noSign: true },
+      { id: 'sec_alc_escort_depot', sign: 'ALC Escort Muster Point', short: 'Escort Depot', ...r(-109, -78, -18, -3.3), zone: true, noSign: true },
+      { id: 'sec_exit_processing', sign: 'Accompanied Offboarding — Processing', short: 'Processing', ...r(-66, -50, -3, 30), zone: true, noSign: true },
+      { id: 'sec_roll_call_yard', sign: 'Mandatory Alignment Yard', short: 'Yard', ...r(-106.5, -66, -3, 31), zone: true, noSign: true },
+      { id: 'sec_feedback_area', sign: 'Kinetic Performance Feedback', short: 'Feedback', ...r(-81, -66, 18.5, 27), zone: true, noSign: true },
+      { id: 'sec_holding_suites', sign: 'Transition Suite', short: 'Suite', ...r(-104, -66, 31, 39), zone: true, noSign: true },
+    ],
+    props: 'security',
+  },
+  {
+    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 74, // was 67: OT-04 grew to 12 m (user, 2026-11-06)
+    height: 8,
     bounds: OT_B, area: 'control',
     rooms: [
       { id: 'ceo_office', sign: 'Office of the Chief Executive', short: 'CEO Office', ...r(-108, -83, 18, 38), h: 6, doors: ['n', 'e'], doorWidth: 4 },
@@ -324,7 +342,8 @@ const HALLS = {
   'OT-01': ['trading', "Trading Floor — Members' Lift Hall", 16, 8],
   'OT-02': ['quant', 'Probability Research Institute — Lift Hall', 14, 7],
   'OT-03': ['outreach', 'Global Client Outreach Centre — Lift Hall', 12, 6],
-  'OT-04': ['security', 'Asset Protection — Screening Hall', 12, 4.2],
+  // two portals (user, 2026-11-06): luxury reception (north) + processing (south); dressed by securityHQ.js
+  'OT-04': ['security', 'Asset Protection — Screening Hall', 8, 5.5, { doors: [{ side: 'w', at: -14, width: 8, top: 5.5 }, { side: 'w', at: 14, width: 6, top: 4.2 }] }],
   'OT-05': ['executive', 'Executive Reception', 10, 5.5],
   'VT-01': ['portal', 'Executive Leisure Suite — Grand Hall', 18, 12],
   'VT-02': ['concourse', 'Sports Analytics Arena', 14, 6, { rect: r(30, 50, -40, 30), open: ['w'] }],
@@ -342,8 +361,8 @@ for (const f of FLOORS) {
     id: `${f.id.toLowerCase().replace('-', '')}_lift_hall`, sign, short: 'Lift Hall', ...rect, hall: theme,
     h: f.height - 0.25, noSign: true, noDoorSigns: true, narrow: !!opts.narrow,
     open: opts.open || (walled ? [ot ? 'e' : 'w', 'n', 's'] : ['n', 's', 'e', 'w']),
-    doors: walled ? [{ side: ot ? 'w' : 'e', at: 0, width, top }, ...(opts.extraDoors || [])] : [],
-    portal: walled ? { x: ot ? rect.x0 : rect.x1, z: 0, width, top } : null,
+    doors: walled ? (opts.doors || [{ side: ot ? 'w' : 'e', at: 0, width, top }, ...(opts.extraDoors || [])]) : [],
+    portal: walled ? { x: ot ? rect.x0 : rect.x1, z: opts.doors ? opts.doors[0].at : 0, width, top } : null,
     link: (f.openings || []).some((o) => o.y0 == null && o.side === (ot ? 'e' : 'w')), // The Link enters this hall
   });
 }

@@ -65,6 +65,12 @@ lavish details freely.
   clearance may watch but not trade.
 - DEPARTMENT FLOORS: Sports Desk, Casino Operations, Thai Betting Desk,
   Security HQ.
+  SECURITY HQ (12 m tall): two entrances from its lift hall. A luxury
+  private-security agency side (client reception, waiting salon, guard
+  lounge, guard deployment bay with threat board, cash-robot escort depot)
+  and a corporate-prison side (exit processing straight into a roll-call
+  yard, a beating area, one big glass holding cell, guard catwalks).
+  No CCTV wall here: that stays in the control floor's monitoring room.
 - CONTROL FLOOR (top floor):
   - CEO office (can summon any employee to it)
   - CFO office
@@ -127,12 +133,16 @@ including the control floor, vault and server room.
 ## Budget blowout event
 When any department exceeds its budget:
 1. An alarm sounds throughout the ENTIRE building, audible to visitors too.
-2. Security runs to that department.
-3. A prison-style roll call: that department's workers line up.
-4. The CFO gives a speech.
-5. A chunk of that department's background employees are mock-fired and
-   visibly escorted out by security through the lobby, carrying boxes of
-   belongings.
+2. Security runs to that department and marches the WHOLE department to
+   Security HQ (enters through the processing portal).
+3. A prison-style roll call in the Security HQ yard: the workers line up on
+   numbered spots.
+4. The CFO gives a speech from the yard podium. The survivors go back to work.
+5. A chunk of that department's background employees are mock-fired: exit
+   processing (boxes issued, badges shredded) → wait in the glass holding
+   cell → final line-up in the yard (where guards beat some of them up) →
+   visibly escorted down and out through the lobby by security, carrying
+   boxes of belongings.
 6. Replacement hires walk in through the lobby to refill headcount.
 This works even when no admins are online.
 
