@@ -2,8 +2,10 @@ import { buildBase, finalize } from './base.js';
 import { buildScreens } from '../world/screens.js';
 import { shiftedCtx } from '../world/geom.js';
 import { lobby, plaza } from './lobby.js';
-import { trading, department, control, lottery } from './officeTower.js';
-import { leisure, racing } from './visitorsTower.js';
+import { department, control, lottery } from './officeTower.js';
+import { trading } from './tradingFloor.js';
+import { racing } from './visitorsTower.js';
+import { leisure } from './leisureSuite.js';
 import { pavilion as muaythai } from './pavilion.js';
 import { arena } from './arena.js';
 import { hall } from './halls.js';
@@ -26,6 +28,6 @@ export function buildFloor(floor) {
   const ctx = buildBase(floor);
   const fn = PROPS[floor.props];
   if (fn) fn(shiftedCtx(ctx, PROP_DX[floor.props] || 0));
-  for (const rm of floor.rooms) if (rm.hall) hall(ctx, rm);
+  if (!floor.customHall) for (const rm of floor.rooms) if (rm.hall) hall(ctx, rm); // Phase 1 floors build their own hall
   return finalize(ctx, buildScreens);
 }

@@ -50,6 +50,13 @@ export function bridge(ctx) {
     for (const sz of [-1, 1]) L.box(x - 0.07, x + 0.07, 0, 4.0, sz * 2.95 - 0.08, sz * 2.95 + 0.08, 'bronze');
     L.box(x - 0.07, x + 0.07, 3.9, 4.06, -3, 3, 'bronze');
   }
+  // bronze reveals through the atrium wall at both mouths (X ±28.85..±30), so no bare wall ends show
+  // through the glass; the towers continue them to X ±31.14 (see luxHall.js)
+  for (const sx of [-1, 1]) {
+    const a = sx * 28.85, b = sx * 30.0;
+    for (const sz of [-1, 1]) L.box(a, b, 0, 4.34, sz < 0 ? -3.34 : 2.96, sz < 0 ? -2.96 : 3.34, 'bronze');
+    L.box(a, b, 3.96, 4.34, -3.34, 3.34, 'bronze');
+  }
   L.box(x0, x1, -0.75, -0.02, -3.1, 3.1, 'bronze'); // underside seen from the lobby
   L.box(x0, x1, -0.78, -0.75, -0.3, 0.3, 'ledStrip');
   plaque(ctx, 'THE LINK — Authorised Synergy Only', 0, 3.4, 3.0, 0, { h: 0.3 });

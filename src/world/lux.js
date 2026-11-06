@@ -184,8 +184,9 @@ export class Lux {
     worldUV(g, tile);
     return this.geo(g, mat);
   }
-  person(x, z, { yaw = 0, suit = 0x1f2a44, skin = 0xd8a47f, hair = 0x2a1a10, y = 0, walk = null } = {}) {
-    this.people.push({ x, z, yaw, suit, skin, hair, y, walk });
+  // walk: loop of [x, z] points; fidget: 0..1 (standing people turn and bounce on the spot)
+  person(x, z, { yaw = 0, suit = 0x1f2a44, skin = 0xd8a47f, hair = 0x2a1a10, y = 0, walk = null, fidget = 0, speed = 1.25 } = {}) {
+    this.people.push({ x, z, yaw, suit, skin, hair, y, walk, fidget, speed });
     return this;
   }
   build() {
@@ -244,13 +245,23 @@ function buildPeople(ctx, list) {
   for (const m of meshes) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
   // walkers: loop along their path at a steady pace
   const walkers = list.map((o, i) => [o, i]).filter(([o]) => o.walk);
-  if (walkers.length) {
-    for (const [o] of walkers) { o.seg = 0; o.t = Math.random() * 3; }
+  const fidgeters = list.map((o, i) => [o, i]).filter(([o]) => !o.walk && o.fidget > 0);
+  for (const [o] of fidgeters) { o.yaw0 = o.yaw; o.ph = Math.random() * 100; o.rate = 0.6 + Math.random() * 1.4; o.hop = 1.6 + Math.random() * 1.6; }
+  if (walkers.length || fidgeters.length) {
+    for (const [o] of walkers) { o.seg = Math.floor(Math.random() * o.walk.length); o.t = Math.random(); }
+    let clock = 0;
     ctx.onUpdate((dt) => {
+      if (!ctx.group.visible) return;
+      clock += dt;
+      for (const [o, i] of fidgeters) { // turn to shout at a neighbour, bounce while shouting
+        o.yaw = o.yaw0 + Math.sin(clock * o.rate + o.ph) * 0.45 * o.fidget;
+        const shout = Math.max(0, Math.sin(clock * 0.7 + o.ph * 1.3));
+        place(o, i, Math.abs(Math.sin(clock * o.hop * Math.PI + o.ph)) * 0.07 * o.fidget * shout);
+      }
       for (const [o, i] of walkers) {
         const pts = o.walk, a = pts[o.seg % pts.length], b = pts[(o.seg + 1) % pts.length];
         const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-        o.t += (dt * 1.25) / len;
+        o.t += (dt * o.speed) / len;
         if (o.t >= 1) { o.t = 0; o.seg = (o.seg + 1) % pts.length; continue; }
         o.x = a[0] + (b[0] - a[0]) * o.t; o.z = a[1] + (b[1] - a[1]) * o.t;
         o.yaw = Math.atan2(b[0] - a[0], b[1] - a[1]);

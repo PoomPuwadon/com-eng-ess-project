@@ -41,13 +41,18 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE'];
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'VT-01'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'VT-01': 'leisure' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
   off: { tone: THREE.NoToneMapping, exp: 1, env: 0.75, sun: 1.4, sunCol: 0xffffff, hemi: 1.6, sky: 0xffffff, gnd: 0x777766, shadow: false },
   indoor: { tone: THREE.ACESFilmicToneMapping, exp: 0.82, env: 0.5, sun: 0.15, sunCol: 0xffe9cf, hemi: 0.05, sky: 0xfff4e6, gnd: 0x8a6f52, shadow: true },
   outdoor: { tone: THREE.ACESFilmicToneMapping, exp: 0.9, env: 0.5, sun: 1.1, sunCol: 0xfff0dc, hemi: 0.35, sky: 0xdfeaff, gnd: 0x8a7a62, shadow: true },
+  // trading floor (reference: bright, warm, even light from the ceiling panels; no sun inside)
+  // leisure suite (reference: warm gold from above, orange glow bouncing off the red carpet onto the ceilings)
+  leisure: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.45, sun: 0, sunCol: 0xfff0dc, hemi: 0.95, sky: 0xffdcae, gnd: 0xff8a50, shadow: false },
+  trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
 const PERF_OPT = { glow: true, shadows: true, lights: true }; // Perf tests panel switches
@@ -70,7 +75,7 @@ function renderFrame(cam = camera) {
     shadowFloor = floors.current; renderer.shadowMap.needsUpdate = true;
     if (!PERF_OPT.lights) scene.traverse((o) => { if (o.isPointLight) o.visible = false; });
   } // re-draw shadows when the loaded floors change
-  setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : floors.current === 'PLAZA' ? 'outdoor' : 'indoor');
+  setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : LOOK_OF[floors.current] || 'indoor');
   if (luxOn) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
 }
 const floors = new FloorManager(scene);

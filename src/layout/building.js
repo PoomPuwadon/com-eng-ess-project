@@ -69,10 +69,10 @@ export const BANKS = {
     cars: 4, shaft: { x0: -34, x1: -30, z0: -21, pitch: 3.2 }, speed: 7, carH: 2.8, doorW: 1.8, doorH: 2.5,
   },
   // Chief Executive Lifts (rev 12): one big car (9 x 4.4 m, 15+ people) per tower, between the
-  // low-rise and high-rise banks. Office: Treasury Reserve ⇄ Lobby ⇄ Executive Floor (tours).
+  // low-rise and high-rise banks. Office: every floor from the Treasury Reserve to the Executive Floor.
   ceo: {
-    name: 'Chief Executive Lift', label: 'Treasury Reserve · Lobby · Executive Floor', tower: 'OT', stops: ['B1', 'L0', 'OT-05'],
-    stopArea: { 'OT-05': 'control', B1: 'basement', L0: 'ceo_lift' }, side: otSide,
+    name: 'Chief Executive Lift', label: 'Treasury Reserve · Lobby · Floors 1–5', tower: 'OT', stops: ['B1', 'L0', ...OT_FLOORS],
+    stopArea: { 'OT-05': 'control', B1: 'basement', default: 'ceo_lift' }, side: otSide,
     cars: 1, shaft: { x0: -39, x1: -30, z0: -25.6, pitch: 4.4 }, speed: 7, carH: 3.6, doorW: 3.2, doorH: 3.0,
   },
   freight_ot: {
@@ -190,12 +190,11 @@ export const FLOORS = [
   // ------------------------------------------------------------ office tower
   {
     id: 'OT-01', tower: 'OT', short: 'Trading', sign: 'Trading Floor', elevation: 15, height: 12,
-    bounds: OT_B, area: 'ot_view',
+    bounds: OT_B, area: 'ot_view', lux: true, customHall: true, // Phase 1 look; lift hall built by tradingFloor.js
     openings: [{ side: 'e', from: -3, to: 3 }], // The Link
     rooms: [
       { id: 'ot_bridge_checkpoint', sign: 'Link Checkpoint', short: 'Checkpoint', ...r(-38, -31, -6, 6), zone: true },
       { id: 'trading_floor', sign: 'Trading Floor', short: 'Trading', ...OT_MAIN, full: true, noSign: true },
-      { id: 'trading_viewing_gallery', sign: 'Guest Viewing Gallery (Observe Only)', short: 'Gallery', ...r(-104, -54, 33, 39), zone: true },
     ],
     props: 'trading',
   },
@@ -234,7 +233,7 @@ export const FLOORS = [
   // ------------------------------------------------------------ visitors' tower
   {
     id: 'VT-01', tower: 'VT', short: 'Leisure Suite', sign: 'Executive Leisure Suite', elevation: 15, height: 22,
-    bounds: VT_B, area: 'public',
+    bounds: VT_B, area: 'public', lux: true, customHall: true, // Phase 1 look (leisureSuite.js)
     openings: [{ side: 'w', from: -3, to: 3 }], // The Link
     rooms: [
       { id: 'vt_bridge_checkpoint', sign: 'Link Checkpoint', short: 'Checkpoint', ...r(31, 38, -6, 6), zone: true },
@@ -244,8 +243,8 @@ export const FLOORS = [
       { id: 'zone_twentyone', sign: 'Twenty-One Advisory Tables', short: 'Twenty-One', ...r(52, 96, 12, 56), zone: true },
       { id: 'zone_private_banking', sign: 'Private Banking Tables', short: 'Priv. Banking', ...r(98, 124, 12, 56), zone: true },
       { id: 'zone_kinetic_pit', sign: 'Kinetic Probability Pit', short: 'Kinetic Pit', ...r(126, 148, 12, 56), zone: true },
-      { id: 'card_salon', sign: 'Private Card Salon — Strategic Negotiation', short: 'Card Salon', ...r(152, 206, 12, 56), h: 10, doors: ['w', 'n'], doorWidth: 5 },
-      { id: 'card_salon_high_limit', sign: 'High-Conviction Salon', short: 'High Limit', ...r(193, 205, 43, 55), h: 5, doors: ['w'], doorWidth: 3 },
+      { id: 'card_salon', sign: 'Private Card Salon — Strategic Negotiation', short: 'Card Salon', ...r(152, 206, 12, 56), zone: true }, // Phase 1: glass partition (leisureSuite.js)
+      { id: 'card_salon_high_limit', sign: 'High-Conviction Salon', short: 'High Limit', ...r(193, 205, 43, 55), zone: true },
     ],
     props: 'leisure',
   },

@@ -124,7 +124,7 @@ Elevation = Y of the floor slab. H = floor-to-floor height. W × D in metres.
 
 | Floor ID | Elev. | H | Room ID | Sign label | Rect (X; Z) / notes |
 | --- | --- | --- | --- | --- | --- |
-| `OT-01` | 15 | 12 | `trading_floor` (+ `trading_viewing_gallery` −104…−54; 33…39, `ot_bridge_checkpoint` −38…−31; −6…6) | Trading Floor | Open plan. **Exchange floor, rebuilt from the user's photo of a real exchange**: 9 big hollow-ring trading posts (12 m across: X −97/−80/−63 × Z −29/−12.5/12.5) + 2 medium (9 m: X −97/−80, Z 26.8); aisle |Z| < 6 from the portal. Each post: lettered dark base wall → ring counter (blue-lit edge, monitors on arms, keyboards, stools) → open gap on thin supports → raised crown of 16 data screens tilted down → sloped member-logo band → grey ring deck (open centre, railing, cable trays), cable drops to the ceiling. Basket-weave parquet with inlaid blue/black stripes; glass TV booth on a platform (X −67…−55, Z 20.5…30.5) with rope stanchions; steel roof grid; tall blue window wall + bell balcony (W); firm banner (N), flag (S). **The Link enters here.** |
+| `OT-01` | 15 | 12 | `trading_floor` (+ `ot_bridge_checkpoint` −38…−31; −6…6; the guest viewing gallery was removed in Phase 1) | Trading Floor | Open plan. **Exchange floor, rebuilt from the user's photo of a real exchange**: 9 big hollow-ring trading posts (12 m across: X −97/−80/−63 × Z −29/−12.5/12.5) + 2 medium (9 m: X −97/−80, Z 26.8); aisle |Z| < 6 from the portal. Each post: lettered dark base wall → ring counter (blue-lit edge, monitors on arms, keyboards, stools) → open gap on thin supports → raised crown of 16 data screens tilted down → sloped member-logo band → grey ring deck (open centre, railing, cable trays), cable drops to the ceiling. Basket-weave parquet with inlaid blue/black stripes; glass TV booth on a platform (X −67…−55, Z 20.5…30.5) with rope stanchions; steel roof grid; tall blue window wall + bell balcony (W); firm banner (N), flag (S). **The Link enters here.** |
 | `OT-02` | 27 | 10 | `lottery_institute` | Probability Research Institute | Open plan. Moved here from the Wellness Tower (rev 10). 12 rows of quant desks (triple monitors) with an aisle at Z 0, equation walls (W, N), draw-results wall + probability heat-map (S), whiteboards |
 | `OT-03` | 37 | 5 | `thai_desk` | Thai Markets Desk | Open plan, desk rows N and S of the Z 0 aisle |
 | `OT-04` | 42 | 5 | `security_hq` | Asset Protection HQ | Open plan: CCTV desks (N), lockers, roll-call benches + guards (S) |
@@ -159,7 +159,7 @@ space. Generated in `building.js` (`HALLS`), dressed in `src/floors/halls.js`. L
 
 | Floor | Hall sign | Theme | Portal (W × H) | Dressing |
 | --- | --- | --- | --- | --- |
-| OT-01 | Trading Floor — Members' Lift Hall | `trading` | 16 × 8 | green marble jambs, live ticker on the lintel, chart screens, bronze bull, **Link checkpoint** |
+| OT-01 | Trading Floor — Members' Lift Hall | Phase 1 (`tradingFloor.js`, `customHall`) | 16 × 8 | cream + gunmetal, navy dado, terrazzo; **Link checkpoint in a recess in the core** (see Phase 1 — OT-01) |
 | OT-02 | Probability Research Institute — Lift Hall | `quant` | 14 × 7 | white/navy, lottery screen on the lintel, whiteboards, quant desks |
 | OT-03 | Thai Markets Desk — Sala Hall | `thai` | 12 × 4.2 | red jambs with tiered gold gables, spirit house, orchids |
 | OT-04 | Asset Protection — Screening Hall | `security` | 12 × 4.2 | hazard-striped jambs, blast-door leaves parked open, body scanner, CCTV |
@@ -184,7 +184,7 @@ it takes you there. Inside a car, E gives the floor panel.
 | --- | --- | --- | --- | --- |
 | `ot_low` Office Low-Rise | 4 (OT-L1…4) | −34…−30; −38.6…−25.8 | B1, L0, OT-01, OT-02 | 5 m/s |
 | `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-03…OT-05 (express past 1–2) | 7 m/s |
-| `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (into the vault), L0 (tours board here), OT-05 | 7 m/s |
+| `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (into the vault), L0 (tours board here), OT-01…OT-05 (every Office floor) | 7 m/s |
 | `freight_ot` | 1 (OT-F1) | −35…−30; 21…26 | B1 (vault), OT-01…OT-05 | 3 m/s |
 | `vt_low` Wellness Low-Rise | 4 (VT-L1…4) | 30…34; −38.6…−25.8 | L0, VT-01, VT-02 | 5 m/s |
 | `ceo_vt` Chief Executive Lift (Wellness) | 1 (VT-X1, ~8.5 × 3.9 m cab, 15+ people) | 30…39; −25.6…−21.2 (between low- and high-rise) | L0, VT-01…VT-04 | 7 m/s |
@@ -287,6 +287,32 @@ look (`lux: true` on the floor). Everything else is still greybox. See `verifica
 - **Plaza**: granite paving, red carpet with brass stanchions, cantilevered glass canopy, bronze
   curtain-wall entrance facade, fountains with jets, waving flags, sculpted hedges, trees, lamps,
   supercars at the drop-off, monument sign; street and distant skyline beyond.
+
+## Phase 1 — OT-01 Trading Floor (2026-11-06)
+
+Rebuilt in the tone of the user's stylised exchange-floor image (`src/floors/tradingFloor.js`,
+lighting profile `trading` in `main.js`). See `verification/phase-1-ot01/`.
+
+- **Look**: warm tan oak floor with navy/red inlays; cream walls, gunmetal pilasters on the truss
+  lines (X −104/−88/−72/−56); cream coffered ceiling (underside Y 11.55) with warm yellow light panels;
+  gunmetal Warren trusses N–S on the pilaster lines and E–W at Z ±36/±28/±20.75/±12/±4, bottom chord
+  Y 9.5; columns at those X × Z ±20.75; yellow pendant lamps; west wall = two recessed bays of blue
+  windows (Z ±8.6…±29.6) with the navy firm banner and the bell balcony (Z ±6) between them; flag on
+  the north wall; hanging navy bell sign over the aisle at X −72.
+- **Posts**: unchanged layout and hollow-ring design, recoloured grey with red accent stripes.
+- **Screens**: every trading-floor screen samples ONE static atlas (`src/world/tradingScreens.js`,
+  48 clipped cells: charts, bars, candles, quotes, heat-maps, order books); wall boards are the sharp
+  `marketBoard` displays.
+- **Crowd + clutter** (user: "more dense, more chaos"): ~500 people — specialists in every post, a
+  packed counter ring and a second rank (fidgeting: turn + bounce), ~80 walkers; broker booth rows on
+  the window wall (X −108…−106), the portal wall (X −52.3…−50.4, Z ±10…±37.5) and the south wall
+  (Z 37…38.9); ~26 monitor pods in the gaps; 2,600 trading slips. Lux people support `walk`,
+  `speed` and `fidget`.
+- **Lift hall** (X −50…−35.1): cream core cladding at X −35.1 with gunmetal portals for every door
+  that stops here; the Chief Executive Lift stands proud (face X −39.1); navy dado + red cap; tan
+  terrazzo; runners; kiosks; planters; market pylons; market boards over the low- and high-rise
+  banks. **The Link checkpoint** is a recess in the core (Z ±6.3, X −35.1…−31, 5 m high): speed
+  gates at X −33.6 with a wide escort lane, glass side panels, invisible `bridge` barrier, guards.
 
 ## Notes for future phases (user)
 

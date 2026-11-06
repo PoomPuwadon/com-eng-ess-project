@@ -105,7 +105,7 @@ function liftPortals(L, ctx, sx, cars) {
   }
 }
 const FLOOR_SHORT = (id) => (id === 'L0' ? 'L' : id === 'B1' ? 'B1' : id.slice(-1));
-function liftState(id) {
+export function liftState(id) {
   const sys = LIFT.sys; if (!sys) return null;
   const c = sys.byId[id]; if (!c) return null;
   const stops = BANKS[c.bank].stops;
