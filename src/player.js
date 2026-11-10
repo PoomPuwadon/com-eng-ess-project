@@ -20,6 +20,7 @@ export class Player {
     this.floor = null;
     this.room = null;
     this.enabled = true;
+    this.touch = null; // {f, s, run} from the on-screen thumbstick
     this.lastMoveBlocked = false;
 
     addEventListener('keydown', (e) => { this.keys.add(e.code); });
@@ -68,6 +69,12 @@ export class Player {
       fx = -Math.sin(this.yaw) * f + Math.cos(this.yaw) * s;
       fz = -Math.cos(this.yaw) * f - Math.sin(this.yaw) * s;
       if (k.has('ShiftLeft') || k.has('ShiftRight')) speed = SPRINT;
+      const t = this.touch; // on-screen thumbstick (touch.js)
+      if (t && (t.f || t.s) && !f && !s) {
+        fx = -Math.sin(this.yaw) * t.f + Math.cos(this.yaw) * t.s;
+        fz = -Math.cos(this.yaw) * t.f - Math.sin(this.yaw) * t.s;
+        speed = t.run ? SPRINT : WALK * Math.min(1, Math.hypot(t.f, t.s) + 0.2);
+      }
     }
     const len = Math.hypot(fx, fz);
     const before = this.pos.clone();

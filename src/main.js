@@ -12,15 +12,19 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
+import { IS_TOUCH, LOW, QUALITY } from './device.js';
+import { Net } from './net.js';
+import { setupTouch } from './touch.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
 const canvas = document.getElementById('c');
 const SHOTS = new URLSearchParams(location.search).has('shots'); // dev: keep frame for screenshots
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: SHOTS });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+// LOW tier (phones / ?q=low): no MSAA, no post-processing, no shadows, no point lights, adaptive resolution.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW, powerPreference: 'high-performance', preserveDrawingBuffer: SHOTS });
+renderer.setPixelRatio(LOW ? Math.min(devicePixelRatio, 1) : Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !LOW;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false; // the ground floor is static: shadows are re-drawn on demand, not every frame
 const scene = new THREE.Scene();
@@ -28,8 +32,10 @@ const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 12
 
 // Phase 1 look (ground floor only for now): filmic tone mapping, sun shadows, bloom on the lights.
 // Greybox floors render exactly as before (no tone mapping, no post-processing).
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 2 }));
-const DPR = Math.min(devicePixelRatio, 1.5), LUX_DPR = Math.min(devicePixelRatio, 1.25); // Phase 1 effects run at a capped pixel density
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: LOW ? 0 : 2 }));
+// Phase 1 effects run at a capped pixel density. On LOW both follow the adaptive resolution below.
+const LOW_DPR_MAX = Math.min(devicePixelRatio, 1);
+let DPR = LOW ? LOW_DPR_MAX : Math.min(devicePixelRatio, 1.5), LUX_DPR = LOW ? LOW_DPR_MAX : Math.min(devicePixelRatio, 1.25);
 const renderPass = new RenderPass(scene, camera);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.35, 1.0);
 composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
@@ -61,7 +67,7 @@ const LOOKS = {
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
-const PERF_OPT = { glow: true, shadows: true, lights: true }; // Perf tests panel switches
+const PERF_OPT = { glow: !LOW, shadows: !LOW, lights: !LOW }; // Perf tests panel switches
 function setLook(name) {
   if (name === lookName) return;
   const L = LOOKS[name], wasTone = renderer.toneMapping;
@@ -83,7 +89,18 @@ function renderFrame(cam = camera) {
     if (!PERF_OPT.lights) scene.traverse((o) => { if (o.isPointLight) o.visible = false; });
   } // re-draw shadows when the loaded floors change
   setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : LOOK_OF[floors.current] || 'indoor');
-  if (luxOn) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
+  if (luxOn && !LOW) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
+}
+// LOW tier: drop resolution when the frame rate sags, raise it again when there is headroom.
+let dprAcc = 0;
+function adaptResolution(dt, fps) {
+  if (!LOW || (dprAcc += dt) < 2) return;
+  dprAcc = 0;
+  const cur = renderer.getPixelRatio();
+  const next = fps < 28 ? Math.max(0.5, cur - 0.1) : fps > 50 ? Math.min(LOW_DPR_MAX, cur + 0.05) : cur;
+  if (Math.abs(next - cur) < 0.01) return;
+  DPR = LUX_DPR = next;
+  renderer.setPixelRatio(next); composer.setPixelRatio(next); composer.setSize(innerWidth, innerHeight);
 }
 const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
@@ -165,6 +182,13 @@ const hud = new HUD({
   onTeleportFloor: (id) => teleport(id),
   onRole: setRole,
   onRide: (bank, stop, car) => requestLift(bank, stop, car),
+});
+
+// ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
+const net = new Net(scene, hud);
+if (IS_TOUCH) setupTouch(player, canvas, {
+  onUse: () => dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'e' })),
+  onChat: () => (net.chatOpen ? net.closeChat() : net.openChat()),
 });
 
 // ---------------------------------------------------------------- scripted walking (verification)
@@ -412,6 +436,7 @@ function frame(now) {
   last = now;
   const t0 = performance.now();
   if (!simWalking) tick(dt);
+  net.update(dt, player, camera, floors.visibleIds());
   updateScreens(dt);
   updateTicker(dt);
   renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);
@@ -427,7 +452,11 @@ function frame(now) {
   } else hud.prompt('');
   const stats = perf.tick(now, rawMs, performance.now() - t0);
   hudAcc += dt;
-  if (hudAcc > 0.15) { hudAcc = 0; hud.update(player, stats, ui); perfPanel.fps(stats); }
+  adaptResolution(dt, stats.fps);
+  if (hudAcc > 0.15) {
+    hudAcc = 0; hud.update(player, stats, ui); perfPanel.fps(stats);
+    document.getElementById('perf').textContent += ` · ${QUALITY} · dpr ${renderer.getPixelRatio().toFixed(2)}`;
+  }
   while (frameWaiters.length) frameWaiters.shift()();
 }
 requestAnimationFrame(frame);
