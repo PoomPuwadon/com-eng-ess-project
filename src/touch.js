@@ -5,6 +5,7 @@ export function setupTouch(player, canvas, { onUse, onChat }) {
   const ui = document.createElement('div');
   ui.id = 'touch';
   ui.innerHTML = `<div id="stick"><div id="knob"></div></div>
+    <button id="t-full" aria-label="Full screen">⛶</button>
     <div id="tbtns"><button id="t-use">USE</button><button id="t-chat">💬</button><button id="t-menu">☰</button></div>`;
   document.body.appendChild(ui);
   const stick = ui.querySelector('#stick'), knob = ui.querySelector('#knob');
@@ -53,6 +54,22 @@ export function setupTouch(player, canvas, { onUse, onChat }) {
   ui.querySelector('#t-use').onclick = onUse;
   ui.querySelector('#t-chat').onclick = onChat;
   ui.querySelector('#t-menu').onclick = () => document.body.classList.toggle('menu-open');
+
+  // full screen (Android / iPad). iPhone Safari has no page full screen: there, "Add to Home Screen" is the way.
+  const full = ui.querySelector('#t-full'), root = document.documentElement;
+  const req = root.requestFullscreen || root.webkitRequestFullscreen;
+  const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const paint = () => { full.textContent = isFull() ? '✕' : '⛶'; };
+  full.onclick = async () => {
+    if (!req) { full.blur(); alert('Full screen is not available in this browser. On iPhone: Share → Add to Home Screen, then open it from there.'); return; }
+    try {
+      if (isFull()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else await req.call(root, { navigationUI: 'hide' });
+    } catch { /* refused */ }
+  };
+  document.addEventListener('fullscreenchange', paint);
+  document.addEventListener('webkitfullscreenchange', paint);
+  if (window.matchMedia('(display-mode: standalone)').matches) full.style.display = 'none'; // already app-like
   document.getElementById('help')?.classList.add('hidden');
   document.getElementById('perf')?.classList.remove('hidden'); // fps always visible while testing on phones
 }
