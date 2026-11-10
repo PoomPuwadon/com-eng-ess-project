@@ -71,6 +71,8 @@
     #q-btn { position: fixed; left: 136px; top: 104px; z-index: 30; font: 600 12px system-ui; padding: 5px 10px; border-radius: 6px; border: 1px solid #b8924a; background: #14110dcc; color: #e3c27a; cursor: pointer; touch-action: manipulation; }
     #summon-btn { position: fixed; left: 280px; top: 104px; z-index: 30; font: 600 12px system-ui; padding: 5px 10px; border-radius: 6px; border: 1px solid #c0503a; background: #1a0f0dcc; color: #f0a08a; cursor: pointer; touch-action: manipulation; }
     body.touch #summon-btn { left: 8px; top: 140px; }
+    /* PROTOTYPE testing lockdown (until admin login) */
+    body.locked #floors, body.locked #roles, body.locked #prompt, body.locked #elevator, body.locked #t-use, body.locked #t-menu { display: none !important; }
     #t-full { position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 34px); right: max(8px, env(safe-area-inset-right)); width: 44px; height: 44px; border-radius: 10px; border: 2px solid rgba(201,162,58,.7); background: rgba(10,12,18,.7); color: #e3c27a; font: 700 20px system-ui; z-index: 15; touch-action: manipulation; }
     #t-use { width: 78px !important; height: 78px !important; background: rgba(201,162,58,.85) !important; color: #111 !important; }
     .hidden { display: none !important; }

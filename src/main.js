@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FLOOR_BY_ID, ROLES, findRoom, canAccess, landingZone, BANKS } from './layout/building.js';
+import { FLOOR_BY_ID, ROLES, findRoom, canAccess, landingZone, BANKS, clusterOf } from './layout/building.js';
 import { buildExterior, FloorManager } from './world/world.js';
 import { updateScreens, updateTicker } from './world/screens.js';
 import { Player } from './player.js';
@@ -207,17 +207,35 @@ function requestLift(bank, stop, car = null) {
   return { ok: true, car: c.id };
 }
 
+// PROTOTYPE testing lockdown: until a player logs in as admin they can only walk, look, chat and change
+// graphics. No floor list, roles, lifts or ?floor= links: floors change only when the admin summons them.
+let locked = true;
+document.body.classList.add('locked');
 const hud = new HUD({
-  onTeleportFloor: (id) => teleport(id),
-  onRole: setRole,
-  onRide: (bank, stop, car) => requestLift(bank, stop, car),
+  onTeleportFloor: (id) => !locked && teleport(id),
+  onRole: (r) => !locked && setRole(r),
+  onRide: (bank, stop, car) => !locked && requestLift(bank, stop, car),
 });
 
 // ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
 const net = new Net(scene, hud);
+net.onAdmin = () => { locked = false; document.body.classList.remove('locked'); };
+// Backstop: a locked player who reaches another floor group some other way (e.g. riding a lift a cash
+// robot called) is put back where they last stood on the floors they were summoned to.
+let allowed = clusterOf('PLAZA'), lastGood = null;
+function lockGuard() {
+  if (!locked || !player.floor) return;
+  const inCar = elev.carAt(player.pos.x, player.pos.y, player.pos.z);
+  if (allowed.includes(player.floor.id) && !inCar) { lastGood = { f: player.floor.id, x: player.pos.x, z: player.pos.z }; return; }
+  if (inCar) return;
+  if (lastGood) placeOn(lastGood.f, lastGood.x, lastGood.z, player.yaw);
+  else teleport(allowed.includes('PLAZA') ? 'PLAZA' : allowed[0]);
+  hud.toast('Floors are locked for testing: wait to be summoned', 3);
+}
 net.onTeleport = (m) => { // admin summon: land in a ring around the caller, not on top of them
   if (!FLOOR_BY_ID[m.floor]) return;
-  const a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 1.5;
+  allowed = clusterOf(m.floor); lastGood = null;
+  const a =Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 1.5;
   placeOn(m.floor, m.x + Math.cos(a) * r, m.z + Math.sin(a) * r, Math.atan2(Math.cos(a), Math.sin(a)));
 };
 mountQualityButton(applyQuality);
@@ -441,6 +459,7 @@ const perfPanel = (() => {
 })();
 
 addEventListener('keydown', (e) => {
+  if (locked && (e.code === 'KeyE' || /^Digit[0-9]$|^Numpad[0-9]$/.test(e.code))) return; // testing lockdown
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
@@ -456,8 +475,8 @@ addEventListener('keydown', (e) => {
 
 // ---------------------------------------------------------------- start
 const params = new URLSearchParams(location.search);
-setRole(params.get('role') || 'visitor');
-if (params.get('floor')) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);
+setRole('visitor'); // lockdown: no ?role= either
+if (params.get('floor') && !locked) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);
 else teleport('PLAZA'); // the journey starts outside
 if (params.get('hud') === '0') document.body.classList.add('nohud');
 
@@ -471,6 +490,7 @@ function frame(now) {
   last = now;
   const t0 = performance.now();
   if (!simWalking) tick(dt);
+  lockGuard();
   net.update(dt, player, camera, floors.visibleIds());
   updateScreens(dt);
   updateTicker(dt);

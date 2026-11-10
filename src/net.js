@@ -8,7 +8,7 @@ const ROLE_COL = { visitor: 0x8fa8c8, cleared: 0x5cc98a, tour: 0xe89a3c, admin: 
 export class Net {
   constructor(scene, hud) {
     this.scene = scene; this.hud = hud;
-    this.id = null; this.remotes = new Map(); this.sendAcc = 0; this.online = 0; this.status = 'connecting';
+    this.id = null; this.admin = false; this.pw = null; this.remotes = new Map(); this.sendAcc = 0; this.online = 0; this.status = 'connecting';
     const q = new URLSearchParams(location.search);
     let name = q.get('name');
     try { name = name || localStorage.getItem('firm.name'); } catch { /* storage blocked */ }
@@ -34,7 +34,11 @@ export class Net {
     const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
     const ws = new WebSocket(url);
     this.ws = ws;
-    ws.onopen = () => { this.status = 'online'; ws.send(JSON.stringify({ t: 'hello', name: this.name })); };
+    ws.onopen = () => {
+      this.status = 'online'; ws.send(JSON.stringify({ t: 'hello', name: this.name }));
+      let pw = this.pw; try { pw = pw || sessionStorage.getItem('firm.pw'); } catch { /* ignore */ }
+      if (pw) { this.pw = pw; ws.send(JSON.stringify({ t: 'login', pw })); }
+    };
     ws.onmessage = (e) => this.onMsg(JSON.parse(e.data));
     ws.onclose = () => { this.status = 'offline'; this.remotes.clear(); setTimeout(() => this.connect(), 2000); };
     ws.onerror = () => {};
@@ -46,6 +50,14 @@ export class Net {
     if (m.t === 'chat') { this.addChat(m.id === this.id ? 'You' : m.name, m.text); return; }
     if (m.t === 'tp') { this.onTeleport && this.onTeleport(m); this.hud.toast(`${m.name || m.by} summoned everyone`, 3); return; }
     if (m.t === 'denied') { this.hud.toast('Wrong password', 2); return; }
+    if (m.t === 'admin') {
+      if (!m.ok) { this.pw = null; try { sessionStorage.removeItem('firm.pw'); } catch { /* ignore */ } this.hud.toast('Wrong password', 2); return; }
+      try { sessionStorage.setItem('firm.pw', this.pw); } catch { /* ignore */ } // re-login after reconnects
+      if (!this.admin) this.hud.toast('Admin unlocked: all controls enabled', 2.5);
+      this.admin = true; this.summonBtn.textContent = 'Admin: summon all';
+      this.onAdmin && this.onAdmin();
+      return;
+    }
     if (m.t === 'summoned') { this.hud.toast(`Summoned ${m.n} player${m.n === 1 ? '' : 's'}`, 2.5); return; }
     if (m.t !== 'snap') return;
     const seen = new Set();
@@ -137,13 +149,16 @@ export class Net {
       <form id="net-form" class="hidden"><input id="net-in" maxlength="200" placeholder="Message everyone…" autocomplete="off" enterkeyhint="send"></form>`;
     document.body.appendChild(wrap);
     const sb = document.createElement('button');
-    sb.id = 'summon-btn'; sb.textContent = 'Admin: summon all';
+    sb.id = 'summon-btn'; sb.textContent = 'Admin login';
     sb.onclick = (e) => {
       e.stopPropagation(); sb.blur(); document.exitPointerLock?.();
+      if (!this.ws || this.ws.readyState !== 1) return;
+      if (this.admin) { this.ws.send(JSON.stringify({ t: 'summon' })); return; }
       const pw = prompt('Admin password');
-      if (pw && this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'summon', pw }));
+      if (pw) { this.pw = pw; this.ws.send(JSON.stringify({ t: 'login', pw })); }
     };
     document.body.appendChild(sb);
+    this.summonBtn = sb;
     this.ui = { count: wrap.querySelector('#net-count'), log: wrap.querySelector('#net-log'), form: wrap.querySelector('#net-form'), input: wrap.querySelector('#net-in') };
     this.ui.form.onsubmit = (e) => {
       e.preventDefault();

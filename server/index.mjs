@@ -53,8 +53,13 @@ wss.on('connection', (ws) => {
       Object.assign(p, { x: nx, y: ny, z: nz, yaw: +m.yaw, floor: clean(m.floor, 10), moving: m.moving ? 1 : 0, role: clean(m.role, 12) || p.role, t: now, ready: true });
       return;
     }
+    if (m.t === 'login') { // PROTOTYPE admin login (unlocks the client's controls + summon)
+      p.admin = String(m.pw) === ADMIN_PASSWORD;
+      ws.send(JSON.stringify({ t: 'admin', ok: p.admin }));
+      return;
+    }
     if (m.t === 'summon') { // PROTOTYPE admin: teleport everyone to the caller
-      if (String(m.pw) !== ADMIN_PASSWORD) { ws.send(JSON.stringify({ t: 'denied' })); return; }
+      if (!p.admin && String(m.pw) !== ADMIN_PASSWORD) { ws.send(JSON.stringify({ t: 'denied' })); return; }
       const s = JSON.stringify({ t: 'tp', by: p.name, floor: p.floor, x: p.x, y: p.y, z: p.z });
       let n = 0;
       for (const o of players.values()) if (o !== p && o.ws.readyState === 1) { o.ready = false; o.ws.send(s); n++; } // ready=false: accept the jump
