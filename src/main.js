@@ -12,7 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
-import { IS_TOUCH, LOW, QUALITY } from './device.js';
+import { IS_TOUCH, LOW, QUALITY, mountQualityButton } from './device.js';
 import { Net } from './net.js';
 import { setupTouch } from './touch.js';
 
@@ -186,6 +186,7 @@ const hud = new HUD({
 
 // ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
 const net = new Net(scene, hud);
+mountQualityButton();
 if (IS_TOUCH) setupTouch(player, canvas, {
   onUse: () => dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'e' })),
   onChat: () => (net.chatOpen ? net.closeChat() : net.openChat()),
