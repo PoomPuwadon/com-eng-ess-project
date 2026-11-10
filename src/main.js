@@ -12,7 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
-import { IS_TOUCH, LOW, QUALITY, mountQualityButton } from './device.js';
+import { IS_TOUCH, LOW, mountQualityButton } from './device.js';
 import { Net } from './net.js';
 import { setupTouch } from './touch.js';
 
@@ -20,8 +20,11 @@ import { setupTouch } from './touch.js';
 // ---------------------------------------------------------------- renderer / scene
 const canvas = document.getElementById('c');
 const SHOTS = new URLSearchParams(location.search).has('shots'); // dev: keep frame for screenshots
-// LOW tier (phones / ?q=low): no MSAA, no post-processing, no shadows, no point lights, adaptive resolution.
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW, powerPreference: 'high-performance', preserveDrawingBuffer: SHOTS });
+// Quality is switchable live (Graphics button). The canvas itself has no MSAA: on HIGH every floor goes
+// through the composer, whose render target does the antialiasing; on LOW we render straight to the
+// canvas with no post-processing, no shadows, no point lights and an adaptive resolution.
+const Q = { low: LOW };
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: SHOTS });
 renderer.setPixelRatio(LOW ? Math.min(devicePixelRatio, 1) : Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !LOW;
@@ -34,8 +37,8 @@ const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 12
 // Greybox floors render exactly as before (no tone mapping, no post-processing).
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: LOW ? 0 : 2 }));
 // Phase 1 effects run at a capped pixel density. On LOW both follow the adaptive resolution below.
-const LOW_DPR_MAX = Math.min(devicePixelRatio, 1);
-let DPR = LOW ? LOW_DPR_MAX : Math.min(devicePixelRatio, 1.5), LUX_DPR = LOW ? LOW_DPR_MAX : Math.min(devicePixelRatio, 1.25);
+const LOW_DPR_MAX = Math.min(devicePixelRatio, 1), HIGH_DPR = Math.min(devicePixelRatio, 1.5), HIGH_LUX_DPR = Math.min(devicePixelRatio, 1.25);
+let DPR = LOW ? LOW_DPR_MAX : HIGH_DPR, LUX_DPR = LOW ? LOW_DPR_MAX : HIGH_LUX_DPR;
 const renderPass = new RenderPass(scene, camera);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.35, 1.0);
 composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
@@ -78,8 +81,7 @@ function setLook(name) {
   bloom.strength = L.bloom ?? 0.22;
   ext.hemi.intensity = L.hemi; ext.hemi.color.set(L.sky); ext.hemi.groundColor.set(L.gnd);
   if (wasTone !== L.tone) scene.traverse((o) => { if (o.material && o.material.isMaterial) o.material.needsUpdate = true; });
-  const dpr = luxOn ? LUX_DPR : DPR;
-  if (renderer.getPixelRatio() !== dpr) { renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(innerWidth, innerHeight); }
+  setPixelRatio(luxOn ? LUX_DPR : DPR);
   renderer.shadowMap.needsUpdate = true;
 }
 let shadowFloor = null;
@@ -89,18 +91,45 @@ function renderFrame(cam = camera) {
     if (!PERF_OPT.lights) scene.traverse((o) => { if (o.isPointLight) o.visible = false; });
   } // re-draw shadows when the loaded floors change
   setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : LOOK_OF[floors.current] || 'indoor');
-  if (luxOn && !LOW) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
+  if (!Q.low) {
+    bloom.enabled = luxOn && PERF_OPT.glow; // greybox floors: composer only for antialiasing, no glow
+    renderPass.camera = cam; composer.render();
+  } else renderer.render(scene, cam);
+}
+function setPixelRatio(dpr) {
+  if (Math.abs(renderer.getPixelRatio() - dpr) < 0.001) return;
+  renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(innerWidth, innerHeight);
+}
+// Switch LOW <-> HIGH without reloading: everything here can change on a live renderer.
+function applyQuality(low) {
+  if (Q.low === low) return;
+  Q.low = low;
+  PERF_OPT.glow = PERF_OPT.shadows = PERF_OPT.lights = !low;
+  renderer.shadowMap.enabled = !low;
+  for (const rt of [composer.renderTarget1, composer.renderTarget2]) { rt.samples = low ? 0 : 2; rt.dispose(); } // re-allocated on next use
+  DPR = low ? LOW_DPR_MAX : HIGH_DPR; LUX_DPR = low ? LOW_DPR_MAX : HIGH_LUX_DPR;
+  setPixelRatio(luxOn ? LUX_DPR : DPR);
+  ext.sun.castShadow = !low && !!(LOOKS[lookName] && LOOKS[lookName].shadow);
+  // shadow on/off and light count are baked into shaders: flag materials for a one-off recompile
+  scene.traverse((o) => {
+    if (o.isPointLight) o.visible = !low;
+    const m = o.material;
+    if (m) for (const mm of Array.isArray(m) ? m : [m]) mm.needsUpdate = true;
+  });
+  renderer.shadowMap.needsUpdate = true;
+  document.querySelectorAll('[data-opt]').forEach((el) => { el.checked = !low; }); // Perf tests panel
+  dprAcc = 0;
 }
 // LOW tier: drop resolution when the frame rate sags, raise it again when there is headroom.
 let dprAcc = 0;
 function adaptResolution(dt, fps) {
-  if (!LOW || (dprAcc += dt) < 2) return;
+  if (!Q.low || (dprAcc += dt) < 2) return;
   dprAcc = 0;
   const cur = renderer.getPixelRatio();
   const next = fps < 28 ? Math.max(0.5, cur - 0.1) : fps > 50 ? Math.min(LOW_DPR_MAX, cur + 0.05) : cur;
   if (Math.abs(next - cur) < 0.01) return;
   DPR = LUX_DPR = next;
-  renderer.setPixelRatio(next); composer.setPixelRatio(next); composer.setSize(innerWidth, innerHeight);
+  setPixelRatio(next);
 }
 const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
@@ -186,7 +215,7 @@ const hud = new HUD({
 
 // ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
 const net = new Net(scene, hud);
-mountQualityButton();
+mountQualityButton(applyQuality);
 if (IS_TOUCH) setupTouch(player, canvas, {
   onUse: () => dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'e' })),
   onChat: () => (net.chatOpen ? net.closeChat() : net.openChat()),
@@ -387,7 +416,7 @@ const perfPanel = (() => {
   const opt = PERF_OPT;
   const row = (label, html) => `<div style="margin:6px 0"><div style="color:#b8a27a;font-size:11px;text-transform:uppercase;letter-spacing:.06em">${label}</div>${html}</div>`;
   const seg = ['live', 'frozen', 'hidden'].map((m) => `<button data-screen="${m}" style="margin:2px 3px 0 0;padding:3px 8px;border-radius:5px;border:1px solid #6b5a3a;background:#221c14;color:#ddd;cursor:pointer">${m}</button>`).join('');
-  const chk = (k, l) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-opt="${k}" checked> ${l}</label>`;
+  const chk = (k, l) => `<label style="display:block;cursor:pointer"><input type="checkbox" data-opt="${k}"${opt[k] ? ' checked' : ''}> ${l}</label>`;
   box.innerHTML = `<div style="font-weight:700;color:#e3c27a">Perf tests (ground floor)</div>
     <div id="pt-fps" style="font:600 15px ui-monospace,monospace;margin:4px 0 2px">— fps</div>
     ${row('Screens', seg)}${row('Effects', chk('glow', 'Glow (bloom)') + chk('shadows', 'Sun shadows') + chk('lights', 'Chandelier / desk lights'))}
@@ -456,7 +485,7 @@ function frame(now) {
   adaptResolution(dt, stats.fps);
   if (hudAcc > 0.15) {
     hudAcc = 0; hud.update(player, stats, ui); perfPanel.fps(stats);
-    document.getElementById('perf').textContent += ` · ${QUALITY} · dpr ${renderer.getPixelRatio().toFixed(2)}`;
+    document.getElementById('perf').textContent += ` · ${Q.low ? 'low' : 'high'} · dpr ${renderer.getPixelRatio().toFixed(2)}`;
   }
   while (frameWaiters.length) frameWaiters.shift()();
 }

@@ -15,22 +15,23 @@ export const QUALITY_MODE = valid(q.get('q')) ? q.get('q') : valid(saved) ? save
 export const QUALITY = QUALITY_MODE === 'auto' ? AUTO : QUALITY_MODE;
 export const LOW = QUALITY === 'low';
 
-// "Graphics" button for every device: Auto → Low → High. Antialiasing is fixed when the renderer is
-// created, so switching saves the choice and reloads the page.
-export function mountQualityButton() {
+// "Graphics" button for every device: Auto → Low → High, applied live via onChange(low) — no reload.
+export function mountQualityButton(onChange) {
+  let mode = QUALITY_MODE;
   const b = document.createElement('button');
   b.id = 'q-btn';
   const label = { auto: `Auto (${AUTO === 'low' ? 'Low' : 'High'})`, low: 'Low', high: 'High' };
-  b.textContent = `Graphics: ${label[QUALITY_MODE]}`;
+  const paint = () => { b.textContent = `Graphics: ${label[mode]}`; };
   b.title = 'Low = no glow, shadows, lamp lights or antialiasing, adaptive resolution. Best for older laptops and phones.';
   b.onclick = (e) => {
-    e.stopPropagation();
-    const next = { auto: 'low', low: 'high', high: 'auto' }[QUALITY_MODE];
-    try { if (next === 'auto') localStorage.removeItem(KEY); else localStorage.setItem(KEY, next); } catch { /* ignore */ }
+    e.stopPropagation(); b.blur();
+    mode = { auto: 'low', low: 'high', high: 'auto' }[mode];
+    try { if (mode === 'auto') localStorage.removeItem(KEY); else localStorage.setItem(KEY, mode); } catch { /* ignore */ }
     const u = new URL(location.href);
-    u.searchParams.delete('q');
-    if (next !== 'auto') u.searchParams.set('q', next); // still works when storage is blocked
-    location.replace(u);
+    if (u.searchParams.has('q')) { u.searchParams.delete('q'); history.replaceState(null, '', u); } // the button now owns it
+    paint();
+    onChange((mode === 'auto' ? AUTO : mode) === 'low');
   };
+  paint();
   document.body.appendChild(b);
 }
