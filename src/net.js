@@ -44,6 +44,9 @@ export class Net {
     if (m.t === 'welcome') { this.id = m.id; return; }
     if (m.t === 'leave') { this.remotes.delete(m.id); return; }
     if (m.t === 'chat') { this.addChat(m.id === this.id ? 'You' : m.name, m.text); return; }
+    if (m.t === 'tp') { this.onTeleport && this.onTeleport(m); this.hud.toast(`${m.name || m.by} summoned everyone`, 3); return; }
+    if (m.t === 'denied') { this.hud.toast('Wrong password', 2); return; }
+    if (m.t === 'summoned') { this.hud.toast(`Summoned ${m.n} player${m.n === 1 ? '' : 's'}`, 2.5); return; }
     if (m.t !== 'snap') return;
     const seen = new Set();
     this.online = m.p.length;
@@ -133,6 +136,14 @@ export class Net {
     wrap.innerHTML = `<div id="net-count">○ connecting…</div><div id="net-log"></div>
       <form id="net-form" class="hidden"><input id="net-in" maxlength="200" placeholder="Message everyone…" autocomplete="off" enterkeyhint="send"></form>`;
     document.body.appendChild(wrap);
+    const sb = document.createElement('button');
+    sb.id = 'summon-btn'; sb.textContent = 'Admin: summon all';
+    sb.onclick = (e) => {
+      e.stopPropagation(); sb.blur(); document.exitPointerLock?.();
+      const pw = prompt('Admin password');
+      if (pw && this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'summon', pw }));
+    };
+    document.body.appendChild(sb);
     this.ui = { count: wrap.querySelector('#net-count'), log: wrap.querySelector('#net-log'), form: wrap.querySelector('#net-form'), input: wrap.querySelector('#net-in') };
     this.ui.form.onsubmit = (e) => {
       e.preventDefault();

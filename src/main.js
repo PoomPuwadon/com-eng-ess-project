@@ -215,6 +215,11 @@ const hud = new HUD({
 
 // ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
 const net = new Net(scene, hud);
+net.onTeleport = (m) => { // admin summon: land in a ring around the caller, not on top of them
+  if (!FLOOR_BY_ID[m.floor]) return;
+  const a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 1.5;
+  placeOn(m.floor, m.x + Math.cos(a) * r, m.z + Math.sin(a) * r, Math.atan2(Math.cos(a), Math.sin(a)));
+};
 mountQualityButton(applyQuality);
 if (IS_TOUCH) setupTouch(player, canvas, {
   onUse: () => dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'e' })),

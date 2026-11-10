@@ -10,6 +10,7 @@ import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8787;
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '1234'; // prototype only
 const TICK_HZ = 15, MAX_PLAYERS = 50, MAX_SPEED = 14; // m/s (sprint is 9; slack for lifts/teleports below)
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2' };
@@ -50,6 +51,15 @@ wss.on('connection', (ws) => {
       const jump = Math.hypot(nx - p.x, nz - p.z);
       if (p.ready && m.floor === p.floor && dt > 0 && jump > MAX_SPEED * dt + 2) return;
       Object.assign(p, { x: nx, y: ny, z: nz, yaw: +m.yaw, floor: clean(m.floor, 10), moving: m.moving ? 1 : 0, role: clean(m.role, 12) || p.role, t: now, ready: true });
+      return;
+    }
+    if (m.t === 'summon') { // PROTOTYPE admin: teleport everyone to the caller
+      if (String(m.pw) !== ADMIN_PASSWORD) { ws.send(JSON.stringify({ t: 'denied' })); return; }
+      const s = JSON.stringify({ t: 'tp', by: p.name, floor: p.floor, x: p.x, y: p.y, z: p.z });
+      let n = 0;
+      for (const o of players.values()) if (o !== p && o.ws.readyState === 1) { o.ready = false; o.ws.send(s); n++; } // ready=false: accept the jump
+      ws.send(JSON.stringify({ t: 'summoned', n }));
+      console.log(`summon by ${p.name}: ${n} players`);
       return;
     }
     if (m.t === 'chat') {
