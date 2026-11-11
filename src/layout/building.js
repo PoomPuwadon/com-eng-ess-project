@@ -204,12 +204,12 @@ export const FLOORS = [
     // The lift hall is at 52 m; its portal opens onto a bridge to the TOP tier of a four-level
     // operator structure standing in a 15 m-deep pit (the whole main space is sunk to 37 m, the
     // Probability Research Institute's ceiling). Zig-zag stairs down the structure's east face link
-    // the tiers (0 / -5 / -10) and the pit floor (-15). See floors/officeTower.js outreach().
+    // the tiers (0 / -5 / -10) and the pit floor (-15). See floors/outreach.js.
     id: 'OT-03', tower: 'OT', short: 'Outreach', sign: 'Global Client Outreach Centre', elevation: 52, height: 10,
     below: 15, slabHoleRect: r(-109, -50, -39, 39),
-    bounds: OT_B, area: 'ot_view', slabColor: 0x252b38, ceilColor: 0x161a24,
+    bounds: OT_B, area: 'ot_view', slabColor: 0x252b38, ceilColor: 0x161a24, wallColor: 0x1e2330, lux: true, customHall: true, // Phase 1 look (outreach.js)
     rooms: [
-      { id: 'outreach_centre', sign: 'Global Client Outreach Centre', short: 'Outreach', ...OT_MAIN, full: true, noSign: true },
+      { id: 'outreach_centre', sign: 'Global Client Outreach Centre', short: 'Outreach', ...OT_MAIN, full: true, noSign: true, spawn: { x: -52, z: 0 } }, // on the Arrival Bridge (the centre is the void)
       // (no greybox zones here: their floor tiles sit at slab level, i.e. over the pit)
     ],
     props: 'outreach',
@@ -222,7 +222,7 @@ export const FLOORS = [
     // cells, a beating area and steel catwalks at 6 m. No CCTV here (that stays on OT-05).
     // Plain names in comments only: security HQ, firing, roll call, holding cells.
     id: 'OT-04', tower: 'OT', short: 'Security HQ', sign: 'Asset Protection HQ', elevation: 62, height: 12,
-    bounds: OT_B, area: 'ot_view', customHall: true, slabColor: 0x6b6f76,
+    bounds: OT_B, area: 'ot_view', customHall: true, slabColor: 0x6b6f76, lux: true, // Phase 1 look (securityHQ.js)
     rooms: [
       { id: 'security_hq', sign: 'Asset Protection HQ', short: 'Security HQ', ...OT_MAIN, full: true, noSign: true },
       { id: 'sec_reception', sign: 'Asset Protection Services — Client Reception', short: 'Reception', ...r(-66, -50, -26, -12), zone: true, noSign: true },

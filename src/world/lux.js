@@ -143,7 +143,9 @@ function worldUV(geo, tile) {
     else uv.setXY(i, _v.x / tile, _v.y / tile);
   }
 }
-const TILE = { marble: 2.4, granite: 2, stone: 3, walnut: 2.4, paving: 4, asphalt: 6, facade: 12 };
+export const TILE = { marble: 2.4, granite: 2, stone: 3, walnut: 2.4, paving: 4, asphalt: 6, facade: 12 };
+// register floor-specific materials (and their world-UV tile size) into the shared kit
+export function addLuxMaterials(mats, tiles = {}) { initMaterials(); for (const [k, m] of Object.entries(mats)) if (!LM[k]) LM[k] = m; Object.assign(TILE, tiles); return LM; }
 
 export class Lux {
   constructor(ctx) { initMaterials(); this.ctx = ctx; this.parts = new Map(); this.people = []; this.noShadow = new Set(['glass', 'facadeGlass', 'water', 'lampWarm', 'crystal', 'downlight', 'jet', 'rug', 'ledStrip']); }
@@ -185,8 +187,9 @@ export class Lux {
     return this.geo(g, mat);
   }
   // walk: loop of [x, z] points; fidget: 0..1 (standing people turn and bounce on the spot)
-  person(x, z, { yaw = 0, suit = 0x1f2a44, skin = 0xd8a47f, hair = 0x2a1a10, y = 0, walk = null, fidget = 0, speed = 1.25 } = {}) {
-    this.people.push({ x, z, yaw, suit, skin, hair, y, walk, fidget, speed });
+  // sit: seated pose (hips at 0.48 m, knees forward along the facing direction)
+  person(x, z, { yaw = 0, suit = 0x1f2a44, skin = 0xd8a47f, hair = 0x2a1a10, y = 0, walk = null, fidget = 0, speed = 1.25, sit = false } = {}) {
+    this.people.push({ x, z, yaw, suit, skin, hair, y, walk, fidget, speed, sit });
     return this;
   }
   build() {
@@ -201,34 +204,60 @@ export class Lux {
       if (transparent) mesh.renderOrder = 5;
       ctx.add(mesh, geo);
     }
-    if (this.people.length) buildPeople(ctx, this.people);
+    const sitting = this.people.filter((o) => o.sit), standing = this.people.filter((o) => !o.sit);
+    if (standing.length) buildPeople(ctx, standing);
+    if (sitting.length) buildPeople(ctx, sitting, true);
   }
 }
 
 // ---------------------------------------------------------------- low-poly people (3 instanced meshes)
-let PEOPLE_GEO = null;
-function peopleGeo() {
-  if (PEOPLE_GEO) return PEOPLE_GEO;
+const PEOPLE_GEO = {};
+function peopleGeo(sit = false) {
+  const key = sit ? 'sit' : 'stand';
+  if (PEOPLE_GEO[key]) return PEOPLE_GEO[key];
+  const dy = sit ? -0.42 : 0; // seated: the upper body drops by the thigh length
   const part = (g, x, y, z) => { g.translate(x, y, z); const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); return n; };
+  const legs = sit
+    ? [part(new THREE.BoxGeometry(0.15, 0.16, 0.46), -0.1, 0.48, 0.2), part(new THREE.BoxGeometry(0.15, 0.16, 0.46), 0.1, 0.48, 0.2), // thighs
+      part(new THREE.BoxGeometry(0.14, 0.44, 0.15), -0.1, 0.24, 0.4), part(new THREE.BoxGeometry(0.14, 0.44, 0.15), 0.1, 0.24, 0.4)] // shins
+    : [part(new THREE.BoxGeometry(0.15, 0.84, 0.17), -0.1, 0.5, 0), part(new THREE.BoxGeometry(0.15, 0.84, 0.17), 0.1, 0.5, 0)];
   const body = mergeGeometries([
-    part(new THREE.BoxGeometry(0.15, 0.84, 0.17), -0.1, 0.5, 0), part(new THREE.BoxGeometry(0.15, 0.84, 0.17), 0.1, 0.5, 0), // legs
-    part(new THREE.CylinderGeometry(0.2, 0.17, 0.62, 6), 0, 1.22, 0), // torso
-    part(new THREE.CylinderGeometry(0.235, 0.2, 0.12, 6), 0, 1.5, 0), // shoulders
-    part(new THREE.BoxGeometry(0.1, 0.6, 0.12), -0.27, 1.18, 0), part(new THREE.BoxGeometry(0.1, 0.6, 0.12), 0.27, 1.18, 0), // arms
+    ...legs,
+    part(new THREE.CylinderGeometry(0.2, 0.17, 0.62, 6), 0, 1.22 + dy, 0), // torso
+    part(new THREE.CylinderGeometry(0.235, 0.2, 0.12, 6), 0, 1.5 + dy, 0), // shoulders
+    // arms (seated: reaching forward to the desk)
+    ...(sit ? [part(new THREE.BoxGeometry(0.1, 0.12, 0.42), -0.27, 1.06 + dy + 0.05, 0.16), part(new THREE.BoxGeometry(0.1, 0.12, 0.42), 0.27, 1.06 + dy + 0.05, 0.16),
+      part(new THREE.BoxGeometry(0.1, 0.32, 0.12), -0.27, 1.32 + dy, 0), part(new THREE.BoxGeometry(0.1, 0.32, 0.12), 0.27, 1.32 + dy, 0)]
+      : [part(new THREE.BoxGeometry(0.1, 0.6, 0.12), -0.27, 1.18, 0), part(new THREE.BoxGeometry(0.1, 0.6, 0.12), 0.27, 1.18, 0)]),
   ]);
   const skin = mergeGeometries([
-    part(new THREE.IcosahedronGeometry(0.115, 1), 0, 1.69, 0), part(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 6), 0, 1.57, 0),
-    part(new THREE.BoxGeometry(0.08, 0.1, 0.09), -0.27, 0.84, 0), part(new THREE.BoxGeometry(0.08, 0.1, 0.09), 0.27, 0.84, 0),
+    part(new THREE.IcosahedronGeometry(0.115, 1), 0, 1.69 + dy, 0), part(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 6), 0, 1.57 + dy, 0),
+    ...(sit ? [part(new THREE.BoxGeometry(0.08, 0.08, 0.1), -0.27, 1.11 + dy, 0.42), part(new THREE.BoxGeometry(0.08, 0.08, 0.1), 0.27, 1.11 + dy, 0.42)]
+      : [part(new THREE.BoxGeometry(0.08, 0.1, 0.09), -0.27, 0.84, 0), part(new THREE.BoxGeometry(0.08, 0.1, 0.09), 0.27, 0.84, 0)]),
   ]);
   const dark = mergeGeometries([
-    part(new THREE.SphereGeometry(0.122, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.5), 0, 1.72, -0.01), // hair
-    part(new THREE.BoxGeometry(0.16, 0.08, 0.27), -0.1, 0.04, 0.04), part(new THREE.BoxGeometry(0.16, 0.08, 0.27), 0.1, 0.04, 0.04), // shoes
+    part(new THREE.SphereGeometry(0.122, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.5), 0, 1.72 + dy, -0.01), // hair
+    part(new THREE.BoxGeometry(0.16, 0.08, 0.27), -0.1, 0.04, sit ? 0.48 : 0.04), part(new THREE.BoxGeometry(0.16, 0.08, 0.27), 0.1, 0.04, sit ? 0.48 : 0.04), // shoes
   ]);
-  PEOPLE_GEO = { body, skin, dark };
-  return PEOPLE_GEO;
+  PEOPLE_GEO[key] = { body, skin, dark };
+  return PEOPLE_GEO[key];
 }
-function buildPeople(ctx, list) {
-  const G = peopleGeo(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1), c = new THREE.Color();
+
+// Low-poly people driven by capsule-style matrices (centre at +0.85 m), for floors that animate
+// their own figures. set(i, m4) takes the matrix a 1.7 m capsule would have.
+export function peopleInstanced(ctx, n) {
+  initMaterials();
+  const G = peopleGeo(), off = new THREE.Matrix4().makeTranslation(0, -0.85, 0), t = new THREE.Matrix4(), c = new THREE.Color();
+  const meshes = ['body', 'skin', 'dark'].map((k) => { const m = new THREE.InstancedMesh(G[k], LM.people, n); m.frustumCulled = false; m.castShadow = true; ctx.add(m); return m; });
+  return {
+    meshes,
+    color(i, suit, skin = 0xc68c62, hair = 0x1a1410) { [suit, skin, hair].forEach((col, k) => meshes[k].setColorAt(i, c.set(col))); },
+    set(i, m4) { t.multiplyMatrices(m4, off); for (const m of meshes) m.setMatrixAt(i, t); },
+    commit() { for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } },
+  };
+}
+function buildPeople(ctx, list, sit = false) {
+  const G = peopleGeo(sit), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1), c = new THREE.Color();
   const meshes = [['body', 'suit'], ['skin', 'skin'], ['dark', 'hair']].map(([k, col]) => {
     const m = new THREE.InstancedMesh(G[k], LM.people, list.length);
     list.forEach((o, i) => m.setColorAt(i, c.set(o[col])));

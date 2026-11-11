@@ -87,6 +87,7 @@ export function buildBase(floor) {
 
   // exterior walls (inside the bounds): gaps for the bridge, for shafts on the edge
   // (their own walls replace the facade), and car doors of shafts just outside.
+  const WALL = floor.wallColor ?? P.wall; // a floor may darken its shell (OT-03)
   if (floor.tower !== 'BRIDGE' && !floor.outdoor) {
     const gaps = { n: [], s: [], e: [], w: [] };
     for (const o of floor.openings || []) gaps[o.side].push({ from: o.from, to: o.to, bottom: o.y0 != null ? o.y0 - e : 0, top: o.y1 != null ? o.y1 - e : 4 });
@@ -104,13 +105,13 @@ export function buildBase(floor) {
     }
     const glassAbove = floor.glassRoof ? 15 : null;
     const xWall = (za, zb, side) => {
-      if (glassAbove) { ctx.wallX(x0, x1, za, zb, glassAbove, P.wall, gaps[side]); ctx.glass.add(x0, x1, e + glassAbove, e + H, za, zb, 0xcfe8ff); }
-      else ctx.wallX(x0, x1, za, zb, H, P.wall, gaps[side]);
+      if (glassAbove) { ctx.wallX(x0, x1, za, zb, glassAbove, WALL, gaps[side]); ctx.glass.add(x0, x1, e + glassAbove, e + H, za, zb, 0xcfe8ff); }
+      else ctx.wallX(x0, x1, za, zb, H, WALL, gaps[side]);
     };
     xWall(z0, z0 + EXT, 'n');
     xWall(z1 - EXT, z1, 's');
-    ctx.wallZ(z0 + EXT, z1 - EXT, x0, x0 + EXT, H, P.wall, gaps.w);
-    ctx.wallZ(z0 + EXT, z1 - EXT, x1 - EXT, x1, H, P.wall, gaps.e);
+    ctx.wallZ(z0 + EXT, z1 - EXT, x0, x0 + EXT, H, WALL, gaps.w);
+    ctx.wallZ(z0 + EXT, z1 - EXT, x1 - EXT, x1, H, WALL, gaps.e);
   }
 
   // shaft walls (for shafts inside this floor), with landing door gaps
@@ -182,7 +183,7 @@ export function buildBase(floor) {
       return { from: at - dw / 2, to: at + dw / 2, top: d0.top ?? doorTop };
     });
     const open = rm.open || [];
-    const wallC = rm.color ?? P.wall; // a room may set its own wall / floor colour (e.g. VT-03's black focus room)
+    const wallC = rm.color ?? floor.wallColor ?? P.wall; // a room may set its own wall / floor colour (e.g. VT-03's black focus room)
     if (!rm.hall) ctx.deco(rm.x0, rm.x1, 0, 0.015, rm.z0, rm.z1, rm.floorColor ?? P.room); // lift halls lay their own themed floor
     if (!open.includes('n')) ctx.wallX(rm.x0, rm.x1, rm.z0, rm.z0 + INT, h, wallC, gapsFor('n', rm.x0, rm.x1));
     if (!open.includes('s')) ctx.wallX(rm.x0, rm.x1, rm.z1 - INT, rm.z1, h, wallC, gapsFor('s', rm.x0, rm.x1));

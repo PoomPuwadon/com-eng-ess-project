@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { CH } from '../world/screens.js';
+import { Lux, peopleInstanced } from '../world/lux.js';
+import { luxProxy } from './luxKit.js';
+import { luxLiftHall, planter } from './luxHall.js';
 
 // OT-04 Asset Protection HQ — greybox redesign (user, 2026-11-06). 62 m, 12 m tall.
 // One floor, two faces:
@@ -17,6 +20,22 @@ const STEEL = 0x4b5058, STEEL_D = 0x2f333a, CONC = 0x8b8f95, YEL = 0xffd400, GOL
 const MARBLE = 0xeee6d6, ONYX = 0x2a2420, WALNUT = 0x5a3a22, LEATHER = 0x6b2b1b, VELVET = 0x5b2a6e;
 const GUARD = 0x050505, SUIT = 0x2b3a55, CLIENT = 0x8a6d3b, CFO = 0x1f2a44;
 const CW_Y = 6; // catwalk level
+
+// ---- Phase 1 look (2026-11-09): every greybox call goes through the Phase 1 kit (luxKit.js).
+// Agency side: white marble floors, walnut panelling under pale stone, gold, a back-lit onyx wall,
+// leather and velvet. Prison side: board-formed concrete walls, grey epoxy floor, diamond-plate
+// catwalks, powder-coated steel, cold strip lights. Low-poly people throughout (seated where they sit).
+const GLOW = new Set([0xfff0c8, 0xe8eeff, 0xf2f7ff, 0xffe9a8, 0xffffcc, 0xe8f6ff, 0xff2a2a, 0x4dd2ff, 0x9fe6ff]);
+const MAT_OF = new Map([
+  [MARBLE, 'marble'], [0x3c3a3a, 'granite'], [GOLD, 'gold'], [CONC, 'epoxyGrey'], [0xd9dde5, 'stone'], [0xffd9a0, 'onyx'],
+  [ONYX, 'granite'], [WALNUT, 'walnut'], [0x3a2a1c, 'walnut'], [LEATHER, 'leather'], [VELVET, 'velvet'],
+  [0x6e5a8a, 'rug'], [0x8c1a1a, 'rug'], [0x4a2a5a, 'rug'],
+  [STEEL, 'metalV'], [STEEL_D, 'metalV'], [0x5c6169, 'plate'], [0x707a88, 'metalV'], [0x9aa3ad, 'steel'], [0x23272e, 'metalV'], [0x222222, 'metalV'], [0x2a2a2a, 'metalV'], [0x111111, 'metalV'], [0x1b2f4a, 'metalV'],
+  [0x2e7bd6, 'carPaint'], [0x9a7a4a, 'brushedBronze'], [0x8a6a4a, 'brushedBronze'], [0x3f9a4a, 'foliage'], [0x7a8a3a, 'foliage'], [0xd8a62a, 'glossV'],
+]);
+const pickMat = (c, { y0 }) => (GLOW.has(c) ? 'glow' : c === STEEL_D && Math.abs(y0 - (CW_Y - 0.25)) < 0.01 ? 'plate' : MAT_OF.get(c) || 'satinV');
+const SECP = { wall: 'stone', wallDeep: 'stone', panel: 'lampWarm', frame: 'brushedBronze', frameDark: 'blackMetal', dado: 'walnut', cap: 'gold',
+  runner: 'redCarpet', edge: 'gold', liner: 'steel', ink: '#e3c27a', kioskBg: '#1a1510', kioskBtn: '#3a2a1a', kioskEdge: '#c9a23a', hostSuit: 0x111418 };
 const CAT = { // catwalk bands (prison side)
   n: [-109, -64, -3, -0.5], w: [-109, -106.5, -0.5, 39], s: [-106.5, -64, 36.5, 39], e: [-66.5, -64, -0.5, 36.5],
 };
@@ -25,7 +44,9 @@ const PODIUM = { x0: -102, x1: -98.6, z0: 12, z1: 18, h: 1.0 };
 const FEEDBACK = { x0: -81, x1: -66.8, z0: 18.5, z1: 27 };
 const GROUPS = [[-78, 21], [-71, 21.2], [-74.5, 25]]; // beating groups (victim positions)
 
-export function securityHQ(ctx) {
+export function securityHQ(ctx0) {
+  const L = new Lux(ctx0);
+  const ctx = luxProxy(ctx0, L, { mat: pickMat });
   const e = ctx.e;
   const { box, deco } = { box: ctx.box.bind(ctx), deco: ctx.deco.bind(ctx) };
   const disposables = [];
@@ -64,6 +85,23 @@ export function securityHQ(ctx) {
     deco(x - 0.9, x + 0.9, 7.0, 7.6, z - 0.9, z + 0.9, GOLD);
   }
 
+  // ---- wall finishes over the shell: panelled agency walls, concrete prison walls
+  const face = (axis, a0, a1, f0, f1, y0, y1, mat, gaps = []) => { // a run of facing with door gaps [[a, b, top]]
+    let cur = a0;
+    for (const [ga, gb, top] of [...gaps, [a1, a1, 0]]) {
+      if (ga - cur > 0.02) axis === 'x' ? L.box(cur, ga, y0, y1, f0, f1, mat) : L.box(f0, f1, y0, y1, cur, ga, mat);
+      if (top != null && top < y1 && gb > ga) axis === 'x' ? L.box(ga, gb, Math.max(y0, top), y1, f0, f1, mat) : L.box(f0, f1, Math.max(y0, top), y1, ga, gb, mat);
+      cur = Math.max(cur, gb);
+    }
+  };
+  const H = 11.75;
+  face('x', -78, -50, -39, -38.97, 0, 4.4, 'walnut'); face('x', -78, -50, -39, -38.96, 4.4, 4.5, 'gold'); face('x', -78, -50, -39, -38.97, 4.5, H, 'stone');
+  face('z', -39, -3.3, -50.03, -50, 0, 4.4, 'walnut', [[-18, -10, 5.5]]); face('z', -39, -3.3, -50.04, -50, 4.4, 4.5, 'gold', [[-18, -10, 5.5]]); face('z', -39, -3.3, -50.03, -50, 4.5, H, 'stone', [[-18, -10, 5.5]]);
+  face('x', -109, -78, -39, -38.97, 0, H, 'concreteDark'); face('z', -39, -3.3, -109, -108.97, 0, H, 'concreteDark');
+  face('x', -109, -50, 38.97, 39, 0, H, 'concrete'); face('z', -3, 39, -109, -108.97, 0, H, 'concrete'); face('z', -3, 39, -50.03, -50, 0, H, 'concrete', [[11, 17, 4.2]]);
+  face('x', -109, -50, -2.99, -2.96, 0, H, 'concrete', [[-89.5, -86.5, 3.2], [-75.5, -52.5, 5]]); // divider, yard side
+  face('x', -75.5, -52.5, -2.99, -2.96, 0, 1, 'concrete');
+
   // ================================================================ divider: luxury | prison
   ctx.wallX(-109, -50, -3.3, -3, 11.75, 0xd9dde5, [
     { from: -89.5, to: -86.5, top: 3.2 }, // staff passage (bay/depot -> yard)
@@ -72,7 +110,7 @@ export function securityHQ(ctx) {
   ctx.glassBox(-75.5, -52.5, 1, 5, -3.2, -3.1, 0xbfe6ff, true);
   for (const y of [0.92, 5]) deco(-75.6, -52.4, y, y + 0.08, -3.35, -2.95, GOLD);
   for (let x = -75.5; x <= -52.4; x += 2.3) deco(x - 0.04, x + 0.04, 1, 5, -3.0, -2.9, STEEL_D); // bars on the yard side
-  ctx.sign('Staff passage → Mandatory Alignment Yard', -88, 3.9, -3.9, { size: 0.45, gold: false });
+  ctx.sign('Staff passage → Mandatory Alignment Yard', -88, 3.9, -3.34, { size: 0.4, yaw: Math.PI });
   deco(-88.4, -87.6, 3.25, 3.55, -3.4, -2.9, 0xff2a2a); // red beacon
 
   // ================================================================ LUXURY — client reception
@@ -84,8 +122,8 @@ export function securityHQ(ctx) {
   deco(-60.6, -59.2, 1.1, 1.18, -25.1, -18.4, GOLD);
   ctx.npc(-61.4, -23, 0x111111, Math.PI / 2); ctx.npc(-61.4, -20.4, 0x111111, Math.PI / 2);
   ctx.screen(-59.25, 1.4, -21.7, Math.PI / 2, 0.8, 0.5, CH.PNL);
-  ctx.sign('ASSET PROTECTION SERVICES', -63.4, 7.2, -21.5, { size: 1.0, sub: 'Your assets. Our obsession.' });
-  for (const z of [-17, -26]) { box(-55, -54, 0, 0.8, z - 0.5, z + 0.5, 0x9a7a4a); deco(-54.9, -54.1, 0.8, 2.4, z - 0.4, z + 0.4, 0x3f9a4a); } // planters
+  ctx.sign('ASSET PROTECTION SERVICES', -63.55, 6.7, -21.5, { size: 0.75, sub: 'Your assets. Our obsession.', yaw: Math.PI / 2 });
+  for (const z of [-17, -26]) planter(L, SECP, -54.5, z, 1.2); // planters
   ctx.npc(-52.5, -18.5, CLIENT, -Math.PI / 2); // a client arriving
 
   // ---- client waiting salon (sofas face the window onto the yard)
@@ -93,9 +131,9 @@ export function securityHQ(ctx) {
   for (const x of [-73, -68, -63]) {
     box(x - 2, x + 2, 0, 0.45, -8.6, -7.6, LEATHER); deco(x - 2, x + 2, 0.45, 1.0, -8.6, -8.2, LEATHER);
     box(x - 0.8, x + 0.8, 0, 0.42, -5.6, -4.8, WALNUT);
-    ctx.npc(x - 1, -7.2, CLIENT, Math.PI); if (x !== -68) ctx.npc(x + 1, -7.2, CLIENT, Math.PI);
+    ctx.npc(x - 1, -8.05, CLIENT, 0, 0, { sit: true }); if (x !== -68) ctx.npc(x + 1, -8.05, CLIENT, 0, 0, { sit: true });
   }
-  ctx.sign('Client Waiting Salon', -68, 6.4, -7.5, { size: 0.6, sub: 'Please enjoy the view of our alignment programme' });
+  ctx.sign('Client Waiting Salon', -64, 5.75, -3.34, { size: 0.5, sub: 'Please enjoy the view of our alignment programme', yaw: Math.PI });
 
   // ---- protection officers' lounge + bar
   box(-72, -56, 0, 1.1, -37.4, -36.4, WALNUT); deco(-72.1, -55.9, 1.1, 1.18, -37.5, -36.3, GOLD);
@@ -105,24 +143,24 @@ export function securityHQ(ctx) {
   ctx.npc(-64, -38.2, 0x111111, 0); // bartender
   for (const [x, z] of [[-73, -31], [-69, -29.5], [-65, -31.5], [-61, -29.5], [-57, -31]]) {
     box(x - 0.5, x + 0.5, 0, 0.45, z - 0.5, z + 0.5, LEATHER); deco(x - 0.5, x + 0.5, 0.45, 1.1, z - 0.5, z - 0.3, LEATHER);
-    ctx.npc(x, z, GUARD, 0, 0.1);
+    ctx.npc(x, z - 0.05, GUARD, 0, 0, { sit: true });
   }
   for (const x of [-71, -63, -59]) ctx.npc(x, -35.4, GUARD, Math.PI); // at the bar
   ctx.glassBox(-76, -66, 0, 2.6, -27.1, -26.9, 0xbfe6ff, true);
-  ctx.sign("Protection Officers' Lounge", -64, 6.4, -30, { size: 0.65, sub: 'Complimentary cigars after every alignment' });
+  ctx.sign("Protection Officers' Lounge", -64, 5.4, -38.9, { size: 0.55, sub: 'Complimentary cigars after every alignment', yaw: 0 });
 
   // ================================================================ LUXURY — deployment bay
   ctx.screen(-94, 6, -38.9, 0, 24, 6, CH.PNL); // threat board: department budgets
-  ctx.sign('FISCAL DISCIPLINE ADVISORY STATUS: CALM', -94, 10.1, -38.4, { size: 0.7, gold: false, bg: 'rgba(20,20,20,0.92)', color: '#ffd400' });
+  ctx.sign('FISCAL DISCIPLINE ADVISORY STATUS: CALM', -94, 9.9, -38.9, { size: 0.65, bg: '#141414', color: '#ffd400', yaw: 0 });
   for (let z = -38; z <= -19.6; z += 1.2) { // gold-trimmed lockers on the west wall
     box(-109, -108.2, 0, 2.3, z, z + 1.1, 0x23272e);
     deco(-108.2, -108.15, 1.9, 2.0, z + 0.1, z + 1.0, GOLD);
   }
   for (const x of [-102, -96, -90, -84]) {
     for (const xx of [x - 1.6, x + 1.6]) deco(xx - 0.08, xx + 0.08, 0.025, 0.035, -35, -19, YEL); // muster lanes
-    for (let k = 0; k < 8; k++) ctx.npc(x + (k % 2 ? 0.7 : -0.7), -33 + Math.floor(k / 2) * 1.6, GUARD, 0);
+    for (let k = 0; k < 8; k++) ctx.npc(x + (k % 2 ? 0.7 : -0.7), -33 + Math.floor(k / 2) * 1.6, GUARD, Math.PI);
   }
-  ctx.sign('Rapid Alignment Deployment Bay', -93, 4.6, -22, { size: 0.75, sub: 'Average response time 41 s · sprinting encouraged' });
+  ctx.sign('Rapid Alignment Deployment Bay', -108.9, 4.3, -28.5, { size: 0.6, sub: 'Average response time 41 s · sprinting encouraged', yaw: Math.PI / 2 });
 
   // ================================================================ LUXURY — cash-robot escort depot
   for (let i = 0; i < 4; i++) {
@@ -136,7 +174,7 @@ export function securityHQ(ctx) {
     ctx.npc(x - 0.9, z, GUARD, Math.PI / 2); ctx.npc(x + 0.9, z, GUARD, -Math.PI / 2);
   }
   ctx.screen(-96, 3.6, -3.4, Math.PI, 12, 2.4, CH.TICKER); // escort route board (on the divider)
-  ctx.sign('ALC Escort Muster Point', -96, 6.6, -10, { size: 0.7, sub: 'Two officers per courier. Nothing goes wrong in transit.' });
+  ctx.sign('ALC Escort Muster Point', -96, 5.6, -3.34, { size: 0.55, sub: 'Two officers per courier. Nothing goes wrong in transit.', yaw: Math.PI });
 
   // ================================================================ PRISON — exit processing
   for (const z of [11, 17]) deco(-64, -50, 0.025, 0.035, z - 0.1, z + 0.1, YEL); // lane from the portal
@@ -145,13 +183,13 @@ export function securityHQ(ctx) {
   for (let i = 0; i < 6; i++) deco(-60.6 + i * 0.9, -60 + i * 0.9, 1.05, 1.45, 3.4, 4.1, 0xa07a4a); // boxes on the counter
   for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) box(-62 + i * 0.7, -61.4 + i * 0.7, j * 0.45, j * 0.45 + 0.42, 0, 0.6, 0xa07a4a); // pallet of spare boxes
   ctx.npc(-58, 1.8, 0x3a3f47, 0); ctx.npc(-56, 1.8, 0x3a3f47, 0);
-  ctx.sign('Box Issuance', -58, 2.6, 3.2, { size: 0.42, gold: false });
+  ctx.sign('Box Issuance', -58, 0.62, 2.88, { size: 0.32, yaw: Math.PI });
   box(-54, -52.8, 0, 1.15, 4, 5.2, 0x2a2a2a); deco(-53.9, -52.9, 1.15, 1.25, 4.1, 5.1, 0xff2a2a); // badge shredder
-  ctx.sign('Credential Retirement', -53.4, 2.2, 5.4, { size: 0.38, gold: false });
+  ctx.sign('Credential Retirement', -53.4, 0.75, 5.23, { size: 0.2, yaw: 0 });
   for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) deco(-50.05, -49.98, 1.4 + j * 1.1, 2.3 + j * 1.1, 20 + i * 2.4, 21.6 + i * 2.4, j % 2 ? 0xd9d2c3 : 0xbfb5a0); // alumni photos
   for (let y = 1; y <= 2.2; y += 0.2) deco(-50.05, -49.98, y, y + 0.02, 34.5, 35.5, 0x222222); // height chart
   box(-56.2, -55.8, 0, 1.5, 34.8, 35.2, 0x222222); deco(-56.5, -55.5, 1.5, 1.9, 34.7, 35.3, 0x111111); // camera on a tripod
-  ctx.sign('Alumni Wall', -50.6, 5.2, 27, { size: 0.55, sub: 'Thank you for your contribution' });
+  ctx.sign('Alumni Wall', -50.06, 5.3, 26, { size: 0.5, sub: 'Thank you for your contribution', yaw: -Math.PI / 2 });
   ctx.sign('Accompanied Offboarding — Processing', -57, 6.4, 14, { size: 0.75, sub: 'Please have your box ready' });
 
   // ================================================================ PRISON — the yard
@@ -162,7 +200,7 @@ export function securityHQ(ctx) {
     deco(x - 0.45, x - 0.37, 0.025, 0.035, z - 0.37, z + 0.37, YEL); deco(x + 0.37, x + 0.45, 0.025, 0.035, z - 0.37, z + 0.37, YEL);
     spots.push([x, z]);
   }
-  spots.forEach(([x, z], k) => { if ((k * 7) % 10 < 6) ctx.npc(x, z, SUIT, Math.PI / 2); }); // a session in progress, facing the podium
+  spots.forEach(([x, z], k) => { if ((k * 7) % 10 < 6) ctx.npc(x, z, SUIT, -Math.PI / 2); }); // a session in progress, facing the podium
   for (let z = 6; z <= 16; z += 2.5) ctx.sign(String((z - 6) / 2.5 * 9 + 1), -94.2, 0.5, z, { size: 0.35, gold: false }); // row numbers
   // CFO podium (west), steps on the east side, hanging screen behind
   box(PODIUM.x0, PODIUM.x1, 0, PODIUM.h, PODIUM.z0, PODIUM.z1, STEEL_D);
@@ -171,7 +209,7 @@ export function securityHQ(ctx) {
   ctx.npc(-100.4, 15, CFO, Math.PI / 2, PODIUM.h);
   for (const z of [13, 17]) ctx.npc(-101.3, z, GUARD, Math.PI / 2, PODIUM.h);
   ctx.screen(-103.6, 8.6, 15, Math.PI / 2, 10, 3.6, CH.PNL);
-  ctx.sign('MANDATORY ALIGNMENT YARD', -82, 9.6, 11, { size: 1.3, sub: 'Stand on your number. Smiling is optional but noted.' });
+  ctx.sign('MANDATORY ALIGNMENT YARD', -84, 9.3, -2.94, { size: 1.0, sub: 'Stand on your number. Smiling is optional but noted.', yaw: 0 });
   for (const [x, z] of [[-90, 19], [-74, 4], [-96, 25]]) ctx.npc(x, z, GUARD, 0); // yard guards
 
   // ---- the beating area ("Kinetic Performance Feedback")
@@ -179,7 +217,7 @@ export function securityHQ(ctx) {
   for (const [x0, x1, z0, z1] of [[F.x0, F.x1, F.z0, F.z0 + 0.2], [F.x0, F.x1, F.z1 - 0.2, F.z1], [F.x0, F.x0 + 0.2, F.z0, F.z1], [F.x1 - 0.2, F.x1, F.z0, F.z1]]) deco(x0, x1, 0.025, 0.04, z0, z1, 0xd62839);
   deco(F.x0 + 0.2, F.x1 - 0.2, 0.02, 0.03, F.z0 + 0.2, F.z1 - 0.2, 0x7a6f66);
   ctx.sign('Kinetic Performance Feedback', (F.x0 + F.x1) / 2, 5.2, (F.z0 + F.z1) / 2, { size: 0.7, sub: 'Feedback is a gift' });
-  for (const [x, z] of [[F.x0 - 1, F.z0 + 1], [F.x0 - 1, F.z1 - 1]]) ctx.npc(x, z, SUIT, -Math.PI / 2); // colleagues made to watch
+  for (const [x, z] of [[F.x0 - 1, F.z0 + 1], [F.x0 - 1, F.z1 - 1]]) ctx.npc(x, z, SUIT, Math.PI / 2); // colleagues made to watch
 
   // ---- holding cells ("Transition Suites"): glass row along the south wall
   // one unified glass enclosure (user, 2026-11-06): no partitions, glass front and glass end walls
@@ -194,9 +232,9 @@ export function securityHQ(ctx) {
   box(HC.x0 + 0.6, HC.x1 - 0.6, 0, 0.45, 37.8, 38.8, VELVET); deco(HC.x0 + 0.6, HC.x1 - 0.6, 0.45, 1.2, 38.6, 38.8, VELVET); // one long velvet bench
   for (const x of [-96, -85, -74]) { box(x - 0.4, x + 0.4, 0, 0.9, 31.6, 32.4, WALNUT); deco(x - 0.4, x + 0.4, 0.9, 0.95, 31.6, 32.4, GOLD); } // shared minibars
   for (const x of [-102.5, -90.5, -79.5, -68]) { box(x - 0.2, x + 0.2, 0, 0.4, 31.6, 32, 0x8a6a4a); deco(x - 0.08, x + 0.08, 0.4, 0.75, 31.72, 31.88, 0x7a8a3a); } // sad plants
-  for (const x of [-101, -97, -92, -88, -83, -77, -71]) { ctx.npc(x, 37.2, SUIT, Math.PI); deco(x - 0.25, x + 0.25, 0.45, 0.8, 38, 38.4, 0xa07a4a); } // associates waiting, boxes on the bench
+  for (const x of [-101, -97, -92, -88, -83, -77, -71]) { ctx.npc(x, 38.15, SUIT, Math.PI, 0, { sit: true }); deco(x - 0.25, x + 0.25, 0.45, 0.8, 38, 38.4, 0xa07a4a); } // associates waiting, boxes on the bench
   for (const [x, z] of [[-94, 34], [-80, 33.5]]) ctx.npc(x, z, SUIT, Math.PI / 3); // pacing
-  ctx.sign('Transition Suite', -85, 4.9, 30.6, { size: 0.65, sub: 'Open plan · complimentary minibar · checkout is final' });
+  ctx.sign('Transition Suite', -85, 4.75, 30.92, { size: 0.5, sub: 'Open plan · complimentary minibar · checkout is final', yaw: Math.PI });
 
   // ================================================================ PRISON — catwalks at 6 m
   for (const [x0, x1, z0, z1] of Object.values(CAT)) {
@@ -236,6 +274,19 @@ export function securityHQ(ctx) {
   ctx.sign('Observation Walkway — Asset Protection only', -86, CW_Y + 2.2, -1.8, { size: 0.45, gold: false });
 
   // ================================================================ lift hall (two portals)
+  luxLiftHall(ctx0, L, {
+    s: -1, H: ctx0.floor.height, P: SECP, ceo: 'ceo',
+    banks: [['ot_high', 'OFFICE HIGH-RISE · L · 3–5', false], ['freight_ot', 'FREIGHT · ALC SERVICE', false]],
+    kiosks: [['ot_high', ['L', '3', '4', '5']]],
+    portals: [
+      { z: -14, half: 4, top: 5.5, text: 'ASSET PROTECTION SERVICES', sub: 'Client Reception · by appointment or by alignment', textH: 0.5 },
+      { z: 14, half: 3, top: 4.2, text: 'ACCOMPANIED OFFBOARDING', sub: 'Processing entrance · associates in transition only', textH: 0.6, runner: false }, // its yellow lane is the runner
+    ],
+    hallFloor: (LL, x0, x1, z0, z1) => { // marble on the client side, dark concrete on the processing side
+      if (z0 < 0) LL.floor(x0, x1, z0, Math.min(z1, 0), 0.012, 'marble');
+      if (z1 > 0) LL.floor(x0, x1, Math.max(z0, 0), z1, 0.012, 'concreteDark');
+    },
+  });
   securityHall(ctx);
 
   // ================================================================ animated life (2 instanced meshes)
@@ -260,29 +311,29 @@ export function securityHQ(ctx) {
   };
 
   const N_PARADE = 6, N_PEOPLE = N_PARADE + 2 + GROUPS.length * 3 + 3;
-  const capGeo = new THREE.CapsuleGeometry(0.3, 1.1, 3, 8), capMat = new THREE.MeshLambertMaterial();
-  const people = new THREE.InstancedMesh(capGeo, capMat, N_PEOPLE);
-  const propGeo = new THREE.BoxGeometry(1, 1, 1), propMat = new THREE.MeshLambertMaterial();
+  const people = peopleInstanced(ctx0, N_PEOPLE);
+  const propGeo = new THREE.BoxGeometry(1, 1, 1), propMat = new THREE.MeshStandardMaterial({ roughness: 0.65, metalness: 0.1 });
   const props = new THREE.InstancedMesh(propGeo, propMat, N_PARADE + GROUPS.length * 2);
-  people.frustumCulled = false; props.frustumCulled = false;
+  props.frustumCulled = false;
   const col = new THREE.Color();
   let pi = 0;
   const idx = { parade: [], escort: [], victims: [], beaters: [], patrol: [] };
-  for (let k = 0; k < N_PARADE; k++) { idx.parade.push(pi); people.setColorAt(pi++, col.set(SUIT)); }
-  for (let k = 0; k < 2; k++) { idx.escort.push(pi); people.setColorAt(pi++, col.set(GUARD)); }
+  const SK = [0xd8a47f, 0xc68c62, 0x8d5a3b, 0xf0c8a0, 0xb07850];
+  for (let k = 0; k < N_PARADE; k++) { idx.parade.push(pi); people.color(pi++, SUIT, SK[k % 5]); }
+  for (let k = 0; k < 2; k++) { idx.escort.push(pi); people.color(pi++, GUARD, SK[(k + 2) % 5]); }
   for (let g = 0; g < GROUPS.length; g++) {
-    idx.victims.push(pi); people.setColorAt(pi++, col.set(SUIT));
-    for (let k = 0; k < 2; k++) { idx.beaters.push(pi); people.setColorAt(pi++, col.set(GUARD)); }
+    idx.victims.push(pi); people.color(pi++, SUIT, SK[(g + 1) % 5]);
+    for (let k = 0; k < 2; k++) { idx.beaters.push(pi); people.color(pi++, GUARD, SK[(g + k + 3) % 5]); }
   }
-  for (let k = 0; k < 3; k++) { idx.patrol.push(pi); people.setColorAt(pi++, col.set(GUARD)); }
+  for (let k = 0; k < 3; k++) { idx.patrol.push(pi); people.color(pi++, GUARD, SK[k % 5]); }
   for (let k = 0; k < N_PARADE; k++) props.setColorAt(k, col.set(0xa07a4a)); // carried boxes
   for (let k = N_PARADE; k < props.count; k++) props.setColorAt(k, col.set(0x111111)); // batons
-  ctx.group.add(people, props);
-  disposables.push(capGeo, capMat, propGeo, propMat);
+  ctx.group.add(props);
+  disposables.push(propGeo, propMat);
 
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
   const UP = new THREE.Vector3(0, 1, 0), axis = new THREE.Vector3(), dir = new THREE.Vector3();
-  const stand = (i, x, z, yaw, y = 0, bob = 0) => { q.setFromAxisAngle(UP, yaw); m4.compose(v.set(x, e + y + 0.85 + bob, z), q, sc); people.setMatrixAt(i, m4); };
+  const stand = (i, x, z, yaw, y = 0, bob = 0) => { q.setFromAxisAngle(UP, yaw); m4.compose(v.set(x, e + y + 0.85 + bob, z), q, sc); people.set(i, m4); };
   const SPACING = 1.3, SPEED = 1.3, PATROL = 1.2;
   let t = 0;
   const place = () => {
@@ -312,7 +363,7 @@ export function securityHQ(ctx) {
       const fx = Math.sin(fallYaw), fz = Math.cos(fallYaw);
       const cy = Math.max(0.3, 0.85 * Math.cos(a));
       m4.compose(v.set(vx + fx * 0.85 * Math.sin(a), e + cy, vz + fz * 0.85 * Math.sin(a)), q, sc);
-      people.setMatrixAt(idx.victims[g], m4);
+      people.set(idx.victims[g], m4);
       for (let k = 0; k < 2; k++) {
         const side = k ? 1 : -1;
         const gx = vx + Math.cos(fallYaw) * side * 1.15, gz = vz - Math.sin(fallYaw) * side * 1.15;
@@ -334,18 +385,18 @@ export function securityHQ(ctx) {
       const [x, z] = catAt(s), [x2, z2] = catAt(s + 0.5);
       stand(i, x, z, Math.atan2(x2 - x, z2 - z), CW_Y, Math.abs(Math.sin(t * 5 + k)) * 0.03);
     });
-    people.instanceMatrix.needsUpdate = true;
+    people.commit();
     props.instanceMatrix.needsUpdate = true;
   };
   place();
-  if (people.instanceColor) people.instanceColor.needsUpdate = true;
   ctx.onUpdate((dt) => {
     if (!ctx.group.visible) return;
     t += dt;
     place();
   });
 
-  ctx.disposables.push(...disposables);
+  L.build();
+  ctx0.disposables.push(...disposables);
 }
 
 // ---------------------------------------------------------------- the lift hall (X -50..-30)
@@ -353,26 +404,17 @@ export function securityHQ(ctx) {
 // (dark concrete, hazard stripes, yellow lane from the freight lift to the processing portal at Z 14).
 function securityHall(ctx) {
   const { box, deco } = { box: ctx.box.bind(ctx), deco: ctx.deco.bind(ctx) };
-  // floors (kept clear of the CEO and freight shafts)
-  deco(-49.7, -39.3, 0.015, 0.03, -39, 0, MARBLE);
-  deco(-39.3, -35.2, 0.015, 0.03, -39, -25.8, MARBLE); deco(-39.3, -35.2, 0.015, 0.03, -21, 0, MARBLE);
-  deco(-49.7, -39.3, 0.015, 0.03, 0, 39, 0x3a3f47);
-  deco(-39.3, -35.2, 0.015, 0.03, 0, 20.8, 0x3a3f47); deco(-39.3, -35.2, 0.015, 0.03, 26.2, 39, 0x3a3f47);
+  // (floors, ceiling, lighting, planters and kiosks come from the shared Phase 1 hall: luxHall.js)
   for (let x = -49.7; x < -35.2; x += 1.2) { deco(x, x + 0.6, 0.03, 0.04, -0.3, 0.3, YEL); deco(x + 0.6, x + 1.2, 0.03, 0.04, -0.3, 0.3, 0x111111); }
   // red carpet to the luxury portal; yellow lane from the freight lift to the processing portal
   deco(-49.7, -43, 0.03, 0.045, -15.5, -12.5, 0x8c1a1a);
   for (const z of [-15.5, -12.62]) deco(-49.7, -43, 0.045, 0.05, z, z + 0.12, GOLD);
   for (const [x0, x1, z0, z1] of [[-46.1, -35.2, 22.4, 22.6], [-46.1, -35.2, 24.4, 24.6], [-46.1, -45.9, 12.6, 24.6], [-49.7, -45.9, 12.6, 12.8], [-44.1, -43.9, 15.2, 22.4], [-49.7, -43.9, 15.2, 15.4]]) deco(x0, x1, 0.03, 0.04, z0, z1, YEL);
-  // lighting: warm coffers (north), cold strips (south)
-  for (let z = -36; z < -2; z += 7) deco(-48, -38, 11.55, 11.7, z, z + 2.5, 0xfff0c8);
-  for (let z = 3; z < 38; z += 6) deco(-48, -38, 11.55, 11.7, z, z + 0.5, 0xf2f7ff);
-  for (const z of [-30, -6]) { deco(-43.05, -42.95, 8.4, 11.75, z - 0.05, z + 0.05, GOLD); deco(-44.2, -41.8, 7.4, 8.4, z - 1.2, z + 1.2, 0xffe9a8); }
+  for (const z of [-30, -6]) { deco(-43.05, -42.95, 8.4, 11.6, z - 0.05, z + 0.05, GOLD); deco(-44.2, -41.8, 7.4, 8.4, z - 1.2, z + 1.2, 0xffe9a8); } // gold chandeliers
 
   // luxury portal (Z -18..-10, 5.5 m): gold pilasters, lintel, crest sign
   for (const [za, zb] of [[-19.6, -18], [-10, -8.4]]) { box(-51.2, -48.6, 0, 6.9, za, zb, GOLD); deco(-51.25, -48.55, 6.6, 6.9, za - 0.05, zb + 0.05, 0xfff0c8); }
   deco(-51.2, -48.6, 5.5, 6.9, -18, -10, GOLD);
-  ctx.sign('Asset Protection Services', -48.3, 8.0, -14, { size: 0.9, sub: 'Client Reception · by appointment or by alignment' });
-  for (const z of [-21.5, -6.5]) { box(-48.6, -47.6, 0, 0.9, z - 0.5, z + 0.5, 0x9a7a4a); deco(-48.5, -47.7, 0.9, 2.6, z - 0.4, z + 0.4, 0x3f9a4a); } // planters
   ctx.npc(-47.6, -8.6, GUARD, Math.PI / 2); // doorman in a suit
 
   // processing portal (Z 11..17, 4.2 m): steel frame, hazard stripes, wellness-screening arch
@@ -384,16 +426,8 @@ function securityHall(ctx) {
   for (let z = 11; z < 17; z += 0.8) deco(-48.8, -48.75, 4.35, 4.75, z, z + 0.4, YEL);
   for (const z of [12.6, 15.1]) box(-48, -47.4, 0, 2.6, z, z + 0.3, 0x707a88); // screening arch posts
   deco(-48, -47.4, 2.4, 2.7, 12.6, 15.4, YEL);
-  ctx.sign('Accompanied Offboarding', -48.3, 6.2, 14, { size: 0.7, sub: 'Processing entrance · associates in transition only' });
   ctx.npc(-47.2, 10.2, GUARD, Math.PI / 2); ctx.npc(-47.2, 17.8, GUARD, Math.PI / 2);
   for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) box(-49.4 + j * 0.7, -48.8 + j * 0.7, i * 0.45, i * 0.45 + 0.42, 31, 31.7, 0xa07a4a); // box supply
 
-  // destination-dispatch kiosks for the high-rise bank (north)
-  for (const lz of ctx.floor.elevators) {
-    if (!lz.bank.endsWith('high')) continue;
-    const zc = (lz.z0 + lz.z1) / 2;
-    box(-43.2, -42.6, 0, 1.15, zc - 0.3, zc + 0.3, 0x222831);
-    ctx.screen(-43.21, 1.0, zc, -Math.PI / 2, 0.5, 0.35, CH.ODDS);
-  }
-  ctx.sign('Asset Protection — Screening Hall', -42, 9.5, 0, { size: 1.0, sub: 'Clients to the right · associates in transition to the left' });
+  ctx.sign('Asset Protection — Screening Hall', -35.16, 7.4, 0, { size: 0.7, sub: 'Clients to the right · associates in transition to the left', yaw: -Math.PI / 2 });
 }

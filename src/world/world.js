@@ -160,9 +160,9 @@ export class FloorManager {
     }
   }
 
-  update(dt, t) {
+  update(dt, t, viewer = null) { // viewer: the player position (doors that open as you approach)
     for (const ctx of this.loaded.values()) {
-      for (const fn of ctx.updaters) fn(dt, t);
+      for (const fn of ctx.updaters) fn(dt, t, viewer);
       if (ctx.landing) setLandingDoors(ctx.landing);
     }
   }

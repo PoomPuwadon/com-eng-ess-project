@@ -45,7 +45,9 @@ function fitFont(g, text, maxW, size, weight, family) {
 
 /**
  * opts: { s, H (hall ceiling), P, ceo: bank id, banks: [[bankId, label, board?]], kiosks: [[bankId, floors[]]],
- *         link: { text, id }, portalText, portalSub, board(ctx, x, y, z, yaw, w, h), pylon(list), extras(api) }
+ *         link: { text, id }, portalText, portalSub, board(ctx, x, y, z, yaw, w, h), pylon(list), extras(api),
+ *         portals: [{ z, half, top, text, sub }] (several portals; default one at Z 0 from portal/portalText),
+ *         hallFloor(L, x0, x1, z0, z1) (own flooring instead of P.floor), planters: [z...] }
  */
 export function luxLiftHall(ctx, L, o) {
   const { s, H, P } = o;
@@ -53,7 +55,8 @@ export function luxLiftHall(ctx, L, o) {
   // hall depth from the facade (20 m normally; VT-03's arrivals hall is 14 m): everything placed relative
   // to the portal wall moves with it
   const DEPTH = o.depth ?? 20, PW = 30 + DEPTH - 0.4; // portal-wall face (49.6 for a 20 m hall)
-  const PH = (o.portal?.half ?? 8) + 0.6, PT = (o.portal?.top ?? 8) + 0.6; // hall-side opening of the portal wall
+  const PORTALS = (o.portals || [{ z: 0, half: o.portal?.half ?? 8, top: o.portal?.top ?? 8, text: o.portalText, sub: o.portalSub }])
+    .map((q) => ({ ...q, z0: q.z - q.half - 0.6, z1: q.z + q.half + 0.6, T: q.top + 0.6 })).sort((a, b) => a.z - b.z); // hall-side openings
   const X = (d) => s * d;
   const bx = (d0, d1, y0, y1, z0, z1, m, opt) => L.box(X(d0), X(d1), y0, y1, z0, z1, m, opt);
   const yawCore = s * Math.PI / 2; // facing the hall from the core
@@ -156,19 +159,23 @@ export function luxLiftHall(ctx, L, o) {
   }
 
   // ---- hall shell
-  for (const [d0, d1, z0, z1] of [[PW, CEO.d, Z0, Z1], [CEO.d, DC, Z0, CEO.z0], [CEO.d, DC, CEO.z1, Z1], ...(o.link ? [[DC, R.d, -R.z, R.z]] : [])]) L.floor(Math.min(X(d0), X(d1)), Math.max(X(d0), X(d1)), z0, z1, 0.012, P.floor, P.floorTile || 2);
-  const runner = (d0, d1, z0, z1, alongX) => {
+  for (const [d0, d1, z0, z1] of [[PW, CEO.d, Z0, Z1], [CEO.d, DC, Z0, CEO.z0], [CEO.d, DC, CEO.z1, Z1], ...(o.link ? [[DC, R.d, -R.z, R.z]] : [])]) {
+    if (o.hallFloor) o.hallFloor(L, Math.min(X(d0), X(d1)), Math.max(X(d0), X(d1)), z0, z1);
+    else L.floor(Math.min(X(d0), X(d1)), Math.max(X(d0), X(d1)), z0, z1, 0.012, P.floor, P.floorTile || 2);
+  }
+  const runner = (d0, d1, z0, z1, alongX, m = P.runner, edge = P.edge) => {
     const x0 = Math.min(X(d0), X(d1)), x1 = Math.max(X(d0), X(d1));
-    L.box(x0, x1, 0.012, 0.022, z0, z1, P.runner);
-    if (alongX) for (const zz of [z0 + 0.12, z1 - 0.2]) L.box(x0, x1, 0.012, 0.026, zz, zz + 0.08, P.edge);
-    else for (const xx of [x0 + 0.12, x1 - 0.2]) L.box(xx, xx + 0.08, 0.012, 0.026, z0, z1, P.edge);
+    L.box(x0, x1, 0.012, 0.022, z0, z1, m);
+    if (alongX) for (const zz of [z0 + 0.12, z1 - 0.2]) L.box(x0, x1, 0.012, 0.026, zz, zz + 0.08, edge);
+    else for (const xx of [x0 + 0.12, x1 - 0.2]) L.box(xx, xx + 0.08, 0.012, 0.026, z0, z1, edge);
   };
-  runner(PW - 0.04, o.link ? R.d : DC, -2, 2, true);
-  runner(PW - 2.2, PW - 4.2, Z0 + 1.9, -2, false); runner(PW - 2.2, PW - 4.2, 2, Z1 - 1.9, false);
+  for (const q of PORTALS) if (q.runner !== false) runner(PW - 0.04, o.link && !q.z ? R.d : DC, q.z - 2, q.z + 2, true);
+  { let za = Z0 + 1.9; for (const q of PORTALS) { if (q.z - 2 - za > 0.5) runner(PW - 2.2, PW - 4.2, za, q.z - 2, false); za = q.z + 2; } if (Z1 - 1.9 - za > 0.5) runner(PW - 2.2, PW - 4.2, za, Z1 - 1.9, false); }
   const HW0 = PW + 0.06, HW1 = PW;
-  for (const [za, zb] of [[Z0, -PH], [PH, Z1]]) { bx(HW0, HW1, 0, H - 0.15, za, zb, P.wall); dado(HW1, HW1, za, zb, -1); }
-  bx(HW0, HW1, PT, H - 0.15, -PH, PH, P.wall);
-  for (const zz of [-34, -26, -18, 18, 26, 34].filter((v) => v > Z0 + 1 && v < Z1 - 1)) bx(HW1, HW1 - 0.3, 0, H - 0.15, zz - 0.35, zz + 0.35, P.frame);
+  { let za = Z0; for (const q of [...PORTALS, { z0: Z1, z1: Z1 }]) { if (q.z0 - za > 0.02) { bx(HW0, HW1, 0, H - 0.15, za, q.z0, P.wall); dado(HW1, HW1, za, q.z0, -1); } za = q.z1; } }
+  for (const q of PORTALS) bx(HW0, HW1, q.T, H - 0.15, q.z0, q.z1, P.wall);
+  const inPortal = (zz, pad = 0) => PORTALS.some((q) => zz > q.z0 - pad && zz < q.z1 + pad);
+  for (const zz of [-34, -26, -18, 18, 26, 34].filter((v) => v > Z0 + 1 && v < Z1 - 1 && !inPortal(v, 0.4))) bx(HW1, HW1 - 0.3, 0, H - 0.15, zz - 0.35, zz + 0.35, P.frame);
   bx(HW1, HW1 - 0.12, H - 0.75, H - 0.6, Z0, Z1, P.frame);
   for (const zz of [Z0 - 0.06, Z1]) {
     const f = zz < 0 ? zz + 0.06 : zz, dz = zz < 0 ? 1 : -1;
@@ -188,8 +195,8 @@ export function luxLiftHall(ctx, L, o) {
   ceiling(L, P, H, ...cx(PW, CEO.d), Z0, Z1, 3.8);
   ceiling(L, P, H, ...cx(CEO.d, DC), Z0, CEO.z0, 3.8);
   ceiling(L, P, H, ...cx(CEO.d, DC), CEO.z1, Z1, 3.8);
-  plaque(ctx, o.portalText, X(HW1 - 0.04), PT + 0.9, 0, yawPortal, { h: 1.1, color: P.ink, sub: o.portalSub });
-  for (const zz of [-12, 12, -30, 30].filter((v) => v > Z0 + 2 && v < Z1 - 2)) planter(L, P, X(PW - 0.9), zz, 2.4);
+  for (const q of PORTALS) if (q.text) plaque(ctx, q.text, X(HW1 - 0.04), q.T + 0.9, q.z, yawPortal, { h: q.textH ?? 1.1, color: P.ink, sub: q.sub });
+  for (const zz of (o.planters || [-12, 12, -30, 30]).filter((v) => v > Z0 + 2 && v < Z1 - 2 && !inPortal(v, 1.4))) planter(L, P, X(PW - 0.9), zz, 2.4);
   if (o.pylon) {
     const list = [];
     for (const zz of [-22, 22]) {
@@ -199,7 +206,7 @@ export function luxLiftHall(ctx, L, o) {
     }
     o.pylon(list);
   }
-  L.person(X(PW - 5), 0.5, { yaw: yawPortal, suit: P.hostSuit ?? 0x1c2a4e, skin: 0xc68c62, hair: 0x2a1a10 });
+  if (o.host !== false) L.person(X(PW - 5), PORTALS[0].z + 0.5, { yaw: yawPortal, suit: P.hostSuit ?? 0x1c2a4e, skin: 0xc68c62, hair: 0x2a1a10 });
   return { X, bx, yawCore, yawPortal };
 }
 
