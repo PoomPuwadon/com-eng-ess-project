@@ -245,9 +245,9 @@ function peopleGeo(sit = false) {
 
 // Low-poly people driven by capsule-style matrices (centre at +0.85 m), for floors that animate
 // their own figures. set(i, m4) takes the matrix a 1.7 m capsule would have.
-export function peopleInstanced(ctx, n) {
+export function peopleInstanced(ctx, n, sit = false) { // sit: seated pose
   initMaterials();
-  const G = peopleGeo(), off = new THREE.Matrix4().makeTranslation(0, -0.85, 0), t = new THREE.Matrix4(), c = new THREE.Color();
+  const G = peopleGeo(sit), off = new THREE.Matrix4().makeTranslation(0, -0.85, 0), t = new THREE.Matrix4(), c = new THREE.Color();
   const meshes = ['body', 'skin', 'dark'].map((k) => { const m = new THREE.InstancedMesh(G[k], LM.people, n); m.frustumCulled = false; m.castShadow = true; ctx.add(m); return m; });
   return {
     meshes,

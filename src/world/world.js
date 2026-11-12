@@ -90,7 +90,7 @@ export function buildExterior(scene, renderer) {
   const lux = new Lux({ e: 0, colliders: [], add: (m, ...d) => scene.add(m), onUpdate: () => {} });
   // atrium: its south face is the Phase 1 entrance facade (built with the plaza), so no massing face there
   scene.add(massing(A.x0 - o, A.x1 + o, 0, A.height, A.z0 - o, A.z1 + o, 0xe6dccb, null, { skipSouth: true }));
-  const ot = massing(-110 - o, -30 + o, 15, 82, -40 - o, 40 + o, 0xffffff, { side: 'e', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
+  const ot = massing(-110 - o, -30 + o, 15, 102, -40 - o, 40 + o, 0xffffff, { side: 'e', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
   const vt = massing(30 - o, 210 + o, 15, 112, -60 - o, 60 + o, 0xffffff, { side: 'w', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
   scene.add(ot, vt); // Office Tower, Wellness Tower (curtain-wall facades)
   // tower plinths below 15 m (leaving the lift-core strip open so cars are visible through their doors)

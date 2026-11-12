@@ -204,18 +204,22 @@ export const FLOORS = [
     props: 'trading',
   },
   {
-    id: 'OT-02', tower: 'OT', short: 'Prob. Inst.', sign: 'Probability Research Institute', elevation: 27, height: 10,
-    bounds: OT_B, area: 'ot_view',
-    rooms: [{ id: 'lottery_institute', sign: 'Probability Research Institute', short: 'Prob. Inst.', ...OT_MAIN, full: true, noSign: true }],
+    // Monte Carlo Rehearsal Theatre (redesign, user 2026-11-12): the lift hall is at 47 m; the main space
+    // is an IMAX-scale raked theatre whose twelve tiers of quant desks step DOWN 20 m to a pit at 27 m
+    // (the Trading Floor ceiling) with the draw stage, the animatronic and a 44 x 26 m IMAX wall. See floors/drawTheatre.js.
+    id: 'OT-02', tower: 'OT', short: 'Prob. Inst.', sign: 'Probability Research Institute', elevation: 47, height: 10,
+    below: 20, slabHoleRect: r(-109, -50, -39, 39),
+    bounds: OT_B, area: 'ot_view', lux: true, customHall: true,
+    rooms: [{ id: 'lottery_institute', sign: 'Probability Research Institute', short: 'Prob. Inst.', ...OT_MAIN, full: true, noSign: true, spawn: { x: -59, z: 0 } }],
     props: 'lottery',
   },
   {
     // Global Client Outreach Centre (user, 2026-11-06, greybox from the user's reference images).
     // The lift hall is at 52 m; its portal opens onto a bridge to the TOP tier of a four-level
     // operator structure standing in a 15 m-deep pit (the whole main space is sunk to 37 m, the
-    // Probability Research Institute's ceiling). Zig-zag stairs down the structure's east face link
+    // Probability Research Institute's ceiling, 57 m). Zig-zag stairs down the structure's east face link
     // the tiers (0 / -5 / -10) and the pit floor (-15). See floors/outreach.js.
-    id: 'OT-03', tower: 'OT', short: 'Outreach', sign: 'Global Client Outreach Centre', elevation: 52, height: 10,
+    id: 'OT-03', tower: 'OT', short: 'Outreach', sign: 'Global Client Outreach Centre', elevation: 72, height: 10, // was 52: OT-02 became a 30 m IMAX theatre (user, 2026-11-12)
     below: 15, slabHoleRect: r(-109, -50, -39, 39),
     bounds: OT_B, area: 'ot_view', slabColor: 0x252b38, ceilColor: 0x161a24, wallColor: 0x1e2330, lux: true, customHall: true, // Phase 1 look (outreach.js)
     rooms: [
@@ -231,7 +235,7 @@ export const FLOORS = [
     // straight through exit processing into the prison-style roll-call yard with glass holding
     // cells, a beating area and steel catwalks at 6 m. No CCTV here (that stays on OT-05).
     // Plain names in comments only: security HQ, firing, roll call, holding cells.
-    id: 'OT-04', tower: 'OT', short: 'Security HQ', sign: 'Asset Protection HQ', elevation: 62, height: 12,
+    id: 'OT-04', tower: 'OT', short: 'Security HQ', sign: 'Asset Protection HQ', elevation: 82, height: 12, // was 62 (OT-02 theatre, 2026-11-12)
     bounds: OT_B, area: 'ot_view', customHall: true, slabColor: 0x6b6f76, lux: true, // Phase 1 look (securityHQ.js)
     rooms: [
       { id: 'security_hq', sign: 'Asset Protection HQ', short: 'Security HQ', ...OT_MAIN, full: true, noSign: true },
@@ -248,7 +252,7 @@ export const FLOORS = [
     props: 'security',
   },
   {
-    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 74, // was 67: OT-04 grew to 12 m (user, 2026-11-06)
+    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 94, // was 67, then 74 (OT-04 grew to 12 m), then 94 (OT-02 IMAX theatre, 2026-11-12)
     height: 8,
     bounds: OT_B, area: 'control',
     rooms: [
@@ -359,7 +363,7 @@ export const FLOORS = [
 // [theme, sign, portal width, portal height] — width 0 = no wall (the hall flows straight on).
 const HALLS = {
   'OT-01': ['trading', "Trading Floor — Members' Lift Hall", 16, 8],
-  'OT-02': ['quant', 'Probability Research Institute — Lift Hall', 14, 7],
+  'OT-02': ['quant', 'Probability Research Institute — Lift Hall', 11.2, 5.6], // Phase 1 (drawTheatre.js, customHall): 11.2 x 5.6 opening (portal half 5, top 5) into the cinema foyer
   'OT-03': ['outreach', 'Global Client Outreach Centre — Lift Hall', 12, 6],
   // two portals (user, 2026-11-06): luxury reception (north) + processing (south); dressed by securityHQ.js
   'OT-04': ['security', 'Asset Protection — Screening Hall', 8, 5.5, { doors: [{ side: 'w', at: -14, width: 8, top: 5.5 }, { side: 'w', at: 14, width: 6, top: 4.2 }] }],

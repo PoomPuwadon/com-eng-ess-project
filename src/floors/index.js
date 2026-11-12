@@ -4,7 +4,7 @@ import { shiftedCtx } from '../world/geom.js';
 import { lobby, plaza } from './lobby.js';
 import { department, control } from './officeTower.js';
 import { outreach } from './outreach.js';
-import { lottery } from './probability.js';
+import { drawTheatre as lottery } from './drawTheatre.js';
 import { securityHQ } from './securityHQ.js';
 import { trading } from './tradingFloor.js';
 import { racing } from './visitorsTower.js';

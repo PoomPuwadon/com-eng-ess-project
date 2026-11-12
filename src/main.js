@@ -45,8 +45,8 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
-const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-02', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-02': 'lab', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
@@ -70,6 +70,8 @@ const LOOKS = {
   racing: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.4, sun: 0, sunCol: 0xfff0dc, hemi: 0.75, sky: 0xc8d4ff, gnd: 0x2a2a30, shadow: false, bloom: 0.42 },
   // treasury reserve (B1): cold white light on brushed steel, black granite and gold
   vault: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.65, sun: 0, sunCol: 0xfff0dc, hemi: 0.7, sky: 0xeef3ff, gnd: 0x2a2c30, shadow: false, bloom: 0.32 },
+  // probability institute theatre: a bright white/navy research lab; even, cool-white fill, the screens glow
+  lab: { tone: THREE.ACESFilmicToneMapping, exp: 0.82, env: 0.45, sun: 0, sunCol: 0xfff0dc, hemi: 0.45, sky: 0xf2f6ff, gnd: 0x4a5468, shadow: false, bloom: 0.18 },
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
@@ -99,6 +101,7 @@ function renderFrame(cam = camera) {
     if (!PERF_OPT.lights) scene.traverse((o) => { if (o.isPointLight) o.visible = false; });
   } // re-draw shadows when the loaded floors change
   setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : LOOK_OF[floors.current] || 'indoor');
+  for (const c of floors.loaded.values()) if (c.preRender && c.group.visible) c.preRender(renderer, scene, cam); // live camera feeds (OT-02 IMAX)
   // Low mode skips post-processing entirely: the renderer still tone-maps straight to the screen.
   if (luxOn && !QUALITY.low) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
 }
