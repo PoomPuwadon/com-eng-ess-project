@@ -4,6 +4,7 @@ import { kitMaterials } from './luxKit.js';
 import { luxLiftHall, ceiling } from './luxHall.js';
 import { CH } from '../world/screens.js';
 import { QUALITY } from '../quality.js';
+import { deskScreens } from './theatreScreens.js';
 
 // ================================================================= PHASE 1 — OT-02 PROBABILITY RESEARCH INSTITUTE
 // Redesign (user, 2026-11-12): the "Monte Carlo Rehearsal Theatre". A bright white/navy research lab built as
@@ -457,6 +458,8 @@ export function drawTheatre(ctx) {
 
   // ================================================================ desks, quants, monitors, tickets on the desks
   const seats = desks(ctx, L, r);
+  const screens = deskScreens(ctx, seats.monitors);
+  ctx.theatreScreens = screens; // debug access (stats, onBall)
 
   // ================================================================ projection booth (above the foyer) + beams
   const BX0 = XB - 0.2, BX1 = -50.2, BZ = 10, BY = 4.5, BT = 8.3;
@@ -516,12 +519,13 @@ export function drawTheatre(ctx) {
 
   // ================================================================ the floor's life: draw cycle, IMAX, applause
   const cheer = applause(ctx, seats, r);
-  rig.onDrop = (digit, n) => { imax.onBall(digit, n); cheer.start(); };
+  rig.onDrop = (digit, n) => { imax.onBall(digit, n); screens.onBall(digit, n); cheer.start(); };
   ctx.onUpdate((dt) => {
     if (!ctx.group.visible) return;
     rig.update(dt);
     imax.update(dt);
     cheer.update(dt);
+    screens.update(dt);
   });
 
   ctx.shapes = [theatreShape(e)];
@@ -907,16 +911,19 @@ function desks(ctx, L, r) {
     mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
     ctx.add(mesh, geo);
   }
-  // monitors (shared animated atlas): three per desk, facing the quant
-  const MON_CH = [CH.LOTTO, CH.CHART, CH.LOTTO];
+  // monitors: three per desk, facing the quant, each showing one of the floor's 24 screens (deskScreens). The
+  // variant v = (7·seat + 3·monitor + 5·tier) mod 24 never repeats on one desk, beside a neighbour or behind it,
+  // and the screen type (v mod 4) always differs between side-by-side monitors.
+  const monitors = [], perTier = {};
   for (const s of seats) {
-    const c = Math.cos(s.th), sn = Math.sin(s.th), yaw = Math.atan2(c, sn);
+    const c = Math.cos(s.th), sn = Math.sin(s.th), yaw = Math.atan2(c, sn), i = (perTier[s.k] = (perTier[s.k] ?? -1) + 1);
     for (const [k, dz] of [[0, -0.42], [1, 0], [2, 0.42]]) {
-      // seat-local (-0.955, dz) rotated by -th about Y: x' = x cos(th) - z sin(th)... (rotation by -th)
+      // seat-local (-0.955, dz) rotated by -th about Y
       const lx = -0.955, x = s.x + lx * c - dz * sn, z = s.z + lx * sn + dz * c;
-      ctx.screen(x, s.y + 0.98, z, yaw, 0.4, 0.28, MON_CH[k]);
+      monitors.push({ x, y: s.y + 0.98, z, yaw, v: (i * 7 + k * 3 + s.k * 5) % 24 });
     }
   }
+  seats.monitors = monitors;
   // tickets on the desks (instanced paper)
   const tg = new THREE.PlaneGeometry(0.22, 0.11).rotateX(-Math.PI / 2), tickets = new THREE.InstancedMesh(tg, LM.ptTicketOne, seats.length * 2);
   let ti = 0;
