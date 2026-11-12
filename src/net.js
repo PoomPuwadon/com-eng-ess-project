@@ -35,8 +35,11 @@ export class Net {
     if (new URLSearchParams(location.search).has('name')) return Promise.resolve();
     return new Promise((done) => {
       const gate = document.createElement('div'); gate.id = 'name-gate';
-      gate.innerHTML = '<form><h2>Welcome to the Firm</h2><p>Enter your name for the visitor list.</p><input maxlength="20" autocomplete="nickname" placeholder="Your name" required><button>Enter</button></form>';
-      document.body.appendChild(gate);
+      gate.innerHTML = '<div class="brand">[FIRM NAME]</div><div class="tag">Two Towers. One Vision.</div><form><h2>Welcome to the Firm</h2><p>Enter your name for the visitor list.</p><input maxlength="20" autocomplete="nickname" placeholder="Your name" required><button>Enter the building</button></form>';
+      document.body.appendChild(gate); document.body.classList.add('gated');
+      // nothing reaches the game until a name is entered (no walking, no pointer lock behind the screen)
+      const block = (e) => { if (e.target !== input) { e.stopImmediatePropagation(); if (e.type === 'keydown' && e.key !== 'Tab') e.preventDefault(); } };
+      for (const ev of ['keydown', 'keyup']) window.addEventListener(ev, block, true);
       const input = gate.querySelector('input'); input.value = this.name.startsWith('Guest-') ? '' : this.name;
       for (const ev of ['keydown', 'keyup']) input.addEventListener(ev, (e) => e.stopPropagation());
       for (const ev of ['mousedown', 'click', 'pointerdown']) gate.addEventListener(ev, (e) => e.stopPropagation()); // no pointer lock behind the gate
@@ -46,7 +49,8 @@ export class Net {
         const v = input.value.replace(/[^\p{L}\p{N} _\-.]/gu, '').trim().slice(0, 20);
         if (!v) return;
         this.name = v; try { localStorage.setItem('firm.name', v); } catch { /* ignore */ }
-        gate.remove(); done();
+        for (const ev of ['keydown', 'keyup']) window.removeEventListener(ev, block, true);
+        gate.remove(); document.body.classList.remove('gated'); done();
       };
     });
   }

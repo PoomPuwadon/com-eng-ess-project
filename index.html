@@ -69,9 +69,12 @@
     #tbtns { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: 28px; display: flex; flex-direction: column; gap: 10px; z-index: 15; }
     #tbtns button { width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(201,162,58,.7); background: rgba(10,12,18,.7); color: #e3c27a; font: 700 14px system-ui; touch-action: manipulation; }
     #q-btn { position: fixed; left: 136px; top: 104px; z-index: 30; font: 600 12px system-ui; padding: 5px 10px; border-radius: 6px; border: 1px solid #b8924a; background: #14110dcc; color: #e3c27a; cursor: pointer; touch-action: manipulation; }
-    #name-gate { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,.82); font-family: system-ui; }
+    #name-gate { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 35%, #1d2a4a 0%, #0b0f18 70%); font-family: system-ui; }
+    #name-gate .brand { color: #e3c27a; font: 700 clamp(28px, 6vw, 54px) Georgia, serif; letter-spacing: .06em; margin-bottom: 6px; text-shadow: 0 2px 18px rgba(217,178,92,.35); }
+    #name-gate .tag { color: #9fb3d9; font: italic 15px Georgia, serif; margin-bottom: 26px; }
     #name-gate form { background: #14110d; border: 1px solid #b8924a; border-radius: 12px; padding: 22px 24px; width: min(340px, 88vw); color: #eee; text-align: center; }
     #name-gate h2 { margin: 0 0 4px; color: #e3c27a; font: 700 20px Georgia, serif; }
+    body.gated #c { visibility: hidden; }
     #name-gate p { margin: 0 0 14px; color: #b8a27a; font-size: 13px; }
     #name-gate input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 1px solid #b8924a; background: #0d1018; color: #fff; font-size: 16px; }
     #name-gate button { margin-top: 12px; width: 100%; padding: 10px; border-radius: 8px; border: 0; background: #c9a23a; color: #14110d; font: 700 15px system-ui; cursor: pointer; }
