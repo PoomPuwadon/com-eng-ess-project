@@ -144,6 +144,8 @@ export class FloorManager {
     this.scene.add(ctx.group);
     this.loaded.set(id, ctx);
     ctx.buildMs = performance.now() - t0;
+    ctx.role = this.role;
+    ctx.toast = (text, secs) => this.toast && this.toast(text, secs); // a floor can show a refusal / notice
   }
 
   unload(id, ctx) {
@@ -155,14 +157,17 @@ export class FloorManager {
 
   applyRole(role) {
     this.role = role;
+    for (const ctx of this.loaded.values()) ctx.role = role;
     for (const ctx of this.loaded.values()) for (const b of ctx.barriers) {
       b.mesh.material = canAccess(role, b.area) ? MAT.barrierOpen : MAT.barrierLocked;
     }
   }
 
-  update(dt, t, viewer = null) { // viewer: the player position (doors that open as you approach)
+  // viewer: the player position (doors that open as you approach); agents: the cash robots' positions
+  update(dt, t, viewer = null) {
+    const agents = this.agents ? this.agents() : [];
     for (const ctx of this.loaded.values()) {
-      for (const fn of ctx.updaters) fn(dt, t, viewer);
+      for (const fn of ctx.updaters) fn(dt, t, viewer, agents);
       if (ctx.landing) setLandingDoors(ctx.landing);
     }
   }

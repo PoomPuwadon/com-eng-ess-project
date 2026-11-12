@@ -45,8 +45,8 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04'];
-const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing' };
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
@@ -68,6 +68,8 @@ const LOOKS = {
   security: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.5, sun: 0, sunCol: 0xfff0dc, hemi: 0.8, sky: 0xf4efe6, gnd: 0x6a6258, shadow: false, bloom: 0.3 },
   // equine centre (night race meeting): dark navy sky, cool fill; floodlights, LED lines and screens glow
   racing: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.4, sun: 0, sunCol: 0xfff0dc, hemi: 0.75, sky: 0xc8d4ff, gnd: 0x2a2a30, shadow: false, bloom: 0.42 },
+  // treasury reserve (B1): cold white light on brushed steel, black granite and gold
+  vault: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.65, sun: 0, sunCol: 0xfff0dc, hemi: 0.7, sky: 0xeef3ff, gnd: 0x2a2c30, shadow: false, bloom: 0.32 },
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
@@ -104,6 +106,7 @@ const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
 const life = new Life(scene, elev);
+floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
 const perf = new PerfSampler(renderer);
 let assigned = null; // car assigned to the player by the last call
 
@@ -434,6 +437,7 @@ addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------- start
+floors.toast = (text, secs = 2.5) => hud.toast(text, secs); // floor modules can show refusals (e.g. the Treasury Reserve layers)
 const params = new URLSearchParams(location.search);
 setRole(params.get('role') || 'visitor');
 if (params.get('floor')) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);

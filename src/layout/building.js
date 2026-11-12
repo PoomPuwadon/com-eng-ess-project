@@ -26,6 +26,7 @@ export const AREA_ACCESS = {
   freight: ['admin', 'ceo'], // freight lifts (riding with the robots)
   ceo_lift: ['tour', 'admin', 'ceo'], // the Chief Executive Lifts (tours board in the lobby)
   backstage: ['admin', 'ceo'], // Combat Pavilion: service corridor, backstage, focus room, walkout tunnel, ringside
+  vault_inner: ['tour', 'admin', 'ceo'], // B1 security layers (airlocks, laser corridor, moat bridge, vault door)
 };
 export const canAccess = (role, area) => (AREA_ACCESS[area] || []).includes(role);
 
@@ -39,6 +40,7 @@ export const REFUSALS = {
   freight: 'This lift is reserved for Autonomous Liquidity Couriers.',
   ceo_lift: 'The Chief Executive Lift operates by invitation only.',
   backstage: 'Competitors and officials only beyond this point.',
+  vault_inner: 'The Treasury Reserve is viewable on Executive Tours only. Please remain where you are.',
 };
 
 const r = (x0, x1, z0, z1) => ({ x0, x1, z0, z1 });
@@ -136,16 +138,24 @@ const VT_MAIN = r(50, 210, -60, 60);
 export const FLOORS = [
   // ------------------------------------------------------------ basement
   {
+    // Redesign (user, 2026-11-12; floors/treasuryVault.js): every lift lands in the Treasury Arrival Hall, outside
+    // the layers: airlocks → laser corridor → sentry hall → a 10 m descent → the moat + retracting bridge → the 6 m
+    // round door → a 20 m-tall vault. The sunken zone (X 42..128, Z ±30) drops to -10 m rel (moat -18 m rel).
     id: 'B1', tower: 'B1', short: 'Basement', sign: 'Basement', elevation: -10, height: 10,
-    bounds: r(-80, 130, -40, 40), area: 'basement',
+    bounds: r(-80, 130, -40, 40), area: 'basement', lux: true, below: 18, slabHoleRect: r(42, 128, -30, 30),
+    slabColor: 0x1a1c20, ceilColor: 0x202328, wallColor: 0x2a2e34,
     rooms: [
-      { id: 'vault', sign: 'Treasury Reserve', short: 'Vault', ...r(-29, 21, -25.2, 32.5), h: 9.5,
-        doors: [{ side: 'n', width: 8 }, { side: 'w', at: -23.4, width: 3.4 }, { side: 'w', at: 23.5, width: 4 }] }, // CEO lift + freight open straight in
-      { id: 'server_room', sign: 'Infrastructure Core (IT)', short: 'Server Room', ...r(-78, -38, 5, 35), h: 6, doors: ['n', 'e'], doorWidth: 4 },
-      { id: 'cash_robot_depot', sign: 'Autonomous Liquidity Courier Depot', short: 'ALC Depot', ...r(40, 70, -38, -18), h: 6, doors: ['n', 'w'], doorWidth: 6 },
-      { id: 'b1_service_corridor', sign: 'Service Corridor', short: 'Corridor', ...r(-80, 130, -40, 40), full: true },
+      { id: 'b1_arrival_hall', sign: 'Treasury Arrival Hall', short: 'Arrivals', ...r(-30, -12, -39, 39), zone: true, spawn: { x: -20, z: 0 } },
+      { id: 'b1_airlocks', sign: 'Credential Verification Airlocks', short: 'Airlocks', ...r(-12, 4, -14, 12), zone: true, spawn: { x: -9, z: 0 } },
+      { id: 'b1_laser_corridor', sign: 'Photonic Assurance Corridor', short: 'Lasers', ...r(4, 28, -2.5, 2.5), zone: true, spawn: { x: -9, z: 0 } },
+      { id: 'b1_sentry_hall', sign: 'Asset Protection Sentry Hall', short: 'Sentry Hall', ...r(28, 42, -14, 12), zone: true, spawn: { x: 35, z: 0 } },
+      { id: 'b1_moat_hall', sign: 'Liquidity Moat', short: 'Moat', ...r(42, 72, -30, 30), zone: true, spawn: { x: 35, z: 0 } },
+      { id: 'vault', sign: 'Treasury Reserve', short: 'Vault', ...r(74, 128, -30, 30), zone: true, spawn: { x: 35, z: 0 } },
+      { id: 'server_room', sign: 'Infrastructure Core (IT)', short: 'Server Room', ...r(-78, -42, -38, 38), zone: true, spawn: { x: -45, z: 0 } },
+      { id: 'cash_robot_depot', sign: 'Autonomous Liquidity Courier Depot', short: 'ALC Depot', ...r(-12, 30, 12, 39), zone: true, spawn: { x: 0, z: 30 } },
+      { id: 'b1_service_corridor', sign: 'Service Corridor', short: 'Corridor', ...r(-80, 130, -40, 40), full: true, noSign: true },
     ],
-    props: 'basement',
+    props: 'treasury',
   },
   // ------------------------------------------------------------ grand lobby (atrium between the towers)
   {

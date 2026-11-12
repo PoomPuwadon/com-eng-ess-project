@@ -3,7 +3,7 @@ name: greybox-layout
 description: Building layout source of truth for the firm — scale rules, massing (Office Tower | atrium Grand Lobby | Wellness Tower), the floor-by-floor room table with dimensions and elevations, the lift banks and shafts, room/floor naming conventions, and lift/bridge access rules by role. Use whenever creating, moving, resizing, labelling or connecting any floor, room, lift, bridge or minimap entry.
 ---
 
-# Greybox Layout (rev 14 — 2026-11-12)
+# Greybox Layout (rev 15 — 2026-11-12)
 
 This file is the spec. The code's layout data lives ONLY in `src/layout/building.js` and must
 match this file. If the user approves a layout change, update this file and the layout data in
@@ -35,6 +35,10 @@ modern Dubai-style night meeting (Phase 1 look, `floors/equineCentre.js`): a gra
 one glass wall from a +7 m concourse, a crescent grandstand and a night sky. The track is smaller (centres
 (128, 0) / (170, 0), R 25…35) to make room for the entrance block (X 50…86) inside the 160 × 120 m main space.
 Race cadence and field size are still to be decided by the user (the simulated field circles continuously).
+
+Rev 15 changes, requested by the user (2026-11-12): the whole basement `B1` **redesigned** in the Phase 1 look
+(`floors/treasuryVault.js`) as a very secure vault behind heavy layers. **Every** B1 lift (CEO lift included) now
+lands in the Treasury Arrival Hall, outside all layers; the vault sinks to a 20 m-tall chamber (`below: 18`).
 
 ## 1. Scale rules
 
@@ -101,10 +105,15 @@ Elevation = Y of the floor slab. H = floor-to-floor height. W × D in metres.
 
 | Floor ID | Room ID | Sign label | Rect (X; Z) | Notes |
 | --- | --- | --- | --- | --- |
-| `B1` (Y −10, H 10) | `vault` | Treasury Reserve | −29…21; −25.2…32.5 (50 × 57.7) | The Office Chief Executive Lift (door at Z −23.4) and the Office freight lift (Z 23.5) open straight into it (west wall). North door to the corridor |
-| `B1` | `server_room` | Infrastructure Core (IT) | −78…−38; 5…35 (40 × 30) | Rack rows |
-| `B1` | `cash_robot_depot` | Autonomous Liquidity Courier Depot | 40…70; −38…−18 (30 × 20) | Charging bays |
-| `B1` | `b1_service_corridor` | — | whole floor | Office low-rise lifts open at X −60, Wellness freight at X 60 |
+| `B1` (Y −10, H 10, **below 18**) | `b1_arrival_hall` | Treasury Arrival Hall | −30…−12; −39…39 | **Every B1 lift lands here** (west wall: Office low-rise, Chief Executive Lift, Office freight; gold portal per door). Guard desk, two wellness-screening arches, route opening Z ±5 east, open to the logistics bay south of Z 12, corridor (Z ±6) west to the data hall |
+| `B1` | `b1_airlocks` | Credential Verification Airlocks | −12…4; −14…12 | Floor-to-ceiling glass security wall at X −4 with **two people airlocks** (Z ±7, 2.6 m) and a wide **escort airlock** (Z 0, 4.6 m, for the cash robots). One door at a time: the far door opens only after the near one has closed |
+| `B1` | `b1_laser_corridor` | Photonic Assurance Corridor | 4…28; −2.5…2.5 (4 m high) | Black corridor, red laser grid + 3 sweeping beams; powers down while a cleared user or a courier is in it; a lock collider at X 4 stops everyone else |
+| `B1` | `b1_sentry_hall` | Asset Protection Sentry Hall | 28…42; −14…12 | Two armoured glass booths with seated guards, robot sentries; ends in a glass-railed **balcony** at X 42 over the moat hall |
+| `B1` | `b1_moat_hall` | Liquidity Moat | 42…72; −30…30 (floor −10 rel, ceiling +9.75) | **Grand stair** X 42…58.8, Z ±4 (56 × 0.18 m) down 10 m; guard booths and patrols on the floor; **moat** X 62…72, 8 m deep (−18 rel, water); a **retracting bridge** (Z ±2) that extends only for cleared users / couriers and slides back under the vault floor |
+| `B1` | `vault` | Treasury Reserve | 74…128; −30…30 (floor −10 rel, **20 m tall**) | 2 m wall at X 72…74 with a **6 m round door** (centre +3.4 above the floor, hinge on the north side, 12 bolts, spoked wheel, 4 beacons): bolts retract, then it swings 106° into the vault, and reverses when nobody cleared is near. Gold racks (N wall, 4 levels) and pyramid stacks, cash pallets (S) with 2 forklifts, deposit-box walls (E + upper N/S), rolling ladder, counting team, guards, the **reserve total display** (E wall, placeholder until Phase 2) |
+| `B1` | `server_room` | Infrastructure Core (IT) | −78…−42; −38…38 | Luxury data hall: raised floor (+0.3), 6 pairs of glass-fronted rack rows with contained cold aisles, cable trays, cooling units, gold-trimmed IT desk with techs |
+| `B1` | `cash_robot_depot` | Autonomous Liquidity Courier Depot | −12…30; 12…39 | Armoured Logistics Bay: 6 charging docks, maintenance gantry, guard muster area (hazard floor), ALC route board; the Wellness freight lift lands on its east wall |
+| `B1` | `b1_service_corridor` | — | whole floor | Sunken zone X 42…128, Z ±30 (`slabHoleRect`). Access area `vault_inner` (tour, admin, CEO) for every layer; open doors and the extended bridge still refuse other roles (no tailgating a courier) |
 
 ### Entrance plaza (outdoors) — the game starts here
 
@@ -200,7 +209,7 @@ it takes you there. Inside a car, E gives the floor panel.
 | --- | --- | --- | --- | --- |
 | `ot_low` Office Low-Rise | 4 (OT-L1…4) | −34…−30; −38.6…−25.8 | B1, L0, OT-01, OT-02 | 5 m/s |
 | `ot_high` Office High-Rise | 4 (OT-H1…4) | −34…−30; −21…−8.2 | L0, OT-03, OT-04, OT-05 (express past 1–2) | 7 m/s |
-| `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (into the vault), L0 (tours board here), OT-01…OT-05 (every Office floor) | 7 m/s |
+| `ceo` Chief Executive Lift (Office) | 1 (OT-X1, ~8.5 × 3.9 m cab, 15+ people) | −39…−30; −25.6…−21.2 (between low- and high-rise) | B1 (Treasury Arrival Hall, outside the security layers), L0 (tours board here), OT-01…OT-05 (every Office floor) | 7 m/s |
 | `freight_ot` | 1 (OT-F1) | −35…−30; 21…26 | B1 (vault), OT-01…OT-05 | 3 m/s |
 | `vt_low` Wellness Low-Rise | 4 (VT-L1…4) | 30…34; −38.6…−25.8 | L0, VT-01, VT-02 | 5 m/s |
 | `ceo_vt` Chief Executive Lift (Wellness) | 1 (VT-X1, ~8.5 × 3.9 m cab, 15+ people) | 30…39; −25.6…−21.2 (between low- and high-rise) | L0, VT-01…VT-04 | 7 m/s |
@@ -209,7 +218,7 @@ it takes you there. Inside a car, E gives the floor panel.
 
 Landing (call) zones are 8 m deep in front of each bank's doors, all inside the lift hall. The
 bridge opening (Z −3…3, OT-01 / VT-01 only) sits between the high-rise bank and the CEO/freight
-shafts. Cash robots ride the freight lifts: ALC-01 vault → OT-04 Asset Protection HQ (freight landing → luxury portal → ALC Escort Muster Point); ALC-02 vault →
+shafts. Cash robots ride the freight lifts and walk the whole B1 route (vault → door → bridge → stair → sentry hall → lasers → escort airlock → arrival hall): ALC-01 vault → OT-04 Asset Protection HQ (freight landing → luxury portal → ALC Escort Muster Point); ALC-02 vault →
 OT-01 → The Link → VT-01 Leisure Suite.
 
 ## 5. Naming conventions

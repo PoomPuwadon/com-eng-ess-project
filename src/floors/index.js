@@ -12,12 +12,13 @@ import { leisure } from './leisureSuite.js';
 import { combatPavilion as muaythai } from './combatPavilion.js';
 import { sportsArena } from './sportsArena.js';
 import { equineCentre as equine } from './equineCentre.js';
+import { treasuryVault as treasury } from './treasuryVault.js';
 import { hall } from './halls.js';
 import { basement, bridge } from './basementBridge.js';
 
 const PROPS = {
   lobby, plaza, trading, department, control, lottery, outreach, security: securityHQ,
-  leisure, football: sportsArena, muaythai, racing, equine,
+  leisure, football: sportsArena, muaythai, racing, equine, treasury,
   basement, bridge,
 };
 
