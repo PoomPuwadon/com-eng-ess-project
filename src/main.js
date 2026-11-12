@@ -12,6 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
+import { QUALITY, saveQuality, mountQualityButton } from './quality.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -29,7 +30,10 @@ const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 12
 // Phase 1 look (ground floor only for now): filmic tone mapping, sun shadows, bloom on the lights.
 // Greybox floors render exactly as before (no tone mapping, no post-processing).
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 2 }));
-const DPR = Math.min(devicePixelRatio, 1.5), LUX_DPR = Math.min(devicePixelRatio, 1.25); // Phase 1 effects run at a capped pixel density
+const HIGH_DPR = Math.min(devicePixelRatio, 1.5), HIGH_LUX_DPR = Math.min(devicePixelRatio, 1.25); // Phase 1 effects run at a capped pixel density
+const LOW_DPR_MAX = Math.min(devicePixelRatio, 1), LOW_DPR_MIN = 0.6; // low mode: 1x at most, adaptive down to 0.6x
+let lowDpr = LOW_DPR_MAX;
+const targetDpr = () => (QUALITY.low ? lowDpr : luxOn ? HIGH_LUX_DPR : HIGH_DPR);
 const renderPass = new RenderPass(scene, camera);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.35, 1.0);
 composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
@@ -65,7 +69,12 @@ const LOOKS = {
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
-const PERF_OPT = { glow: true, shadows: true, lights: true }; // Perf tests panel switches
+const PERF_OPT = { glow: !QUALITY.low, shadows: !QUALITY.low, lights: !QUALITY.low }; // Perf tests panel switches (low mode turns them off)
+if (QUALITY.low) renderer.setPixelRatio(lowDpr);
+function setDpr(dpr) {
+  if (Math.abs(renderer.getPixelRatio() - dpr) < 0.001) return;
+  renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(innerWidth, innerHeight);
+}
 function setLook(name) {
   if (name === lookName) return;
   const L = LOOKS[name], wasTone = renderer.toneMapping;
@@ -76,8 +85,7 @@ function setLook(name) {
   bloom.strength = L.bloom ?? 0.22;
   ext.hemi.intensity = L.hemi; ext.hemi.color.set(L.sky); ext.hemi.groundColor.set(L.gnd);
   if (wasTone !== L.tone) scene.traverse((o) => { if (o.material && o.material.isMaterial) o.material.needsUpdate = true; });
-  const dpr = luxOn ? LUX_DPR : DPR;
-  if (renderer.getPixelRatio() !== dpr) { renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(innerWidth, innerHeight); }
+  setDpr(targetDpr());
   renderer.shadowMap.needsUpdate = true;
 }
 let shadowFloor = null;
@@ -87,7 +95,8 @@ function renderFrame(cam = camera) {
     if (!PERF_OPT.lights) scene.traverse((o) => { if (o.isPointLight) o.visible = false; });
   } // re-draw shadows when the loaded floors change
   setLook(!LUX_FLOORS.includes(floors.current) ? 'off' : LOOK_OF[floors.current] || 'indoor');
-  if (luxOn) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
+  // Low mode skips post-processing entirely: the renderer still tone-maps straight to the screen.
+  if (luxOn && !QUALITY.low) { renderPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
 }
 const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
@@ -382,11 +391,34 @@ const perfPanel = (() => {
   box.addEventListener('change', (e) => { const k = e.target.dataset && e.target.dataset.opt; if (k) { opt[k] = e.target.checked; apply(); } });
   const toggle = () => { box.style.display = box.style.display === 'none' ? 'block' : 'none'; paint(); };
   btn.addEventListener('click', toggle);
+  box.querySelectorAll('[data-opt]').forEach((el) => { el.checked = opt[el.dataset.opt]; });
   return { toggle, opt, apply, fps: (st) => { const el = box.querySelector('#pt-fps'); if (el && box.style.display !== 'none') el.textContent = `${st.fps.toFixed(0)} fps · 1% low ${st.fps1Low.toFixed(0)} · ${st.frameMs.toFixed(1)} ms`; } };
 })();
 
+// ---------------------------------------------------------------- Graphics quality (button or G): live switch, saved per browser
+function setQuality(low) {
+  QUALITY.low = low; saveQuality(low);
+  PERF_OPT.glow = PERF_OPT.shadows = PERF_OPT.lights = !low;
+  document.querySelectorAll('[data-opt]').forEach((el) => { el.checked = !low; });
+  perfPanel.apply();
+  ext.sun.castShadow = !low && !!(LOOKS[lookName] && LOOKS[lookName].shadow);
+  lowDpr = LOW_DPR_MAX; dprAcc = 0; setDpr(targetDpr());
+  paintQuality();
+  hud.toast(`Graphics: ${low ? 'Low (performance mode)' : 'High'}`, 1.5);
+}
+const paintQuality = mountQualityButton(() => setQuality(!QUALITY.low));
+// Low mode: drop resolution while the frame rate sags, raise it again when there is headroom.
+let dprAcc = 0;
+function adaptDpr(dt, fps) {
+  if (!QUALITY.low || (dprAcc += dt) < 1.5) return;
+  dprAcc = 0;
+  const next = fps < 45 ? Math.max(LOW_DPR_MIN, lowDpr - 0.1) : fps > 58 ? Math.min(LOW_DPR_MAX, lowDpr + 0.05) : lowDpr;
+  if (next !== lowDpr) { lowDpr = next; setDpr(lowDpr); }
+}
+
 addEventListener('keydown', (e) => {
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
+  if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
@@ -430,6 +462,7 @@ function frame(now) {
     hud.prompt(`E — ${b.name} (${b.label})${a}`);
   } else hud.prompt('');
   const stats = perf.tick(now, rawMs, performance.now() - t0);
+  adaptDpr(dt, stats.fps);
   hudAcc += dt;
   if (hudAcc > 0.15) { hudAcc = 0; hud.update(player, stats, ui); perfPanel.fps(stats); }
   while (frameWaiters.length) frameWaiters.shift()();
