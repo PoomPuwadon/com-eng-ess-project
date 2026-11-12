@@ -50,6 +50,7 @@ export class Net {
         if (!v) return;
         this.name = v; try { localStorage.setItem('firm.name', v); } catch { /* ignore */ }
         for (const ev of ['keydown', 'keyup']) window.removeEventListener(ev, block, true);
+        goFullscreen(); // the Enter tap is a user gesture, so the browser allows it (iPhone Safari ignores it)
         gate.remove(); document.body.classList.remove('gated'); done();
       };
     });
@@ -184,6 +185,14 @@ export class Net {
     };
     document.body.appendChild(sb);
     this.summonBtn = sb;
+    // full-screen toggle for desktop (touch devices get their own ⛶ button from touch.js); also F11-free: press F
+    const fb = document.createElement('button');
+    fb.id = 'fs-btn';
+    const paint = () => { fb.textContent = isFullscreen() ? '⛶ Exit full screen' : '⛶ Full screen'; };
+    fb.onclick = (e) => { e.stopPropagation(); fb.blur(); toggleFullscreen(); };
+    document.addEventListener('fullscreenchange', paint); document.addEventListener('webkitfullscreenchange', paint);
+    addEventListener('keydown', (e) => { if (e.code === 'KeyF' && !this.chatOpen && !document.getElementById('name-gate')) toggleFullscreen(); });
+    paint(); document.body.appendChild(fb);
     this.ui = { count: wrap.querySelector('#net-count'), log: wrap.querySelector('#net-log'), form: wrap.querySelector('#net-form'), input: wrap.querySelector('#net-in') };
     this.ui.form.onsubmit = (e) => {
       e.preventDefault();
@@ -208,4 +217,18 @@ export class Net {
     while (this.ui.log.children.length > 6) this.ui.log.firstChild.remove();
     setTimeout(() => row.classList.add('old'), 15000);
   }
+}
+
+// ---- full screen (prototype)
+const root = document.documentElement;
+function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function goFullscreen() {
+  if (isFullscreen()) return;
+  const req = root.requestFullscreen || root.webkitRequestFullscreen;
+  if (req) Promise.resolve(req.call(root, { navigationUI: 'hide' })).catch(() => {});
+}
+function toggleFullscreen() {
+  if (!isFullscreen()) { goFullscreen(); return; }
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (exit) Promise.resolve(exit.call(document)).catch(() => {});
 }
