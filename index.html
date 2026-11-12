@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>[FIRM NAME] — Greybox</title>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: system-ui, sans-serif; color: #fff; }
@@ -44,6 +44,43 @@
     #fade.on { opacity: 1; }
     #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; }
     #notice { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #bbb; text-shadow: 0 1px 2px #000; }
+    /* PROTOTYPE: multiplayer presence + chat */
+    #net { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(420px, 92vw); pointer-events: none; font-size: 13px; }
+    #net-count { text-align: center; font: 600 12px system-ui; text-shadow: 0 1px 2px #000; margin-bottom: 4px; }
+    #net-log div { background: rgba(10,12,18,.7); border-radius: 6px; padding: 3px 8px; margin-top: 3px; transition: opacity 1s; }
+    #net-log div.old { opacity: 0; }
+    #net-log b { color: #c9a23a; }
+    #net-form { pointer-events: auto; margin-top: 4px; }
+    #net-in { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; border: 1px solid #c9a23a; background: #0d1018; color: #fff; font-size: 16px; }
+    /* PROTOTYPE: touch layout (phones / tablets) */
+    body.touch, body.touch #c { touch-action: none; -webkit-user-select: none; user-select: none; }
+    body.touch #cross, body.touch #minimap, body.touch #help-btn, body.touch #notice { display: none; }
+    body.touch #loc { top: max(8px, env(safe-area-inset-top)); left: 8px; min-width: 0; padding: 6px 9px; font-size: 11px; }
+    body.touch #loc .f { font-size: 13px; }
+    body.touch #floors, body.touch #roles { display: none; }
+    body.touch.menu-open #floors { display: flex; top: 56px; left: 8px; right: 8px; overflow-x: auto; z-index: 20; }
+    body.touch.menu-open #roles { display: flex; top: auto; bottom: 170px; left: 8px; right: 8px; max-width: none; z-index: 20; }
+    body.touch #perf { bottom: auto; top: max(8px, env(safe-area-inset-top)); left: auto; right: 8px; font-size: 10px; padding: 4px 6px; max-width: 46vw; }
+    body.touch #prompt { top: 30%; font-size: 13px; max-width: 86vw; text-align: center; }
+    body.touch #elevator { min-width: 0; width: 88vw; max-height: 78vh; overflow-y: auto; z-index: 25; }
+    body.touch #net { bottom: 150px; }
+    #stick { position: fixed; left: max(24px, env(safe-area-inset-left)); bottom: 28px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(201,162,58,.55); touch-action: none; z-index: 15; }
+    #knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px; border-radius: 50%; background: rgba(201,162,58,.75); pointer-events: none; }
+    #tbtns { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: 28px; display: flex; flex-direction: column; gap: 10px; z-index: 15; }
+    #tbtns button { width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(201,162,58,.7); background: rgba(10,12,18,.7); color: #e3c27a; font: 700 14px system-ui; touch-action: manipulation; }
+    #q-btn { position: fixed; left: 136px; top: 104px; z-index: 30; font: 600 12px system-ui; padding: 5px 10px; border-radius: 6px; border: 1px solid #b8924a; background: #14110dcc; color: #e3c27a; cursor: pointer; touch-action: manipulation; }
+    #name-gate { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,.82); font-family: system-ui; }
+    #name-gate form { background: #14110d; border: 1px solid #b8924a; border-radius: 12px; padding: 22px 24px; width: min(340px, 88vw); color: #eee; text-align: center; }
+    #name-gate h2 { margin: 0 0 4px; color: #e3c27a; font: 700 20px Georgia, serif; }
+    #name-gate p { margin: 0 0 14px; color: #b8a27a; font-size: 13px; }
+    #name-gate input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 1px solid #b8924a; background: #0d1018; color: #fff; font-size: 16px; }
+    #name-gate button { margin-top: 12px; width: 100%; padding: 10px; border-radius: 8px; border: 0; background: #c9a23a; color: #14110d; font: 700 15px system-ui; cursor: pointer; }
+    #summon-btn { position: fixed; left: 280px; top: 104px; z-index: 30; font: 600 12px system-ui; padding: 5px 10px; border-radius: 6px; border: 1px solid #c0503a; background: #1a0f0dcc; color: #f0a08a; cursor: pointer; touch-action: manipulation; }
+    body.touch #summon-btn { left: 8px; top: 140px; }
+    /* PROTOTYPE testing lockdown (until admin login) */
+    body.locked #q-btn, body.locked #perf-btn, body.locked #floors, body.locked #roles, body.locked #prompt, body.locked #elevator, body.locked #t-use, body.locked #t-menu { display: none !important; }
+    #t-full { position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 34px); right: max(8px, env(safe-area-inset-right)); width: 44px; height: 44px; border-radius: 10px; border: 2px solid rgba(201,162,58,.7); background: rgba(10,12,18,.7); color: #e3c27a; font: 700 20px system-ui; z-index: 15; touch-action: manipulation; }
+    #t-use { width: 78px !important; height: 78px !important; background: rgba(201,162,58,.85) !important; color: #111 !important; }
     .hidden { display: none !important; }
     body.nohud .panel, body.nohud #minimap, body.nohud #help-btn, body.nohud #cross, body.nohud #notice { display: none !important; }
   </style>
