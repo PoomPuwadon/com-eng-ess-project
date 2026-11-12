@@ -41,8 +41,8 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03'];
-const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion' };
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
@@ -62,6 +62,8 @@ const LOOKS = {
   outreach: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.45, sun: 0, sunCol: 0xfff0dc, hemi: 0.6, sky: 0x7f9fd0, gnd: 0x3a281c, shadow: false, bloom: 0.35 },
   // asset protection HQ: warm, bright luxury side and a cold, harsh prison side; neutral fill
   security: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.5, sun: 0, sunCol: 0xfff0dc, hemi: 0.8, sky: 0xf4efe6, gnd: 0x6a6258, shadow: false, bloom: 0.3 },
+  // equine centre (night race meeting): dark navy sky, cool fill; floodlights, LED lines and screens glow
+  racing: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.4, sun: 0, sunCol: 0xfff0dc, hemi: 0.75, sky: 0xc8d4ff, gnd: 0x2a2a30, shadow: false, bloom: 0.42 },
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;

@@ -3,7 +3,7 @@ name: greybox-layout
 description: Building layout source of truth for the firm — scale rules, massing (Office Tower | atrium Grand Lobby | Wellness Tower), the floor-by-floor room table with dimensions and elevations, the lift banks and shafts, room/floor naming conventions, and lift/bridge access rules by role. Use whenever creating, moving, resizing, labelling or connecting any floor, room, lift, bridge or minimap entry.
 ---
 
-# Greybox Layout (rev 13 — 2026-11-06)
+# Greybox Layout (rev 14 — 2026-11-12)
 
 This file is the spec. The code's layout data lives ONLY in `src/layout/building.js` and must
 match this file. If the user approves a layout change, update this file and the layout data in
@@ -28,6 +28,13 @@ to 37 m). `OT-04` and `OT-05` move up to 62 and 67; the Office Tower now tops ou
 Rev 13 changes, requested by the user (2026-11-06): `OT-04` Asset Protection HQ **redesigned** and
 raised to **12 m** tall (two portals: luxury reception + processing into a prison-style roll-call
 yard with catwalks). `OT-05` moves up to **74**; the Office Tower now tops out at **82 m**.
+
+Rev 14 changes, requested by the user (2026-11-12): `VT-04` Equine Performance Centre **redesigned** as a
+modern Dubai-style night meeting (Phase 1 look, `floors/equineCentre.js`): a grand entrance sequence
+(grille gates, turnstiles, Champions' Court, Position Windows, parade ring), then the track revealed through
+one glass wall from a +7 m concourse, a crescent grandstand and a night sky. The track is smaller (centres
+(128, 0) / (170, 0), R 25…35) to make room for the entrance block (X 50…86) inside the 160 × 120 m main space.
+Race cadence and field size are still to be decided by the user (the simulated field circles continuously).
 
 ## 1. Scale rules
 
@@ -154,7 +161,7 @@ into the Executive Reception lift hall.
 | `VT-01` | 15 | **22** | `leisure_suite` (+ `vt_bridge_checkpoint` 31…38; −6…6) | Executive Leisure Suite | **The Link enters here.** The lift-hall portal (18 m wide, Z −9…9) opens **straight onto the grand promenade**: red carpet with gold medallions, purple borders, cream marble walkways (Z −9.5…9.5) running to a focal screen on the east wall; columns at Z ±10.6; chandeliers down the centre under an orange/red coffered vault; lower purple soffits with glowing edges (15 m) over the gaming floor; pendant lamps; cream chairs at the tables. Zones: Yield Terminals 52…116; −56…−12 · Rotational 120…206; −56…−12 · Twenty-One 52…96; 12…56 · Private Banking 98…124 · Kinetic Pit 126…148 · **`card_salon` (walled) 152…206; 12…56** with `card_salon_high_limit` 193…205; 43…55 |
 | `VT-02` | **53.5** | 13.5 (+16.5 below) | `football_arena` | Sports Analytics Arena | **Theatre-style box arena (DEMO rev 5 of the arena, user 2026-11-06)**. Bowl centred **(108, 0)**, wall radius 58 m, so the wall touches the arrivals hall's east wall at X 50. Lifts stop in a **compact walled arrivals hall** (X 30…50, Z −40…30); its exit **is** the arena's **14 m-wide portal** (6 m high) — no concourse in between. Inside the portal there are **no boxes**: a **grand stair** (radial aisle ±0.125 rad, ~14.5 m wide at the top, ~4.8 m at the pit) runs straight down — top landing r 54–58, flights r 54→47 / 44→37 / 34→27 / 24→19.3 (0.18 m risers, ~0.28 m treads, glass balustrades + gold rail), landings on the L3/L2/L1 walkways (r 44–47 / 34–37 / 24–27) — to the pit at 37 m (the Leisure Suite's ceiling). Levels L4 0 / L3 −4.5 / L2 −9 / L1 −13.5 / pit −16.5; fronts r 50/40/30/20. **No ramps** (removed by the user, rev 6): the grand stair is the only way between levels and the boxes run continuously round each level from one side of the stair to the other. Open boxes, each with its own TV, 2 recliners and a position console per seat. **Centre stack from the roof to the pit floor**: 3 tall eight-sided tiers (matches · odds + matches · matches), each screen ~12 m wide (16:9), LED rings between them, solid plinth; pit desks round its base at r 17. **Wrap-around LED ribbon** under the roof (Y 8.4…10.6) and **LED boards on every tier front**, one shared scrolling texture. **Hanging screens for the upper levels**: big double-sided screens (7.2 m at r 34 for L3, 8 m at r 44.5 for L4) on the line of **every third box divider**, i.e. between two box TVs. Race feed = **F1 Grand Prix** (live timing tower + circuit map; simulated in Phase 0). Pop-ups: settlement (+/−, green/red, room-wide sound) **and every new position opened** (gold, "New position · Box … · team", short chime; simulated every 1.8–5 s in Phase 0). No ceiling screen |
 | `VT-03` | 67 | 25 | `muay_thai_arena` (+ `ringside`, `pavilion_entry`, `pavilion_service_corridor`, `pavilion_backstage`, `focus_room`) | Combat Sports Analytics Pavilion | **Realistic Muay Thai stadium (rev 11, `floors/pavilion.js`)**, round bowl centred (120, 0). **Ring** 11 m platform (10 m inside 4 ropes), 1.2 m high, steps on the east (walkout) side; **ringside floor** r < 14 (officials' table, pi-phat musicians, cameras, LED boards) — staff/competitors only. **Lower bowl** 15 rows r 14–27.5 (front row 1.6 m above the floor, glass front, so no way down); **cross-aisle** r 27.5–29.5 at 6.1 m; **upper bowl** 14 rows r 29.5–42.4 to 12 m, gold-glass skyboxes on the back wall; **concourse** r 42.8–51.4 at 6.1 m (a plain corridor: the position windows were removed by the user, 2026-11-06). **7 vomitories** (sections 101–128) link the concourse to the cross-aisle. ~7,500 seats. **Spectator route**: narrow arrivals hall (X 30–44) → ticket gates + box office (X 44–55) → 8 m grand stairs up to the concourse → vomitory → seats. **Walkout**: the small black **`focus_room`** "Competitors' Focus Room" (X 172–180, Z −4…4, 4.2 m high, black walls/floor/ceiling, one cold light, a bench each side; both fighters wait here; the dressing rooms were removed by the user, 2026-11-06) opens straight onto the walkout road → tunnel under the concourse → lit runway (Z ±2.5, red/blue LED edges) through the seats → ring steps → corner; routes in `floor.walkout`. A 2 m door at the back of the focus room leads to backstage (X > 172), reached by the service corridor (Z < −53.4) through a locked door in the arrivals hall (`backstage` access). Atmosphere: glowing **sak yant ceiling** (r 47), two zig-zag truss rings, 16 light beams on the ring, 6 big screens. One height field with two levels (the tunnel under the concourse) — shapes get the walker's y |
-| `VT-04` | 92 | 20 | `racing_hall` | Equine Performance Centre | Open plan; the **30 m-wide portal** opens straight onto the track. Track centres (98, 0) and (162, 0), outer R 42, inner R 30. Grandstand 80…180 north side. Tote 54…76; −59…−53 |
+| `VT-04` | 92 | 20 | `racing_hall` (+ `racing_arrival_court`, `racing_position_windows`, `racing_parade_ring`, `racing_concourse`, `racing_grandstand`, `racing_track`) | Equine Performance Centre | **Redesign (user, 2026-11-12; `floors/equineCentre.js`)**, modern Dubai night meeting, see Phase 1 — VT-04. **Entrance block** X 50…86 (ground y 0, decks at **+7**): `racing_arrival_court` "Champions' Court" 50…77.7; −12…12 (double height: gold rearing stallion on a plinth in a reflecting pool X 55…64, Z ±4; **grand stair** X 66…77.7, Z ±5, 39 × 0.18 m risers up to +7); `racing_position_windows` "Position Windows" 50…86; −58.9…−12 (12 windows on the N wall, under the **Champions' Lounge** deck X 50…77.7 at +7); `racing_parade_ring` "Asset Inspection Ring" 50…77.7; 12…58.9 (double height; oval centre (64, 35.5), rail 12 × 19 m, horses led round by grooms; **saddling stalls** X 80.5…86, Z 14…54 under the concourse); `racing_concourse` "Panorama Concourse" 77.7…86; −58.9…58.9 at +7 behind **one glass wall at X 86** (7…19.5 m); **bridge deck** X 86…96, Z −58.9…−46 at +7 onto the stand. **Track hall** X 86…209: dirt oval centres (128, 0) / (170, 0), R 25…35 (centre line R 30, 272 m), turf infield with a lake and a 34 m screen facing the stand, finish post at X 149 on the north straight; **crescent Members' Grandstand** on arcs about (149, 160): front r 200 (X 96…202), 17 rows × 0.85 m / 0.4 m rise (+0.6…+7.0), 8 radial aisles with half steps, top walkway r 214.45…218.5 at +7, back wall, cantilevered crescent roof (12.4…16.7 m) with LED lines; glass front barrier (no way onto the apron or track). Night sky ceiling, skyline walls, 7 floodlight pylons. Spawn in the court |
 
 ### Lift halls (rev 10 — replace the old foyers)
 
@@ -176,7 +183,7 @@ space. Generated in `building.js` (`HALLS`), dressed in `src/floors/halls.js`. L
 | VT-01 | Executive Leisure Suite — Grand Hall | `portal` | 18 × 12 | gold arch with marquee bulbs, red carpet into the promenade, fountain, lanterns, **Link checkpoint** |
 | VT-02 | Sports Analytics Arena | Phase 1 (`sportsArena.js`, `customHall`) | 14 × 6 | **compact hall** (X 30–50, Z −40…30, rev 5) — the portal is the arena entrance itself, straight onto the head of the grand stair (see Phase 1 — VT-02) |
 | VT-03 | Combat Sports Analytics Pavilion (arrivals) | Phase 1 (`combatPavilion.js`, `customHall`) | 8 × 7 | **narrow hall** (X 30–44, Z −40…30) built by `luxLiftHall` with `depth: 14` and an `endDoor` gap for the locked competitors' door in the north wall; portal straight onto the ticket gates and stairs (see Phase 1 — VT-03) |
-| VT-04 | Equine Centre — Paddock Hall | `paddock` | 30 × 12 | white rails, race + odds screens on the lintel, horse statue |
+| VT-04 | Equine Performance Centre — Members' Enclosure | Phase 1 (`equineCentre.js`, `customHall`) | 16 × 9 | **Members' Enclosure** (hall X 30…50, Z −40…40, `luxLiftHall` H 12.5): white + champagne gold, marble, navy runners; back-lit gold **grille screens** on the portal wall; a **turnstile line** (6 lanes) + glass fence across the whole hall at X 46.5 with guards; through the portal two 8 × 9 m gold **grille gate leaves** stand open as fins (Z ±7.55, X 50.4…58.5) |
 
 **Link checkpoint** (OT-01 and VT-01): a glass vestibule round the bridge mouth (d 1…8, Z −6…6) with
 a locked gate (`bridge` access) at d 8.
@@ -370,6 +377,29 @@ broadcast screens, pop-ups, sounds, simulated positions) are reused; every visib
 - **Pit**, **stack** and **arrivals hall**: as rev 1 (crest-inlaid pit, analyst desks, black/gold stack,
   shared `luxLiftHall` with `z0`/`z1` and `link: null`).
 - **Perf** (dev machine, worst view): 178 draw calls incl. bloom passes, 631k triangles, ~1.6 ms.
+
+## Phase 1 — VT-04 Equine Performance Centre (2026-11-12)
+
+Rebuilt from scratch in `src/floors/equineCentre.js` (lux floor, `customHall`, lighting profile `racing` in
+`main.js`: hemi 0.75 cool, exposure 1.0, bloom 0.42). User brief (asked in three rounds of questions):
+modern Dubai style, grand entrance then reveal, grille gates + turnstiles, parade ring, position windows hall,
+statue + water feature, a glass-wall reveal from a concourse, night race under lights, keep the oval, crescent
+grandstand, packed race night; whole floor.
+
+- **Walkable height field** `equineShape`: two levels in the entrance block (under the decks y 0, on them +7),
+  the stair, the stand rows / aisles / walkway; drops over 0.5 m are refused (deck edges, glass wall, stand ends),
+  plus the parade-ring rail and the stand's front barrier. Tested: lift hall → turnstiles → gate → court →
+  stair → concourse → bridge → walkway → aisle down to the front row; refused at the balcony, the glass, the
+  lounge edge, the barrier and the ring rail.
+- **Screens**: own atlas `src/world/raceScreens.js` (2 × 2 cells, 5 Hz while visible): live race (mini track +
+  running order), pricing, previous performances, brand. The race is simulated there (8 invented runners in a
+  bunched pack, a new race number every two laps); the 3D field reads it.
+- **Horses**: low-poly instanced horses (coat / dark / saddle cloth) with jockeys (silks per runner): 8 on the
+  track (gallop bob), 6 walking the ring with grooms, 5 in the stalls; the gold stallion uses the same model.
+- **Crowd**: ~2,300 seated (68 % of ~3,400 seats), standing on the walkway and apron, queues at every window,
+  lounge, concourse and ring rail, walkers.
+- **Perf** (this laptop, Intel UHD integrated): 99–129 draw calls incl. bloom passes, 0.88–0.99 M triangles;
+  ~8–9 ms per frame averaged vs 12.3 ms for VT-03 on the same machine.
 
 ## Phase 1 — VT-03 Combat Sports Analytics Pavilion (2026-11-06)
 

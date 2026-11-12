@@ -321,14 +321,23 @@ export const FLOORS = [
     props: 'muaythai',
   },
   {
+    // Redesign (user, 2026-11-12; floors/equineCentre.js): modern Dubai-style night meeting. Lift hall =
+    // Members' Enclosure (grille screens, turnstiles) -> grille-gate portal -> Champions' Court (gold stallion,
+    // pool, grand stair) with the Position Windows (north) and the Asset Inspection Ring (south) -> the
+    // Panorama Concourse at +7 m behind one glass wall -> bridge deck -> the crescent Members' Grandstand.
     id: 'VT-04', tower: 'VT', short: 'Equine Ctr', sign: 'Equine Performance Centre', elevation: 92, height: 20,
-    bounds: VT_B, area: 'public',
+    bounds: VT_B, area: 'public', lux: true, customHall: true,
     rooms: [
-      { id: 'racing_hall', sign: 'Equine Performance Centre', short: 'Equine Ctr', ...VT_MAIN, full: true },
-      { id: 'racing_grandstand', sign: 'Members Grandstand', short: 'Grandstand', ...r(80, 180, -56, -44), zone: true },
-      { id: 'racing_tote', sign: 'Position Windows', short: 'Tote', ...r(54, 76, -59, -53), zone: true },
+      { id: 'racing_hall', sign: 'Equine Performance Centre', short: 'Equine Ctr', ...VT_MAIN, full: true, noSign: true, spawn: { x: 56, z: 8 } },
+      { id: 'racing_arrival_court', sign: "Champions' Court", short: 'Court', ...r(50, 77.7, -12, 12), zone: true, spawn: { x: 53, z: 8 } },
+      { id: 'racing_position_windows', sign: 'Position Windows', short: 'Windows', ...r(50, 86, -58.9, -12), zone: true, spawn: { x: 66, z: -40 } },
+      { id: 'racing_parade_ring', sign: 'Asset Inspection Ring', short: 'Parade Ring', ...r(50, 77.7, 12, 58.9), zone: true, spawn: { x: 52, z: 14 } },
+      { id: 'racing_concourse', sign: 'Panorama Concourse', short: 'Concourse', ...r(77.7, 86, -58.9, 58.9), zone: true, spawn: { x: 82, z: -30 } },
+      { id: 'racing_grandstand', sign: "Members' Grandstand", short: 'Grandstand', ...r(88, 206, -59, -32), zone: true, spawn: { x: 66, z: -40 } },
+      { id: 'racing_track', sign: 'Performance Track', short: 'Track', ...r(93, 206, -35, 35), zone: true, spawn: { x: 66, z: -40 } },
     ],
-    props: 'racing',
+    slabColor: 0x10141c, ceilColor: 0x05070f, wallColor: 0x0b0e18,
+    props: 'equine',
   },
 ];
 
@@ -348,7 +357,7 @@ const HALLS = {
   'VT-01': ['portal', 'Executive Leisure Suite — Grand Hall', 18, 12],
   'VT-02': ['concourse', 'Sports Analytics Arena', 14, 6, { rect: r(30, 50, -40, 30), open: ['w'] }],
   'VT-03': ['shrine', 'Combat Pavilion — Arrivals', 8, 7, { rect: r(30, 44, -40, 30), open: ['w'], extraDoors: [{ side: 'n', at: 40, width: 3 }], narrow: true }],
-  'VT-04': ['paddock', 'Equine Centre — Paddock Hall', 30, 12],
+  'VT-04': ['equine', "Equine Performance Centre — Members' Enclosure", 16, 9, { rect: r(30, 50, -40, 40), open: ['w'] }], // Phase 1 (equineCentre.js, customHall)
 };
 for (const f of FLOORS) {
   const hl = HALLS[f.id];
