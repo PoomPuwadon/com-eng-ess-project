@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --port 5173",
     "check:words": "node scripts/check-banned-words.mjs",
+    "test:games": "node --test server/games/test/*.test.js",
     "server": "node server/index.mjs",
     "proto": "vite build && node server/index.mjs"
   },

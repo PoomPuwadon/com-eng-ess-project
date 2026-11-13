@@ -1,6 +1,17 @@
 import * as THREE from 'three';
 import { Lux, LM, plaque } from '../world/lux.js';
 import { luxLiftHall } from './luxHall.js';
+import { WHEEL } from '../../server/games/roulette.js';
+
+let _activeSpin = null;
+
+export function spinTo(result, durationSec = 12) {
+  _activeSpin = {
+    result: typeof result === 'number' ? result : 0,
+    duration: Math.max(2, durationSec),
+    elapsed: 0
+  };
+}
 
 // ================================================================= PHASE 1 — VT-01 EXECUTIVE LEISURE SUITE
 // Built to the user's reference image: a long promenade of red carpet with a gold dragon motif and
@@ -477,10 +488,85 @@ export function leisure(ctx) {
   // spinning roulette rotors (instanced)
   const rotor = new THREE.CylinderGeometry(0.52, 0.52, 0.06, 32);
   const rot = new THREE.InstancedMesh(rotor, M.wheel, wheels.length);
+
+  // ONE InstancedMesh of small spheres (radius 0.025), one per table
+  const ballGeo = new THREE.SphereGeometry(0.025, 12, 8);
+  const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.8 });
+  const ballMesh = new THREE.InstancedMesh(ballGeo, ballMat, wheels.length);
+
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
   const placeRotors = () => { wheels.forEach((w, i) => rot.setMatrixAt(i, m4.compose(p.set(w.x, ctx.e + 0.97, w.z), q.setFromAxisAngle(up, w.a), one))); rot.instanceMatrix.needsUpdate = true; };
   placeRotors(); rot.computeBoundingSphere(); ctx.add(rot, rotor);
-  ctx.onUpdate((dt) => { if (!ctx.group.visible) return; for (const w of wheels) w.a += dt * w.w; placeRotors(); });
+  ctx.add(ballMesh, ballGeo);
+
+  ctx.onUpdate((dt) => {
+    if (!ctx.group.visible) return;
+
+    if (_activeSpin) {
+      _activeSpin.elapsed += dt;
+      const t = _activeSpin.elapsed;
+      const dur = _activeSpin.duration;
+      const progress = Math.min(1, t / dur);
+
+      // Speed ramps up then eases down over the phase
+      const spinSpeed =
+        progress < 0.25
+          ? 1.0 + (progress / 0.25) * 11.0
+          : 1.0 + 11.0 * Math.pow(1 - (progress - 0.25) / 0.75, 2);
+      for (const w of wheels) w.a += dt * spinSpeed;
+
+      const timeLeft = dur - t;
+      const k = WHEEL.indexOf(_activeSpin.result);
+      const sliceAngle = ((k + 0.5) / 37) * Math.PI * 2;
+      const pocketOffset = Math.PI / 2; // slice 0 green alignment
+
+      wheels.forEach((w, i) => {
+        let bx, by, bz;
+        const pocketPsi = w.a + sliceAngle + pocketOffset;
+        const pocketX = w.x + 0.4 * Math.sin(pocketPsi);
+        const pocketZ = w.z + 0.4 * Math.cos(pocketPsi);
+        const pocketY = ctx.e + 0.97 + 0.025;
+
+        if (timeLeft > 2.0) {
+          // Ball circles opposite to rotor and spirals inward
+          const spiralProgress = Math.min(1, t / Math.max(0.1, dur - 2.0));
+          const ballRadius = 0.48 - 0.08 * spiralProgress;
+          const ballAngle = -t * (16.0 * (1 - 0.5 * spiralProgress));
+          bx = w.x + ballRadius * Math.sin(ballAngle);
+          bz = w.z + ballRadius * Math.cos(ballAngle);
+          by = ctx.e + 0.97 + 0.035 + 0.005 * Math.abs(Math.sin(t * 35));
+        } else {
+          // In the last ~2 s: ease into the pocket, then ride with the rotor
+          const dropT = Math.min(1, (2.0 - timeLeft) / 0.6);
+          const endSpiralAngle = -(dur - 2.0) * 8.0;
+          const startX = w.x + 0.4 * Math.sin(endSpiralAngle);
+          const startZ = w.z + 0.4 * Math.cos(endSpiralAngle);
+          const startY = ctx.e + 0.97 + 0.035;
+
+          bx = THREE.MathUtils.lerp(startX, pocketX, dropT);
+          bz = THREE.MathUtils.lerp(startZ, pocketZ, dropT);
+          by = THREE.MathUtils.lerp(startY, pocketY, dropT);
+        }
+
+        ballMesh.setMatrixAt(i, m4.compose(p.set(bx, by, bz), q.identity(), one.set(1, 1, 1)));
+      });
+
+      ballMesh.instanceMatrix.needsUpdate = true;
+
+      if (progress >= 1) {
+        _activeSpin = null;
+      }
+    } else {
+      for (const w of wheels) w.a += dt * w.w;
+      // Outside SPINNING: ball hidden
+      wheels.forEach((w, i) => {
+        ballMesh.setMatrixAt(i, m4.compose(p.set(w.x, ctx.e - 20, w.z), q.identity(), one.set(0, 0, 0)));
+      });
+      ballMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    placeRotors();
+  });
   ctx.leisureStats = { slots: slots.length, roulette: wheels.length, people: L.people.length };
   L.build();
 }

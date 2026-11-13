@@ -16,6 +16,8 @@ import { QUALITY, saveQuality, mountQualityButton } from './quality.js';
 import { IS_TOUCH } from './device.js';
 import { Net } from './net.js';
 import { setupTouch } from './touch.js';
+import { RouletteController } from './roulette.js';
+import { AdminPanel } from './adminPanel.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -197,7 +199,14 @@ const hud = new HUD({
 
 // ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
 const net = new Net(scene, hud);
-net.onAdmin = () => { locked = false; document.body.classList.remove('locked'); };
+const rouletteCtrl = new RouletteController(net);
+const adminPanel = new AdminPanel(net);
+net.onRoleChange = (r) => setRole(r);
+net.onAdmin = () => {
+  locked = false;
+  document.body.classList.remove('locked');
+  adminPanel.showButton();
+};
 // Backstop: a locked player who reaches another floor group some other way (e.g. riding a lift a cash
 // robot called) is put back where they last stood on the floors they were summoned to.
 let allowed = clusterOf('PLAZA'), lastGood = null;
@@ -458,6 +467,18 @@ function adaptDpr(dt, fps) {
 }
 
 addEventListener('keydown', (e) => {
+  if (e.code === 'KeyR') {
+    if (rouletteCtrl.isOpen) {
+      rouletteCtrl.close();
+    } else if (rouletteCtrl.joinBtn && rouletteCtrl.joinBtn.style.display !== 'none') {
+      rouletteCtrl.open();
+    }
+    return;
+  }
+  if (e.code === 'Escape' && rouletteCtrl.isOpen) {
+    rouletteCtrl.close();
+    return;
+  }
   if (locked && (e.code === 'KeyE' || e.code === 'F4' || e.code === 'KeyG' || /^Digit[0-9]$|^Numpad[0-9]$/.test(e.code))) return; // testing lockdown: visitors can only walk, look and chat
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
@@ -492,6 +513,7 @@ function frame(now) {
   const t0 = performance.now();
   if (!simWalking) tick(dt);
   lockGuard();
+  rouletteCtrl.updateProximity(player);
   net.update(dt, player, camera, floors.visibleIds());
   updateScreens(dt);
   updateTicker(dt);
