@@ -22,3 +22,10 @@
 - **Server Enforcement**: All admin messages strictly verify `p.admin` server-side before execution; non-admins receive `{ t: 'denied' }`.
 - **Live Sync**: Any admin edit pushes immediate updates (`bal` or `you`) to the target player, broadcasts fresh `adm_players` to all online admins, and records an in-memory audit log entry (capped at 200 items).
 - **Result Integrity**: Absolutely no admin mechanism exists to set, predict, or reveal the spin outcome early.
+
+### Milestone 4: Roulette Overlay UI (Client)
+- **RouletteController Module**: Built HTML overlay UI in `src/roulette.js` styled after the firm's HUD theme.
+- **Persistent Balance Display**: Top HUD banner displays "NU X,XXX" with the mandatory non-currency legal notice.
+- **Touch & Key Access**: Proximity check on floor VT-01 (<= 2.5m from any table) reveals the "Join Rotational Variance Instrument" button. Key R is explicitly allowed even under prototype testing lockdown.
+- **Intuitive Betting Grid**: Offers rapid straight placement, automated row-selection for street bets, multi-cell staging for split/corner/sixline, and outside dozen/column/even-money boxes.
+- **Repeat & Clear**: Supports clearing staged/open allocations and repeating the previous round's positions.

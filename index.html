@@ -88,6 +88,17 @@
     #t-use { width: 78px !important; height: 78px !important; background: rgba(201,162,58,.85) !important; color: #111 !important; }
     .hidden { display: none !important; }
     body.nohud .panel, body.nohud #minimap, body.nohud #help-btn, body.nohud #cross, body.nohud #notice { display: none !important; }
+    /* Rotational Variance Instrument styles */
+    .rv-cell { border-radius: 3px; transition: transform 0.05s; }
+    .rv-cell:active { transform: scale(0.96); }
+    .rv-cell.green { background: #1f8a4c; color: #fff; }
+    .rv-cell.red { background: #c0141f; color: #fff; }
+    .rv-cell.black { background: #121212; color: #fff; }
+    .rv-cell:hover { opacity: 0.9; outline: 1px solid #ffd877; }
+    .rv-type-btn { padding: 4px 8px; border: 1px solid #4a5468; background: #1a202c; color: #cbd5e1; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    .rv-type-btn.on { background: #c9a23a; color: #14110d; border-color: #f2c14a; font-weight: 700; }
+    .rv-token-btn { padding: 4px 8px; border: 1px solid #4a5468; background: #1a202c; color: #ffd877; border-radius: 4px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .rv-token-btn.on { background: #ffd877; color: #14110d; border-color: #fff; }
   </style>
 </head>
 <body>

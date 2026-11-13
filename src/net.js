@@ -9,6 +9,10 @@ export class Net {
   constructor(scene, hud) {
     this.scene = scene; this.hud = hud;
     this.id = null; this.admin = false; this.pw = null; this.remotes = new Map(); this.sendAcc = 0; this.online = 0; this.status = 'connecting';
+    this.serverTimeOffset = 0;
+    this.onRoulette = null;
+    this.onAdminMessage = null;
+    this.onRoleChange = null;
     const q = new URLSearchParams(location.search);
     let name = q.get('name');
     try { name = name || localStorage.getItem('firm.name'); } catch { /* storage blocked */ }
@@ -70,12 +74,26 @@ export class Net {
     ws.onerror = () => {};
   }
 
+  send(msg) {
+    if (this.ws && this.ws.readyState === 1) {
+      this.ws.send(JSON.stringify(msg));
+    }
+  }
+
   onMsg(m) {
     if (m.t === 'welcome') { this.id = m.id; return; }
     if (m.t === 'leave') { this.remotes.delete(m.id); return; }
     if (m.t === 'chat') { this.addChat(m.id === this.id ? 'You' : m.name, m.text); return; }
     if (m.t === 'tp') { this.onTeleport && this.onTeleport(m); this.hud.toast(`${m.name || m.by} summoned everyone`, 3); return; }
-    if (m.t === 'denied') { this.hud.toast('Wrong password', 2); return; }
+    if (m.t === 'bal' || m.t.startsWith('rl_')) { this.onRoulette && this.onRoulette(m); return; }
+    if (m.t === 'you') {
+      if (m.name) this.name = m.name;
+      if (m.role && this.onRoleChange) this.onRoleChange(m.role);
+      this.hud.toast(`Identity updated: ${this.name} (${m.role || ''})`, 2);
+      return;
+    }
+    if (m.t.startsWith('adm_')) { this.onAdminMessage && this.onAdminMessage(m); return; }
+    if (m.t === 'denied') { this.hud.toast('Action denied (admin authorization required)', 2); return; }
     if (m.t === 'admin') {
       if (!m.ok) { this.pw = null; try { sessionStorage.removeItem('firm.pw'); } catch { /* ignore */ } this.hud.toast('Wrong password', 2); return; }
       try { sessionStorage.setItem('firm.pw', this.pw); } catch { /* ignore */ } // re-login after reconnects
@@ -86,6 +104,7 @@ export class Net {
     }
     if (m.t === 'summoned') { this.hud.toast(`Summoned ${m.n} player${m.n === 1 ? '' : 's'}`, 2.5); return; }
     if (m.t !== 'snap') return;
+    this.serverTimeOffset = m.now - Date.now();
     const seen = new Set();
     this.online = m.p.length;
     for (const [id, name, role, floor, x, y, z, yaw, moving] of m.p) {
