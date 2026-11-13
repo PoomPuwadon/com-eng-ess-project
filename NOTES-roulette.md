@@ -29,3 +29,9 @@
 - **Touch & Key Access**: Proximity check on floor VT-01 (<= 2.5m from any table) reveals the "Join Rotational Variance Instrument" button. Key R is explicitly allowed even under prototype testing lockdown.
 - **Intuitive Betting Grid**: Offers rapid straight placement, automated row-selection for street bets, multi-cell staging for split/corner/sixline, and outside dozen/column/even-money boxes.
 - **Repeat & Clear**: Supports clearing staged/open allocations and repeating the previous round's positions.
+
+### Milestone 5: 3D Spin + Ball, and the Admin Panel UI
+- **Single InstancedMesh Ball System**: Rendered one ball per table using a single `THREE.InstancedMesh(SphereGeometry(0.025))` added to the scene graph with zero additional draw calls per table.
+- **Rotor & Ball Dynamics**: In SPINNING phase, rotors accelerate to 12 rad/s then ease down; ball spirals inward in reverse direction (`-t * speed`) and drops into the winning pocket slice during the final 2 seconds (`Math.PI/2` offset aligns 0 with the green slice).
+- **Idle Ball Occlusion**: During non-SPINNING phases, the ball instance matrices are scaled to 0 and moved below the floor plane.
+- **Admin Panel UI**: Implemented in `src/adminPanel.js` with live "Players" management (balance set/add, rename, role dropdown, reset, refund, teleport, kick), "Settings" editor with instant phase and limit validation, and "Audit log" table displaying the latest 200 actions with the Treasury Reserve header.

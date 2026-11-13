@@ -17,6 +17,7 @@ import { IS_TOUCH } from './device.js';
 import { Net } from './net.js';
 import { setupTouch } from './touch.js';
 import { RouletteController } from './roulette.js';
+import { AdminPanel } from './adminPanel.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -199,8 +200,13 @@ const hud = new HUD({
 // ---------------------------------------------------------------- PROTOTYPE: multiplayer presence + touch
 const net = new Net(scene, hud);
 const rouletteCtrl = new RouletteController(net);
+const adminPanel = new AdminPanel(net);
 net.onRoleChange = (r) => setRole(r);
-net.onAdmin = () => { locked = false; document.body.classList.remove('locked'); };
+net.onAdmin = () => {
+  locked = false;
+  document.body.classList.remove('locked');
+  adminPanel.showButton();
+};
 // Backstop: a locked player who reaches another floor group some other way (e.g. riding a lift a cash
 // robot called) is put back where they last stood on the floors they were summoned to.
 let allowed = clusterOf('PLAZA'), lastGood = null;

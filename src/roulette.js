@@ -1,4 +1,5 @@
 import { RED, BLACK } from '../server/games/roulette.js';
+import { spinTo } from './floors/leisureSuite.js';
 
 export class RouletteController {
   constructor(net) {
@@ -518,6 +519,10 @@ export class RouletteController {
       this.phase = m.phase;
       this.endsAt = m.endsAt;
       this.roundId = m.roundId;
+      if (m.phase === 'SPINNING' && m.result !== undefined) {
+        const dur = Math.max(2, (m.endsAt - this.serverNow()) / 1000);
+        spinTo(m.result, dur);
+      }
       if (m.phase === 'RESULT' && m.result !== undefined) {
         this.history.push(m.result);
         if (this.history.length > 12) this.history.shift();
