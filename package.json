@@ -11,7 +11,8 @@
     "preview": "vite preview --port 5173",
     "test": "node --test \"server/test/*.test.js\"",
     "check:words": "node scripts/check-banned-words.mjs",
-    "reset": "node scripts/reset-sim.mjs"
+    "reset": "node scripts/reset-sim.mjs",
+    "test:games": "node --test server/games/test/*.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.8.0",
