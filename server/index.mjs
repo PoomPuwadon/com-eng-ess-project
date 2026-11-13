@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { RouletteRoom } from './games/rouletteRoom.js';
 
 const PORT = Number(process.env.PORT) || 8787;
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -32,17 +33,72 @@ const players = new Map(); // id -> { ws, name, role, x,y,z,yaw, floor, moving, 
 let nextId = 1;
 const clean = (s, n) => String(s ?? '').replace(/[^\p{L}\p{N} _\-.]/gu, '').slice(0, n).trim();
 
+const roulette = new RouletteRoom(
+  undefined,
+  (playerId, msg) => {
+    const pl = players.get(playerId);
+    if (pl && pl.ws.readyState === 1) pl.ws.send(JSON.stringify(msg));
+  },
+  (msg) => broadcast(msg),
+  Date.now
+);
+setInterval(() => roulette.tick(), 250);
+
 wss.on('connection', (ws) => {
   if (players.size >= MAX_PLAYERS) { ws.close(4000, 'full'); return; }
   const id = nextId++;
-  const p = { ws, id, name: `Guest ${id}`, role: 'visitor', x: 0, y: 0, z: 0, yaw: 0, floor: null, moving: 0, t: 0, ready: false };
+  const p = { ws, id, name: `Guest ${id}`, role: 'visitor', x: 0, y: 0, z: 0, yaw: 0, floor: null, moving: 0, t: 0, ready: false, since: Date.now() };
   players.set(id, p);
   ws.send(JSON.stringify({ t: 'welcome', id, count: players.size }));
   console.log(`+ ${id} (${players.size} online)`);
 
   ws.on('message', (buf) => {
     let m; try { m = JSON.parse(buf); } catch { return; }
-    if (m.t === 'hello') { p.name = clean(m.name, 20) || p.name; p.role = clean(m.role, 12) || 'visitor'; return; }
+    if (m.t === 'hello') {
+      p.name = clean(m.name, 20) || p.name;
+      p.role = clean(m.role, 12) || 'visitor';
+      ws.send(JSON.stringify({ t: 'bal', balance: roulette.getBalance(p.name) }));
+      return;
+    }
+    if (m.t === 'rl_join') {
+      ws.send(JSON.stringify({
+        t: 'rl_state',
+        phase: roulette.phase,
+        endsAt: roulette.endsAt,
+        roundId: roulette.roundId,
+        history: roulette.history,
+        balance: roulette.getBalance(p.name),
+        positions: roulette.getPositions(p.id),
+        config: roulette.config
+      }));
+      ws.send(JSON.stringify({ t: 'bal', balance: roulette.getBalance(p.name) }));
+      return;
+    }
+    if (m.t === 'rl_place') {
+      const res = roulette.placePosition(p.id, p.name, {
+        type: m.type,
+        numbers: m.numbers,
+        stake: m.stake,
+        cid: m.cid
+      });
+      if (res.ok) {
+        ws.send(JSON.stringify({ t: 'rl_ok', cid: m.cid, position: res.position, balance: res.balance }));
+        ws.send(JSON.stringify({ t: 'bal', balance: res.balance }));
+      } else {
+        ws.send(JSON.stringify({ t: 'rl_err', cid: m.cid, reason: res.reason }));
+      }
+      return;
+    }
+    if (m.t === 'rl_clear') {
+      const res = roulette.clearPositions(p.id, p.name);
+      if (res.ok) {
+        ws.send(JSON.stringify({ t: 'bal', balance: res.balance }));
+        ws.send(JSON.stringify({ t: 'rl_ok', cid: 'clear', balance: res.balance }));
+      } else {
+        ws.send(JSON.stringify({ t: 'rl_err', cid: 'clear', reason: res.reason }));
+      }
+      return;
+    }
     if (m.t === 'pose') {
       const now = Date.now(), dt = (now - p.t) / 1000;
       const nx = +m.x, ny = +m.y, nz = +m.z;
