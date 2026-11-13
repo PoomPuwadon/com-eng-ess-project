@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { RouletteRoom } from './games/rouletteRoom.js';
+import { AdminManager } from './games/admin.js';
 
 const PORT = Number(process.env.PORT) || 8787;
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -42,6 +43,7 @@ const roulette = new RouletteRoom(
   (msg) => broadcast(msg),
   Date.now
 );
+const adminManager = new AdminManager(roulette);
 setInterval(() => roulette.tick(), 250);
 
 wss.on('connection', (ws) => {
@@ -112,6 +114,22 @@ wss.on('connection', (ws) => {
     if (m.t === 'login') { // PROTOTYPE admin login (unlocks the client's controls + summon)
       p.admin = String(m.pw) === ADMIN_PASSWORD;
       ws.send(JSON.stringify({ t: 'admin', ok: p.admin }));
+      if (p.admin) {
+        ws.send(JSON.stringify(adminManager.getPlayersPayload(players)));
+      }
+      return;
+    }
+    if (m.t && m.t.startsWith('adm_')) {
+      adminManager.handleMessage(p, m, {
+        players,
+        broadcastToAdmins: (payload) => {
+          const s = JSON.stringify(payload);
+          for (const pl of players.values()) {
+            if (pl.admin && pl.ws.readyState === 1) pl.ws.send(s);
+          }
+        },
+        clean
+      });
       return;
     }
     if (m.t === 'summon') { // PROTOTYPE admin: teleport everyone to the caller

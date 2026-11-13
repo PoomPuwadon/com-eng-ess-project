@@ -16,3 +16,9 @@
 - **In-memory Balances**: Keyed by player name with default 10,000 NU. Reconnects with the same name retain balance.
 - **Treasury Reserve**: Tracks net player gains/losses across rounds; can go negative in prototype as specified.
 - **Balance Broadcast**: Client balance is pushed on `hello`, `rl_join`, position acceptance, and round result settlement.
+
+### Milestone 3: Admin Messages on the Server
+- **AdminManager Module**: Isolated all admin commands (`adm_list`, `adm_set`, `adm_config`, `adm_audit`) in `server/games/admin.js` for unit testability.
+- **Server Enforcement**: All admin messages strictly verify `p.admin` server-side before execution; non-admins receive `{ t: 'denied' }`.
+- **Live Sync**: Any admin edit pushes immediate updates (`bal` or `you`) to the target player, broadcasts fresh `adm_players` to all online admins, and records an in-memory audit log entry (capped at 200 items).
+- **Result Integrity**: Absolutely no admin mechanism exists to set, predict, or reveal the spin outcome early.
