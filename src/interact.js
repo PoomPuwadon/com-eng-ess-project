@@ -20,6 +20,7 @@ export function hotspotAt(player, leisureCtx) {
     return null;
   }
   if (f === 'OT-01' && room === 'trading_floor') return { app: 'markets', alt: 'chartdesk', label: 'E — Markets terminal (or M anywhere) · C — Chart Desk: upload a stock graph for an UP / DOWN reading' };
+  if (f === 'VT-02') return { app: 'sports', label: 'E — Sports Analytics terminal: the marquee fixture, real fixtures, house pricing, your positions' };
   if (f === 'OT-02' && room === 'lottery_institute') return { app: 'research', label: 'E — Research workstation: the Institute\'s live lottery models (or press L anywhere)' };
   return null;
 }

@@ -17,6 +17,8 @@ import { openApp, appOpen, buildWallet } from './apps/shell.js';
 import './apps/markets.js';
 import './apps/research.js';
 import './apps/chartDesk.js';
+import './apps/sportsDesk.js';
+import { updateArenaFeed, playArenaVideo } from './world/arenaFeed.js';
 import { hotspotAt, nearestTable } from './interact.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
@@ -449,7 +451,8 @@ window.__debug = {
   setHud: (v) => document.body.classList.toggle('nohud', !v),
   // advance the world N steps of 1/60 s without rendering (player stays put), then render one frame
   _three: { scene, renderer, floors, elev, composer }, // dev-only profiling access
-  bigScreenVideo: (url) => playBigScreenVideo(url), // dev: play a video on the lobby's big screen (null = dashboard)
+  bigScreenVideo: (url) => playBigScreenVideo(url),
+  arenaVideo: (url) => playArenaVideo(url), // dev: play a preview clip/stream on every VT-02 big screen (null = preview card) // dev: play a video on the lobby's big screen (null = dashboard)
   // dev: render one frame from an arbitrary camera and hold it on screen (for screenshots)
   shot: (pos, look, fov = 70, holdMs = 4000) => {
     const cam = new THREE.PerspectiveCamera(fov, innerWidth / innerHeight, 0.1, 1500);
@@ -599,6 +602,7 @@ function frame(now) {
   const overrides = arena.update(dt);
   remotes.update(dt, { visibleIds: floors.visibleIds(), viewer: player.pos, selfPose: { pos: player.pos, floor: player.floor?.id }, overrides });
   rouletteSeat.update(dt);
+  updateArenaFeed(dt, floors.visibleIds().includes('VT-02'));
   updateScreens(dt);
   updateTicker(dt);
   renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);

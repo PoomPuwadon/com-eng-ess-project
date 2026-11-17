@@ -14,6 +14,7 @@ import { createLLM } from './agents/llm.js';
 import { createGateway, AGENTS } from './agents/gateway.js';
 import { createTradingDesk } from './agents/tradingDesk.js';
 import { createChartAnalyst } from './agents/chartAnalyst.js';
+import { createFootball } from './football/service.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
 import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
@@ -50,6 +51,7 @@ export function createApp(config, log = console) {
   const gateway = createGateway(db);
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log });
   const chartDesk = createChartAnalyst({ llm, log });
+  const football = createFootball({ db, ledger, treasury, llm, config, log });
   const lotto = createLotteryData(db, bus, config, log);
   const institute = createInstitute({ db, ledger, data: lotto, gateway, llm, bus, players, log });
   let reconcile = ledger.reconcile();
@@ -86,6 +88,7 @@ export function createApp(config, log = console) {
       if (t.status !== 'delivered') return;
       if (t.to === DEPT.thai) institute.cycle('budget delivered').catch(() => {});
       if (t.to === DEPT.trading) desk.tick({ reason: 'budget delivered' }).catch(() => {});
+      if (t.to === DEPT.sports) football.agentTick();
     });
   }
   let stop = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
@@ -150,6 +153,8 @@ export function createApp(config, log = console) {
     'POST /api/market/cancel': async (req) => { const p = need(req); return { order: trading.cancelOrder(p.account, Number((await readBody(req)).id)), portfolio: trading.portfolio(p.account) }; },
     'GET /api/market/leaderboard': () => ({ leaders: trading.leaderboard(players, config.startingBalance), firm: { nav: trading.portfolio(DEPT.trading).nav, start: 100_000_000 } }),
     'GET /api/firm/book': () => firmBook(),
+    'GET /api/football/state': (req) => { const p = authOf(req); return football.snapshot(p ? p.account : null); },
+    'POST /api/football/position': async (req) => { const p = need(req); limit(p.id); const b = await readBody(req); const out = football.open({ owner: p.account, matchId: b.matchId, market: b.market, pick: b.pick, stake: Math.round(Number(b.amount)), actor: `player:${p.id}` }); return { position: out, balance: ledger.balance(p.account) }; },
     // OT-01 Chart Desk: image -> UP/DOWN (AI when a key is set, labelled demo otherwise)
     'POST /api/vision/chart': async (req) => { const p = need(req); limit(`chart:${p.id}`, 1); const b = await readBody(req, 6_000_000); return chartDesk.analyse({ image: b.image, hint: b.hint }); },
 
@@ -174,6 +179,11 @@ export function createApp(config, log = console) {
 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://x');
+    if (url.pathname === '/api/football/crest') { // club crests, proxied same-origin (3D canvases) and cached
+      try { const c = await football.crest(url.searchParams.get('u')); res.writeHead(200, { 'Content-Type': c.type, 'Cache-Control': 'public, max-age=86400' }); res.end(c.body); }
+      catch (e) { json(res, e.status || 502, { error: e.status ? e.message : 'Crest unavailable' }); }
+      return;
+    }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(`event: hello\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
@@ -206,7 +216,7 @@ export function createApp(config, log = console) {
   const server = createServer(handle);
   let ws = null;
   const start0 = start, stop0 = stop;
-  start = () => { ws = attachWs(server, hub, log); start0(); };
-  stop = () => { ws?.stop(); stop0(); };
-  return { auth, hub, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
+  stop = () => { ws?.stop(); football.stop(); stop0(); };
+  return { auth, hub, football, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

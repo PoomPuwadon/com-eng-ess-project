@@ -368,8 +368,26 @@ bcMaterial.onBeforeCompile = (shader) => {
     .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vMapUv * vec2(${1 / COLS}, ${1 / ROWS}) + cellOffset;\n#endif`);
 };
 const _e = new THREE.Euler(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+// ---- the FEATURE feed: one shared texture (a VideoTexture when a preview stream plays, else the
+// animated marquee preview card from arenaFeed.js) shown on every BIG screen in VT-02 — the centre-hung
+// stack, the ring boards, the pylons, the overhead screens. One decode, many screens (threejs-performance §4).
+export const FEATURE = { on: false, material: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), meshes: new Set() };
+const isBig = (s) => s.w * s.h >= 1.5;
+/** switch every big screen between the match atlas and the feature feed; map = the feature texture */
+export function setFeature(on, map) {
+  if (map && FEATURE.material.map !== map) { FEATURE.material.map = map; FEATURE.material.needsUpdate = true; }
+  FEATURE.on = Boolean(on && FEATURE.material.map);
+  for (const m of FEATURE.meshes) m.material = FEATURE.on ? FEATURE.material : bcMaterial;
+}
+
 // items: {x,y,z,yaw,w,h,cell}
 export function buildBroadcastScreens(items) {
+  const big = items.filter(isBig), small = items.filter((s) => !isBig(s));
+  const bigMeshes = buildInstanced(big);
+  for (const m of bigMeshes) { FEATURE.meshes.add(m); if (FEATURE.on) m.material = FEATURE.material; }
+  return [...buildInstanced(small), ...bigMeshes];
+}
+function buildInstanced(items) {
   return chunked(items, 40, (list) => {
     const geo = new THREE.PlaneGeometry(1, 1);
     const offs = new Float32Array(list.length * 2);

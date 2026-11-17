@@ -4,7 +4,7 @@
 import { MINT, VAULT, DEPT } from './ledger.js';
 
 export const GENESIS_VAULT = 10_000_000_000; // ¤ 100,000,000.00
-export const INITIAL_BUDGETS = { [DEPT.trading]: 100_000_000, [DEPT.thai]: 5_000_000 }; // ¤ 1,000,000 / ¤ 50,000
+export const INITIAL_BUDGETS = { [DEPT.trading]: 100_000_000, [DEPT.thai]: 5_000_000, [DEPT.sports]: 2_000_000 }; // sports desk: ¤ 20,000 (VT-02 fixture positions) // ¤ 1,000,000 / ¤ 50,000
 const TRIP_SECONDS = 90;
 
 export function createTreasury(db, ledger, bus) {
