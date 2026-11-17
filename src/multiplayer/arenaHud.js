@@ -136,7 +136,12 @@ export class ArenaHud {
   makeTrail() {
     const N = 90, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.45, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    if (!ArenaHud.puff) { // soft round puff, shared by every trail
+      const c = document.createElement('canvas'); c.width = c.height = 64; const q = c.getContext('2d');
+      const gr = q.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      q.fillStyle = gr; q.fillRect(0, 0, 64, 64); ArenaHud.puff = new THREE.CanvasTexture(c);
+    }
+    const points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.6, map: ArenaHud.puff, alphaTest: 0.01, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
     points.frustumCulled = false;
     return { points, life: new Float32Array(N), vel: new Float32Array(N * 3), next: 0, N };
   }
@@ -208,7 +213,8 @@ export class ArenaHud {
       this.lines.style.opacity = '0';
       if (Math.abs(camera.fov - 70) > 0.05) { camera.fov += (70 - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix(); }
     }
-    // ---- boxing
+    // ---- boxing (every CEO highlight hides during a round, your own CEO plate included)
+    if (player.avatar?.tag) player.avatar.tag.visible = !this.boxingLive;
     const boxer = this.box && this.box.boxers.find((b) => b.conn === rt.id);
     this.selfHp.classList.toggle('on', Boolean(boxer));
     this.punchBtn.classList.toggle('on', Boolean(boxer && boxer.hp > 0 && this.ctx.isMobile()));

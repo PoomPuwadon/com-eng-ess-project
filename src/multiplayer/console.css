@@ -51,7 +51,7 @@
 #mp-objective { position: fixed; left: 50%; top: 92px; transform: translateX(-50%); z-index: 36; display: none; padding: 8px 18px; border-radius: 999px; font: 900 17px system-ui; letter-spacing: .04em;
   background: rgba(255, 122, 0, .92); color: #1a0d00; box-shadow: 0 0 24px rgba(255,122,0,.6); pointer-events: none; text-align: center; }
 #mp-objective.on { display: block; }
-#mp-selfhp { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 36; display: none; width: 260px; text-align: center; font: 800 12px system-ui; color: #fff; text-shadow: 0 1px 3px #000; pointer-events: none; }
+#mp-selfhp { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 36; display: none; width: 260px; text-align: center; font: 800 12px system-ui; color: #fff; text-shadow: 0 1px 3px #000; pointer-events: none; }
 #mp-selfhp.on { display: block; }
 #mp-selfhp .hp { height: 14px; border: 2px solid #fff; border-radius: 7px; background: rgba(0,0,0,.55); overflow: hidden; margin-top: 3px; }
 #mp-selfhp .hp i { display: block; height: 100%; background: linear-gradient(90deg, #ff2d2d, #ffb000 50%, #3ddc84); transition: width .2s; }
