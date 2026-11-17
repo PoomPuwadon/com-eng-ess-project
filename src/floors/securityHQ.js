@@ -323,9 +323,13 @@ export function securityHQ(ctx0) {
   for (let k = 0; k < 2; k++) { idx.escort.push(pi); people.color(pi++, GUARD, SK[(k + 2) % 5]); }
   for (let g = 0; g < GROUPS.length; g++) {
     idx.victims.push(pi); people.color(pi++, SUIT, SK[(g + 1) % 5]);
-    for (let k = 0; k < 2; k++) { idx.beaters.push(pi); people.color(pi++, GUARD, SK[(g + k + 3) % 5]); }
+    for (let k = 0; k < 2; k++) { idx.beaters.push(pi); people.color(pi++, GUARD, SK[(g + k + 3) % 5], undefined, 'guardBaton'); }
   }
   for (let k = 0; k < 3; k++) { idx.patrol.push(pi); people.color(pi++, GUARD, SK[k % 5]); }
+  // character poses: offboarded associates carry their boxes in tears, victims panic, guards swing batons
+  for (const i of idx.parade) { people.pose(i, 'carry'); people.expr(i, 'cry'); }
+  for (const i of idx.victims) people.expr(i, 'panic');
+  for (const i of idx.beaters) people.pose(i, 'strike');
   for (let k = 0; k < N_PARADE; k++) props.setColorAt(k, col.set(0xa07a4a)); // carried boxes
   for (let k = N_PARADE; k < props.count; k++) props.setColorAt(k, col.set(0x111111)); // batons
   ctx.group.add(props);
@@ -375,7 +379,7 @@ export function securityHQ(ctx0) {
         const hx = gx + Math.sin(yawG) * 0.35, hz = gz + Math.cos(yawG) * 0.35;
         dir.set(Math.sin(yawG) * Math.sin(th), Math.cos(th), Math.cos(yawG) * Math.sin(th)).normalize();
         q.setFromUnitVectors(UP, dir);
-        m4.compose(v.set(hx + dir.x * 0.4, e + 1.4 + dir.y * 0.4, hz + dir.z * 0.4), q, axis.set(0.07, 0.8, 0.07));
+        m4.compose(v.set(hx + dir.x * 0.4, e + 1.4 + dir.y * 0.4, hz + dir.z * 0.4), q, axis.set(0, 0, 0)); // hidden: the guards' own batons swing now
         props.setMatrixAt(N_PARADE + g * 2 + k, m4);
       }
     });

@@ -19,6 +19,9 @@ import './apps/research.js';
 import { hotspotAt, nearestTable } from './interact.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
+import { avatarFor } from './characters/roster.js';
+import { CeoPresence } from './characters/ceoMarker.js';
+import { Crowd } from './characters/crowd.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -118,6 +121,8 @@ const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
 const life = new Life(scene, elev);
 floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
+player.blockInput = () => appOpen();
+const ceoPresence = new CeoPresence(scene, camera); // the one CEO + the green through-walls marker
 const perf = new PerfSampler(renderer);
 let assigned = null; // car assigned to the player by the last call
 
@@ -130,16 +135,20 @@ const allColliders = () => floors.colliders.concat(elev.colliders(player.pos.y))
 function tick(dt, movePlayer = true) {
   if (appOpen()) player.keys.clear(); // an open application owns the keyboard
   if (movePlayer) player.update(dt, allColliders(), floors.shapes);
+  Crowd.viewer.copy(camera.position); globalThis.__crowdViewer = Crowd.viewer; // crowd animation level of detail
   if (player.floor && player.floor.id !== floors.current) floors.ensureAround(player.floor.id);
   floors.update(dt, performance.now() / 1000, player.pos);
   elev.update(dt, floors.landingSets());
   life.update(dt, floors.visibleIds());
+  ceoPresence.update(dt, player, floors.visibleIds());
 }
 
 // ---------------------------------------------------------------- actions
 function setRole(role) {
   if (!ROLES.includes(role)) return false;
   player.role = role;
+  player.setAvatar(scene, avatarFor(role));
+  ceoPresence.setPlayerRole(role);
   floors.applyRole(role);
   hud.setRole(role);
   hud.toast(`Role: ${role.toUpperCase()}`, 1.5);

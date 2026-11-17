@@ -1,4 +1,6 @@
 node_modules/
 dist/
-.env
+# secrets: every .env file except the committed template
+.env*
+!.env.example
 data/

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { makeSign } from './world/geom.js';
 import { locateFloor, FLOOR_BY_ID } from './layout/building.js';
+import { Robot } from './characters/kit.js';
+import { makeGuard } from './characters/roster.js';
 
 // Placeholder cash transporter robots (Autonomous Liquidity Couriers) with guards.
 // Phase 0: scripted routes, fake amounts. They ride the real freight lifts and run
@@ -46,17 +48,15 @@ export class Life {
   }
 
   makeRobot(r) {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.2, 1.4), new THREE.MeshLambertMaterial({ color: 0x2e7bd6 }));
-    const label = makeSign(`${r.name} · ${r.amount}`, { size: 0.55, sub: `→ ${r.dest}` });
-    label.position.y = 1.8;
-    body.add(label);
-    const gMat = new THREE.MeshLambertMaterial({ color: 0x050505 });
-    const gGeo = new THREE.CapsuleGeometry(0.3, 1.1, 3, 8);
-    const guards = [new THREE.Mesh(gGeo, gMat), new THREE.Mesh(gGeo, gMat)];
-    this.group.add(body, ...guards);
+    // the approved Autonomous Liquidity Courier (armoured safe-on-wheels) + two corrections guards
+    const robot = new Robot(0);
+    robot.tag.userData.set([{ t: r.name + ' · IN TRANSIT', px: 18, c: '#a8ffd8' }, { t: '$' + r.amount, px: 40, c: '#ffd46b' }, { t: '→ ' + r.dest, px: 18, c: '#e3c27a', w: 600 }]);
+    const guards = [makeGuard(), makeGuard()];
+    for (const o of [robot.root, ...guards.map((g) => g.root)]) { o.traverse((m) => { m.castShadow = false; }); this.group.add(o); }
     const segs = withReturn(r);
-    return { r, body, guards, segs, i: 0, t: 0, leg: 0, phase: null, car: null, pos: new THREE.Vector3(...segs[0].walk[0]), dir: new THREE.Vector3(0, 0, 1), status: 'dispatched' };
+    return { r, robot, body: robot.root, guards, segs, i: 0, t: 0, leg: 0, phase: null, car: null, pos: new THREE.Vector3(...segs[0].walk[0]), dir: new THREE.Vector3(0, 0, 1), status: 'dispatched' };
   }
+
 
   // Robots standing in a car's doorway hold the doors (door sensor).
   occupies(car) {
@@ -73,6 +73,7 @@ export class Life {
 
   update(dt, visibleIds) {
     const speed = 2.2;
+    this.t = (this.t || 0) + dt;
     for (const rb of this.robots) {
       const seg = rb.segs[rb.i];
       if (seg.walk) {
@@ -109,15 +110,21 @@ export class Life {
       }
       const fl = locateFloor(rb.pos.x, rb.pos.y + 0.1, rb.pos.z);
       const visible = rb.phase === 'ride' || rb.phase === 'board' || (fl && visibleIds.includes(fl.id));
+      const yaw = Math.atan2(rb.dir.x, rb.dir.z);
+      const moving = rb.status === 'in transit' || rb.status === 'boarding' ? speed : 0;
       rb.body.visible = !!visible;
-      rb.body.position.set(rb.pos.x, rb.pos.y + 0.6, rb.pos.z);
-      rb.body.rotation.y = Math.atan2(rb.dir.x, rb.dir.z);
+      rb.body.position.set(rb.pos.x, rb.pos.y, rb.pos.z);
+      rb.body.rotation.y = yaw;
+      if (visible) rb.robot.update(dt, this.t, moving);
       const inLift = rb.phase === 'ride' || rb.phase === 'board';
       const side = new THREE.Vector3(rb.dir.z, 0, -rb.dir.x);
       rb.guards.forEach((g, k) => {
-        g.visible = !!visible;
-        if (inLift) g.position.set(rb.pos.x + (k ? 0.9 : -0.9) * 0.5, rb.pos.y + 0.85, rb.pos.z + (k ? 1 : -1));
-        else g.position.copy(rb.pos).addScaledVector(rb.dir, -1.6).addScaledVector(side, k ? 1.1 : -1.1).setY(rb.pos.y + 0.85);
+        const o = g.root;
+        o.visible = !!visible;
+        if (inLift) o.position.set(rb.pos.x + (k ? 0.9 : -0.9) * 0.5, rb.pos.y, rb.pos.z + (k ? 1 : -1));
+        else o.position.copy(rb.pos).addScaledVector(rb.dir, -1.6).addScaledVector(side, k ? 1.1 : -1.1).setY(rb.pos.y);
+        o.rotation.y = yaw;
+        if (visible) g.update(dt, this.t, inLift ? 0 : moving);
       });
     }
   }
