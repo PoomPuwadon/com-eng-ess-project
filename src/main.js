@@ -51,8 +51,8 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-02', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
-const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-02': 'lab', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-02', 'OT-03', 'OT-04', 'OT-05', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-02': 'lab', 'OT-03': 'outreach', 'OT-04': 'security', 'OT-05': 'command', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
@@ -78,6 +78,8 @@ const LOOKS = {
   vault: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.65, sun: 0, sunCol: 0xfff0dc, hemi: 0.7, sky: 0xeef3ff, gnd: 0x2a2c30, shadow: false, bloom: 0.32 },
   // probability institute theatre: a bright white/navy research lab; even, cool-white fill, the screens glow
   lab: { tone: THREE.ACESFilmicToneMapping, exp: 0.82, env: 0.45, sun: 0, sunCol: 0xfff0dc, hemi: 0.45, sky: 0xf2f6ff, gnd: 0x4a5468, shadow: false, bloom: 0.18 },
+  // executive command centre (NORAD bunker): near-black, the screens, money streams and gold edges carry the light
+  command: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.35, sun: 0, sunCol: 0xfff0dc, hemi: 0.42, sky: 0xe6eee8, gnd: 0x2a2010, shadow: false, bloom: 0.36 },
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
@@ -376,7 +378,7 @@ async function bench(secs) {
   const out = [];
   const views = {
     B1: ['vault', Math.PI / 2], L0: ['grand_lobby', 0], 'OT-01': ['trading_floor', Math.PI / 2], 'OT-02': ['lottery_institute', Math.PI / 2],
-    'OT-03': ['outreach_centre', Math.PI / 2], 'OT-04': ['security_hq', Math.PI / 2], 'OT-05': ['master_dashboards', Math.PI],
+    'OT-03': ['outreach_centre', Math.PI / 2], 'OT-04': ['security_hq', Math.PI / 2], 'OT-05': ['command_deck', Math.PI / 2],
     BRIDGE: ['glass_bridge', -Math.PI / 2], 'VT-01': ['leisure_suite', -Math.PI / 2],
     'VT-02': ['football_arena', -Math.PI / 2], 'VT-03': ['muay_thai_arena', -Math.PI / 2], 'VT-04': ['racing_hall', -Math.PI / 2],
   };
