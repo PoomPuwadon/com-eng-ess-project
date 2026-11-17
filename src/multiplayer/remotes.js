@@ -2,16 +2,21 @@
 // (rendered ~150 ms behind), nametags as one DOM layer, CEO markers over every real CEO, and the
 // VT-03 boxer highlight (see-through-walls silhouette + name + health bar).
 //
-// Perf (threejs-performance): a kit Character is ~60 meshes, so only the nearest FULL_MAX remote
+// Perf (threejs-performance): a kit Character is ~36 draw calls, so only the nearest few remote
 // players on loaded floors get a full avatar; everyone else is drawn by two instanced meshes
 // (body + head, coloured by role) — at most ~2 extra draw calls however many guests there are.
 import * as THREE from 'three';
 import { avatarFor } from '../characters/roster.js';
 import { CeoMarker } from '../characters/ceoMarker.js';
 import { FLOOR_BY_ID } from '../layout/building.js';
+import { QUALITY } from '../quality.js';
 import { memberPose, basketRadius, BASKET_Y } from '../../server/realtime/basket.js';
 
-const FULL_MAX = 8, DELAY = 0.15, MAX_PROXIES = 64;
+// a full avatar costs ~36 draw calls (measured): at most 2 within 30 m (1 in Low graphics), the rest are proxies
+// (measured with 50 players in the lobby: 4 full avatars took the frame to 334 calls; 2 keeps it near the 250 budget)
+const FULL_NEAR = 30, DELAY = 0.15, MAX_PROXIES = 64;
+// crowds (> 6 guests in view) and Low graphics: only the nearest guest gets a full avatar
+const fullMax = (shown) => (QUALITY.low || shown > 6 ? 1 : 2), MAX_TAGS = 16;
 const ROLE_COL = { player: 0xe8b04a, admin: 0x2a2c32, ceo: 0xefe4c8 };
 const CSS = `
 .mp-tags { position: fixed; inset: 0; pointer-events: none; z-index: 35; }
@@ -121,7 +126,7 @@ export class RemotePlayers {
     shown.sort((a, b) => a.dist - b.dist);
     let np = 0;
     shown.forEach((rm, i) => {
-      const full = i < FULL_MAX || this.boxers.has(rm.id);
+      const full = (i < fullMax(shown.length) && rm.dist < FULL_NEAR) || this.boxers.has(rm.id);
       if (full) {
         if (!rm.av || rm.avRole !== rm.role) this.makeAvatar(rm);
         const a = rm.av;
@@ -155,12 +160,13 @@ export class RemotePlayers {
   // ---------------------------------------------------------------- nametags (DOM, one layer)
   drawTags(shown) {
     const W = innerWidth, H = innerHeight, keep = new Set();
+    let n = 0;
     for (const rm of shown) {
-      if (rm.dist > 45 || this.boxers.has(rm.id)) continue;
+      if (rm.dist > 45 || this.boxers.has(rm.id) || n >= MAX_TAGS) continue;
       const s = rm.av && rm.av.root.visible ? rm.av.root.scale.x : 1;
       const v = this._v.set(rm.pos.x, rm.pos.y + 2.25 * s, rm.pos.z).project(this.camera);
       if (v.z > 1 || v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) continue;
-      keep.add(rm.id);
+      keep.add(rm.id); n++;
       let el = this.tags.get(rm.id);
       if (!el) { el = document.createElement('div'); this.tagLayer.append(el); this.tags.set(rm.id, el); }
       const key = `${rm.name}|${rm.role}|${rm.device}`;
