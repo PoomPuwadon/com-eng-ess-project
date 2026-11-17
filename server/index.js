@@ -6,7 +6,9 @@ process.removeAllListeners('warning'); // node:sqlite prints an ExperimentalWarn
 const app = createApp(CONFIG);
 app.server.listen(CONFIG.port, () => {
   console.log(`[firm] server on http://localhost:${CONFIG.port} · db ${CONFIG.dbFile}`);
-  console.log(`[firm] LLM agents: ${CONFIG.anthropicKey ? `enabled (${CONFIG.modelTick}, cap $${CONFIG.llmMonthlyCapUsd}/month)` : 'no ANTHROPIC_API_KEY — rule-based fallback'}`);
+  const st = app.llm.status();
+  console.log(`[firm] LLM agents: ${st.provider ? `${st.provider} (${st.model}, cap $${CONFIG.llmMonthlyCapUsd}/month)` : 'no ANTHROPIC_API_KEY / GEMINI_API_KEY — rule-based fallback + demo chart desk'}`);
+  console.log(`[firm] football data: ${CONFIG.footballKey ? 'football-data.org key loaded' : 'no FOOTBALL_DATA_API_KEY — simulated fixtures'}`);
   console.log(`[firm] stock quotes: ${CONFIG.finnhubKey ? 'Finnhub + Yahoo charts' : 'Yahoo Finance public chart endpoint'}${CONFIG.allowClosedFills ? ' · SIM_ALLOW_CLOSED_FILLS on' : ''}`);
   app.start();
 });

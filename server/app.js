@@ -13,6 +13,7 @@ import { createTrading } from './market/trading.js';
 import { createLLM } from './agents/llm.js';
 import { createGateway, AGENTS } from './agents/gateway.js';
 import { createTradingDesk } from './agents/tradingDesk.js';
+import { createChartAnalyst } from './agents/chartAnalyst.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
 import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
@@ -48,6 +49,7 @@ export function createApp(config, log = console) {
   const llm = createLLM(db, config, log);
   const gateway = createGateway(db);
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log });
+  const chartDesk = createChartAnalyst({ llm, log });
   const lotto = createLotteryData(db, bus, config, log);
   const institute = createInstitute({ db, ledger, data: lotto, gateway, llm, bus, players, log });
   let reconcile = ledger.reconcile();
@@ -90,8 +92,8 @@ export function createApp(config, log = console) {
 
   // ---------------------------------------------------------------- HTTP
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
-  const readBody = (req) => new Promise((resolve, reject) => {
-    let s = ''; req.on('data', (c) => { s += c; if (s.length > 64_000) { reject(Object.assign(new Error('Body too large'), { status: 413 })); req.destroy(); } });
+  const readBody = (req, max = 64_000) => new Promise((resolve, reject) => {
+    let s = ''; req.on('data', (c) => { s += c; if (s.length > max) { reject(Object.assign(new Error('Body too large'), { status: 413 })); req.destroy(); } });
     req.on('end', () => { try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('Invalid JSON'), { status: 400 })); } });
   });
   const authOf = (req) => players.auth((req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
@@ -148,6 +150,8 @@ export function createApp(config, log = console) {
     'POST /api/market/cancel': async (req) => { const p = need(req); return { order: trading.cancelOrder(p.account, Number((await readBody(req)).id)), portfolio: trading.portfolio(p.account) }; },
     'GET /api/market/leaderboard': () => ({ leaders: trading.leaderboard(players, config.startingBalance), firm: { nav: trading.portfolio(DEPT.trading).nav, start: 100_000_000 } }),
     'GET /api/firm/book': () => firmBook(),
+    // OT-01 Chart Desk: image -> UP/DOWN (AI when a key is set, labelled demo otherwise)
+    'POST /api/vision/chart': async (req) => { const p = need(req); limit(`chart:${p.id}`, 1); const b = await readBody(req, 6_000_000); return chartDesk.analyse({ image: b.image, hint: b.hint }); },
 
     'GET /api/lottery/state': (req) => {
       const p = authOf(req);

@@ -16,6 +16,7 @@ import { QUALITY, saveQuality, mountQualityButton } from './quality.js';
 import { openApp, appOpen, buildWallet } from './apps/shell.js';
 import './apps/markets.js';
 import './apps/research.js';
+import './apps/chartDesk.js';
 import { hotspotAt, nearestTable } from './interact.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
@@ -546,6 +547,7 @@ addEventListener('keydown', (e) => {
   if (appOpen() || e.target.closest?.('input, textarea, select')) return; // applications own the keyboard
   if (e.code === 'KeyM' && !hud.elevatorOpen) { openApp('markets'); return; }
   if (e.code === 'KeyL' && !hud.elevatorOpen) { openApp('research'); return; }
+  if (e.code === 'KeyC' && !hud.elevatorOpen && player.floor?.id === 'OT-01') { openApp('chartdesk'); return; } // OT-01 Chart Desk
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
