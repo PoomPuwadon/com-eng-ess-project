@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS cash_trips (
 
 -- ---------------------------------------------------------------- players (guest identities until Phase 1 sign-in)
 CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL, last_seen INTEGER);
+-- extra bearer tokens issued by name + password sign-in (one per device); the guest token stays valid too
+CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, player_id TEXT NOT NULL, created_at INTEGER NOT NULL);
+-- positions on real football fixtures (Sports Analytics Arena) — stake held in ESCROW:BET:fx<id>
+CREATE TABLE IF NOT EXISTS fixture_positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL, match_id INTEGER NOT NULL, market TEXT NOT NULL, pick TEXT NOT NULL,
+  stake INTEGER NOT NULL, price REAL NOT NULL, status TEXT NOT NULL, payout INTEGER, created_at INTEGER NOT NULL, settled_at INTEGER, label TEXT);
 
 -- ---------------------------------------------------------------- roulette
 CREATE TABLE IF NOT EXISTS roulette_rounds (

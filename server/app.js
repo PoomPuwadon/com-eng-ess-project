@@ -16,6 +16,9 @@ import { createTradingDesk } from './agents/tradingDesk.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
 import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
+import { createAuth, jsonFileStore, memoryStore } from './auth.js';
+import { createHub } from './realtime/hub.js';
+import { attachWs } from './realtime/ws.js';
 
 function createBus() {
   const clients = new Set();
@@ -37,6 +40,8 @@ export function createApp(config, log = console) {
   const ledger = createLedger(db);
   const treasury = createTreasury(db, ledger, bus);
   const players = createPlayers(db, ledger, config);
+  const auth = createAuth({ store: config.dbFile === ':memory:' ? memoryStore() : jsonFileStore(config.usersFile), players, adminPassword: config.adminPassword || 'admin123' });
+  const hub = createHub({ players, auth, ledger, config, log });
   const roulette = createRoulette(db, ledger, bus, players);
   const market = createMarketData(db, bus, config, log);
   const trading = createTrading(db, ledger, market, bus, config);
@@ -50,7 +55,7 @@ export function createApp(config, log = console) {
 
   // ---------------------------------------------------------------- schedulers (the firm runs 24/7, players or not)
   const timers = [];
-  function start() {
+  let start = function start() {
     timers.push(setInterval(() => { try { treasury.deliverDue(); trading.processPending(); } catch (e) { log.warn('[exec]', e.message); } }, 4000));
     timers.push(setInterval(() => { try { trading.snapshotNav([DEPT.trading, ...db.all("SELECT DISTINCT owner FROM positions WHERE owner LIKE 'PLAYER:%' AND qty > 0").map((r) => r.owner)]); } catch (e) { log.warn('[nav]', e.message); } }, 300_000));
     timers.push(setInterval(() => { reconcile = ledger.reconcile(); if (!reconcile.ok) log.error('[ledger] LEDGER_DRIFT', reconcile.problems); }, 600_000));
@@ -81,7 +86,7 @@ export function createApp(config, log = console) {
       if (t.to === DEPT.trading) desk.tick({ reason: 'budget delivered' }).catch(() => {});
     });
   }
-  const stop = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
+  let stop = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
 
   // ---------------------------------------------------------------- HTTP
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -117,6 +122,11 @@ export function createApp(config, log = console) {
       return players.create();
     },
     'GET /api/me': (req) => ({ player: need(req) }),
+    // name + password: unknown names open an account (Visitor), known names must match
+    'POST /api/auth/enter': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.enter(b.name, b.password); },
+    'POST /api/auth/login': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.login(b.name, b.password); },
+    'POST /api/auth/register': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.register(b.name, b.password); },
+    'GET /api/presence': () => ({ players: hub.snapshot().length, meta: hub.meta() }),
     'POST /api/me/name': async (req) => ({ player: players.rename(need(req).id, (await readBody(req)).name) }),
 
     'GET /api/roulette/state': (req) => { const p = authOf(req); return { recent: roulette.recent(), limits: roulette.LIMITS, stats: roulette.stats(), commitment: p ? roulette.commitment(p.id) : null }; },
@@ -190,5 +200,9 @@ export function createApp(config, log = console) {
   }
 
   const server = createServer(handle);
-  return { db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  let ws = null;
+  const start0 = start, stop0 = stop;
+  start = () => { ws = attachWs(server, hub, log); start0(); };
+  stop = () => { ws?.stop(); stop0(); };
+  return { auth, hub, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

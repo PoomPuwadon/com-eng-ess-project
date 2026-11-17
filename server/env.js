@@ -5,8 +5,11 @@ import { dirname, join } from 'node:path';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const file = join(ROOT, '.env');
-if (existsSync(file)) {
+// Precedence: real environment variables, then .env.local (gitignored secrets), then .env.
+// Secrets are read here, server side only; they are never sent to the client or logged.
+for (const name of ['.env.local', '.env']) {
+  const file = join(ROOT, name);
+  if (!existsSync(file)) continue;
   for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
     if (!m || line.trim().startsWith('#')) continue;
@@ -23,6 +26,14 @@ export const CONFIG = {
   dbFile: process.env.DB_FILE || join(ROOT, 'data', 'firm.db'),
   finnhubKey: process.env.FINNHUB_API_KEY || '',
   anthropicKey: process.env.ANTHROPIC_API_KEY || '',
+  geminiKey: process.env.GEMINI_API_KEY || '',
+  // which provider the agents use when both keys are set: 'claude' (default) or 'gemini'
+  llmProvider: (process.env.LLM_PROVIDER || '').toLowerCase(),
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  footballKey: process.env.FOOTBALL_DATA_API_KEY || '',
+  adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
+  usersFile: process.env.USERS_FILE || join(ROOT, 'data', 'users.json'),
+  maxPlayers: num('MAX_PLAYERS', 50),
   // models per job (agent-cost-control skill §1: Haiku for ticks; configurable)
   modelTick: process.env.AGENT_MODEL_TICK || 'claude-haiku-5-5',
   llmMonthlyCapUsd: num('LLM_MONTHLY_CAP_USD', 75),

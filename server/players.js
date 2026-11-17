@@ -8,10 +8,10 @@ const ADJ = ['Liquid', 'Bullish', 'Hedged', 'Leveraged', 'Synergised', 'Diversif
 const NOUN = ['Associate', 'Analyst', 'Principal', 'Partner', 'Stakeholder', 'Visionary', 'Whale', 'Investor', 'Patron', 'Delegate'];
 
 export function createPlayers(db, ledger, config) {
-  function create() {
+  function create({ name: chosen } = {}) {
     const token = randomBytes(24).toString('base64url');
     const id = randomBytes(8).toString('hex');
-    const name = `${ADJ[randomInt(ADJ.length)]} ${NOUN[randomInt(NOUN.length)]} ${randomInt(100, 1000)}`;
+    const name = chosen || `${ADJ[randomInt(ADJ.length)]} ${NOUN[randomInt(NOUN.length)]} ${randomInt(100, 1000)}`;
     db.tx(() => {
       db.run('INSERT INTO players(id, token_hash, name, created_at, last_seen) VALUES (?, ?, ?, ?, ?)', id, hash(token), name, Date.now(), Date.now());
       ledger.post({ actor: 'system:onboarding', reason: 'STARTING_BALANCE', ref: id, idem: `start:${id}`,
@@ -25,7 +25,8 @@ export function createPlayers(db, ledger, config) {
   };
   function auth(token) {
     if (!token) return null;
-    const p = db.get('SELECT id FROM players WHERE token_hash = ?', hash(token));
+    const h = hash(token);
+    const p = db.get('SELECT id FROM players WHERE token_hash = ?', h) || db.get('SELECT player_id AS id FROM sessions WHERE token_hash = ?', h);
     if (!p) return null;
     db.run('UPDATE players SET last_seen = ? WHERE id = ?', Date.now(), p.id);
     return get(p.id);
@@ -37,5 +38,11 @@ export function createPlayers(db, ledger, config) {
     return get(id);
   }
   const nameOf = (id) => db.get('SELECT name FROM players WHERE id = ?', id)?.name || 'Former associate';
-  return { create, get, auth, rename, nameOf };
+  /** A new bearer token for an existing player (sign-in from another device). */
+  function issueToken(id) {
+    const token = randomBytes(24).toString('base64url');
+    db.run('INSERT INTO sessions(token_hash, player_id, created_at) VALUES (?, ?, ?)', hash(token), id, Date.now());
+    return token;
+  }
+  return { create, get, auth, rename, nameOf, issueToken };
 }
