@@ -10,8 +10,9 @@ let es = null;
 export let online = false;
 
 const store = {
-  get() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-  set(v) { try { localStorage.setItem(TOKEN_KEY, v); } catch { /* private mode: session lasts this tab */ } },
+  // this tab's identity first (two tabs can be two different people), then the browser's last one
+  get() { try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch { return null; } },
+  set(v) { try { sessionStorage.setItem(TOKEN_KEY, v); localStorage.setItem(TOKEN_KEY, v); } catch { /* private mode: session lasts this tab */ } },
 };
 
 export async function api(path, { method = 'GET', body } = {}) {
@@ -79,3 +80,22 @@ export const ago = (ms) => {
   return s < 60 ? `${Math.round(s)} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
 };
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------------------------------------------------------------- name + password sign-in
+export const getToken = () => token;
+const ACCOUNT_KEY = 'firm.account.v1';
+export const savedAccount = () => { try { return localStorage.getItem(ACCOUNT_KEY); } catch { return null; } };
+/** mode: 'enter' (sign in, or open an account if the name is new) | 'login' | 'register' */
+export async function signIn(name, password, mode = 'enter') {
+  const out = await api(`/api/auth/${mode}`, { method: 'POST', body: { name, password } });
+  token = out.token; store.set(token);
+  try { localStorage.setItem(ACCOUNT_KEY, out.player.name); } catch { /* private mode */ }
+  me = null; setMe(out.player);
+  online = true;
+  connectStream();
+  for (const fn of sessionListeners) fn(out);
+  return out;
+}
+const sessionListeners = new Set();
+/** called after a successful sign-in (the realtime link reconnects with the new identity) */
+export const onSignIn = (fn) => { sessionListeners.add(fn); return () => sessionListeners.delete(fn); };

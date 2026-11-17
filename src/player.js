@@ -86,6 +86,20 @@ export class Player {
   }
 
   update(dt, colliders, shapes = []) {
+    // carried (the CEO's basket, a race horse): the server/host decides where we are; no input, no gravity
+    if (this.ride) {
+      const before = this.pos.clone(), p = this.ride();
+      if (p) {
+        this.pos.copy(p); this.vy = 0; this.grounded = true; this.groundY = p.y;
+        if (this.rideYaw != null) this.bodyYaw = this.rideYaw;
+        this.locate();
+        this.t += dt;
+        const a = this.avatar;
+        if (a) { a.root.position.copy(this.pos); a.root.rotation.y = this.bodyYaw; a.airborne = false; a.update(dt, this.t, 0); a.root.visible = true; void before; }
+        this.placeCamera(colliders);
+        return;
+      }
+    }
     const live = shapes.filter((sh) => sh.active(this.pos.y));
     // ---- input direction (camera-relative)
     let fx = 0, fz = 0, speed = WALK;
@@ -143,8 +157,12 @@ export class Player {
       a.update(dt, this.t, v);
       a.root.visible = this.enabled; // seated at a table: the seat view takes over
     }
+    this.placeCamera(colliders);
+  }
 
-    // ---- third-person camera: orbit behind the avatar, pulled in when something is in the way
+  // ---- third-person camera: orbit behind the avatar, pulled in when something is in the way
+  placeCamera(colliders) {
+    const a = this.avatar;
     const s = a ? a.root.scale.x : 1;
     const tx = this.pos.x, ty = this.pos.y + 1.55 * s, tz = this.pos.z;
     const el = 0.3 - this.pitch; // camera elevation above the look target

@@ -311,8 +311,8 @@ export const makeRandomStaff = () => pick(STAFF_MAKERS)();
 export { Robot };
 
 /** The player's own avatar for a role: CEO (one tycoon), admins (dark suit + badge), everyone else the visitor look. */
-export function avatarFor(role) {
+export function avatarFor(role, name) {
   if (role === 'ceo') return makeCEO();
-  if (role === 'admin') return makeAdmin('Staff');
-  return makeVisitor('you');
+  if (role === 'admin') return makeAdmin(name || 'Staff');
+  return makeVisitor(name || 'you');
 }

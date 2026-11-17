@@ -22,6 +22,12 @@ import { startLiveData } from './liveData.js';
 import { avatarFor } from './characters/roster.js';
 import { CeoPresence } from './characters/ceoMarker.js';
 import { Crowd } from './characters/crowd.js';
+import { Realtime } from './net/realtime.js';
+import { savedAccount, signIn, setBalance } from './net/api.js';
+import { RemotePlayers } from './multiplayer/remotes.js';
+import { ExecConsole, showSignIn } from './multiplayer/console.js';
+import { ArenaHud } from './multiplayer/arenaHud.js';
+import { memberPose } from '../server/realtime/basket.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -140,6 +146,8 @@ function tick(dt, movePlayer = true) {
   floors.update(dt, performance.now() / 1000, player.pos);
   elev.update(dt, floors.landingSets());
   life.update(dt, floors.visibleIds());
+  // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
+  ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
   ceoPresence.update(dt, player, floors.visibleIds());
 }
 
@@ -206,6 +214,77 @@ const hud = new HUD({
   onRide: (bank, stop, car) => requestLift(bank, stop, car),
 });
 
+// ---------------------------------------------------------------- multiplayer presence (server/realtime/hub.js)
+const rt = new Realtime();
+const remotes = new RemotePlayers(scene, camera);
+const isMobile = () => rt.device === 'mobile';
+let reviewTools = new URLSearchParams(location.search).has('review');
+const paintStaffTools = () => document.body.classList.toggle('staff-tools', reviewTools || rt.isStaff);
+paintStaffTools();
+/** server role -> access role: guests are visitors (on tour while Tour Mode is on); admin/ceo keep their powers */
+function applyServerRole() {
+  const access = rt.role === 'player' ? (rt.meta?.tour?.on ? 'tour' : 'visitor') : rt.role;
+  if (access !== player.role) setRole(access);
+  paintStaffTools();
+}
+rt.on('role', applyServerRole);
+rt.on('meta', applyServerRole);
+rt.on('welcome', () => { remotes.selfId = rt.id; });
+rt.on('status', (s) => { remotes.selfId = rt.id; if (!s.connected) for (const r of remotes.list()) remotes.drop(r.id); });
+rt.on('snap', (s) => { remotes.selfId = rt.id; remotes.ingest(s.at, s.players); });
+rt.on('left', (m) => remotes.drop(m.id));
+rt.on('toast', (m) => hud.toast(m.text, 3));
+rt.on('announce', (m) => hud.toast(m.text, 3.5));
+rt.on('balance', (m) => setBalance(m.balance));
+rt.on('error', (m) => hud.toast(m.text, 5));
+rt.on('kicked', (m) => {
+  for (const r of remotes.list()) remotes.drop(r.id);
+  const o = document.createElement('div'); o.className = 'mp-modal';
+  o.innerHTML = `<div class="card"><h2>Session ended</h2><div class="sub" style="font-size:15px;color:#fff">${m.text || 'You have been kicked by an admin'}</div><div class="row"><button class="mp-btn primary">Reload</button></div></div>`;
+  o.querySelector('button').onclick = () => location.reload();
+  document.body.append(o);
+});
+// carried in a CEO's basket: ride at our slot above the host's head (the host's interpolated pose)
+let basket = null;
+rt.on('basket', (m) => {
+  basket = m.host ? m : null;
+  if (basket) { player.ride = () => { const hp = remotes.hostPose(basket.host); return hp ? new THREE.Vector3().copy(memberPose(hp, basket.slot, basket.n)) : null; }; player.rideYaw = null; hud.toast('You are in the Executive Basket. Enjoy the view.', 3); }
+  else if (!arena.amRacer()) { player.ride = null; }
+});
+/** place on a floor at a world point, stepping aside if something solid is there */
+function placeAt(floorId, x, y, z, yaw = player.yaw) {
+  const f = FLOOR_BY_ID[floorId];
+  if (!f) return;
+  floors.ensureAround(floorId);
+  const blocked = (px, pz) => floors.colliders.some((c) => c.y1 > y + 0.45 && c.y0 < y + 1.8 &&
+    !(c.lock && canAccess(player.role, c.lock)) && px > c.x0 - 0.5 && px < c.x1 + 0.5 && pz > c.z0 - 0.5 && pz < c.z1 + 0.5);
+  if (blocked(x, z)) {
+    search: for (let rr = 1; rr < 40; rr += 0.5) for (let a = 0; a < 16; a++) {
+      const px = x + Math.cos((a / 16) * Math.PI * 2) * rr, pz = z + Math.sin((a / 16) * Math.PI * 2) * rr;
+      if (!blocked(px, pz)) { x = px; z = pz; break search; }
+    }
+  }
+  player.place(x, y, z, yaw);
+  player.update(0, allColliders(), floors.shapes);
+}
+rt.on('teleport', (m) => {
+  if (rouletteSeat.active()) rouletteSeat.stand();
+  if (!arena.amRacer()) player.ride = null;
+  placeAt(m.floor, m.x, m.y, m.z, m.yaw ?? player.yaw);
+  if (m.objective === 'boxing') hud.toast('You are a competitor: walk down the walkout into the ring!', 5);
+  else if (m.by) hud.toast(`${m.by} has convened everyone here.`, 3);
+});
+// 10 Hz on a timer (not the render loop), so a background tab still reports where it stands
+let poseT = performance.now();
+function sendPose() {
+  if (!rt.connected || !player.floor) return;
+  const now = performance.now(), dt = Math.max(0.05, (now - poseT) / 1000); poseT = now;
+  const p = player.pos, sp = player.lastPos ? Math.hypot(p.x - player.lastPos.x, p.z - player.lastPos.z) / dt : 0;
+  player.lastPos = (player.lastPos || new THREE.Vector3()).copy(p);
+  rt.send('pose', { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), yaw: +player.yaw.toFixed(3), f: player.floor.id, r: player.room?.id || null, s: +sp.toFixed(1) });
+}
+setInterval(sendPose, 100);
+
 // ---------------------------------------------------------------- roulette: sit at a real 3D table
 const leisureCtx = () => floors.loaded.get('VT-01');
 const rouletteSeat = createRouletteSeat({ camera, canvas, player, getLeisureCtx: leisureCtx, hud });
@@ -217,7 +296,10 @@ function sitAtTable(table) {
   }
   return table ? rouletteSeat.sit(table) : false;
 }
+const arena = new ArenaHud({ rt, scene, camera, canvas, player, remotes, hud, isMobile, placeAt });
+const execConsole = new ExecConsole({ rt, toast: (t, s = 2.5) => hud.toast(t, s) });
 function openFromHud(id) {
+  if (id === 'signin') { document.exitPointerLock?.(); showSignIn(); return; }
   if (id === 'roulette') return sitAtTable(null);
   if (rouletteSeat.active()) rouletteSeat.stand();
   openApp(id);
@@ -476,7 +558,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'F3') { e.preventDefault(); document.getElementById('perf').classList.toggle('hidden'); }
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
   const n = Number(e.key);
-  if (n >= 1 && n <= ROLES.length && !hud.elevatorOpen) setRole(ROLES[n - 1]);
+  // review shortcut: local access-role switch, only for staff (or ?review=1); real roles come from the server
+  if (n >= 1 && n <= ROLES.length && !hud.elevatorOpen && !e.altKey && document.body.classList.contains('staff-tools')) setRole(ROLES[n - 1]);
 });
 
 // ---------------------------------------------------------------- start
@@ -487,6 +570,16 @@ startLiveData();
 window.__debug.openApp = (id, opts) => openFromHud(id, opts);
 window.__debug.roulette = { sit: () => sitAtTable(null), stand: () => rouletteSeat.stand(), spin: () => rouletteSeat.spin(), view: (v) => rouletteSeat.setView(v), state: () => rouletteSeat.state() };
 setRole(params.get('role') || 'visitor');
+if (params.get('role')) reviewTools = true; // scripted review runs keep the local role tools
+paintStaffTools();
+// sign in (Name + Password) unless this browser already holds an account, or a review/automation run
+const AUTOMATION = ['shots', 'bench', 'guest', 'role', 'review'].some((k) => params.has(k));
+if (!savedAccount() && !AUTOMATION) showSignIn();
+rt.start();
+window.__debug.mp = {
+  rt, remotes, arena, console: execConsole, signIn: (n, p) => signIn(n, p),
+  ask: (t, d) => rt.ask(t, d), players: () => rt.players, meta: () => rt.meta, basket: () => basket,
+};
 if (params.get('floor')) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);
 else teleport('PLAZA'); // the journey starts outside
 if (params.get('hud') === '0') document.body.classList.add('nohud');
@@ -501,6 +594,8 @@ function frame(now) {
   last = now;
   const t0 = performance.now();
   if (!simWalking) tick(dt);
+  const overrides = arena.update(dt);
+  remotes.update(dt, { visibleIds: floors.visibleIds(), viewer: player.pos, selfPose: { pos: player.pos, floor: player.floor?.id }, overrides });
   rouletteSeat.update(dt);
   updateScreens(dt);
   updateTicker(dt);

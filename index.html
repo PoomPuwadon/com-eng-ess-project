@@ -45,6 +45,7 @@
     #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; }
     #notice { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #bbb; text-shadow: 0 1px 2px #000; }
     .hidden { display: none !important; }
+    body:not(.staff-tools) #roles, body:not(.staff-tools) #floors { display: none !important; }
     body.nohud .panel, body.nohud #minimap, body.nohud #help-btn, body.nohud #cross, body.nohud #notice { display: none !important; }
   </style>
 </head>
@@ -69,10 +70,10 @@
     <h3>Phase 0 — Greybox layout review</h3>
     <b>Hold right-click and drag</b> to turn the camera · <b>mouse wheel</b> zoom.<br />
     <b>W A S D</b> move · <b>Shift</b> run · <b>E</b> on a yellow landing pad = choose your floor, a car is assigned and comes to you · <b>E</b> inside a car = floor panel<br />
-    <b>1–5</b> switch role (Visitor, Cleared visitor, Tour, Admin, CEO) — gates turn green when you may pass<br />
+    <b>Alt+F2</b> executive console (CEO / Admin) · <b>1–5</b> review role switch (staff only) — gates turn green when you may pass<br />
     <b>Floor list</b> (top right) = review teleport to any floor · <b>F3</b> frame-rate overlay · <b>G</b> Low / High graphics · <b>H</b> this help<br />
     <b>E</b> at a roulette table (VT-01) = Rotational Variance Instrument · <b>M</b> = Markets terminal (the firm's live AI book, your portfolio) · <b>L</b> = Probability Research Institute (lottery models) · <b>Esc</b> closes a terminal<br /><br />
-    Live: real delayed US stock prices, real official Thai lottery results, AI desks trading and researching 24/7 with notional capital. Your balance is kept by the server (guest session; sign-in comes later).
+    Live: real delayed US stock prices, real official Thai lottery results, AI desks trading and researching 24/7 with notional capital. Your balance is kept by the server. Sign in with a name and password to keep it; other guests appear live around you.
     <br /><br /><i>Press H to close.</i>
   </div>
   <div id="fade"></div>

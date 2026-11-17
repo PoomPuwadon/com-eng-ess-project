@@ -69,6 +69,7 @@ export function buildWallet({ onOpen }) {
   w.innerHTML = `<span class="dot" title="Server connection"></span>
     <div class="who"><small>Liquidity</small><span class="bal">—</span></div>
     <div class="who"><small>Associate</small><span class="nm">connecting…</span></div>
+    <button data-app="signin" title="Sign in with your name and password">Sign in</button>
     <button data-app="roulette" title="Rotational Variance Instrument">Rotational</button>
     <button data-app="markets" title="Markets terminal — firm book and your portfolio">Markets<kbd>M</kbd></button>
     <button data-app="research" title="Probability Research Institute — lottery research">Research<kbd>L</kbd></button>`;
