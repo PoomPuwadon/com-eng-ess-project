@@ -147,6 +147,44 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     if (c.ready) { broadcast({ t: 'left', id: c.id }); dirtyMeta = true; }
   }
 
+  // ---------------------------------------------------------------- treasury: a CEO adds, removes or sets any guest's money
+  // Ledger recipes (money-ledger skill): add = MINT -> PLAYER (ADMIN_TOPUP); remove = PLAYER -> MINT
+  // (ADMIN_DEBIT, never below zero; open positions held in escrow are untouched); set = whichever of the
+  // two reaches the target. The actor on every posting is the CEO, so the ledger is the audit trail.
+  const MAX_ADJUST = 1_000_000_000_000; // minor units (¤10,000,000,000.00)
+  const money2 = (minor) => `¤${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  function balances(by) {
+    needCeo(by);
+    return list().map((o) => ({ id: o.id, name: o.name, balance: ledger.balance(`PLAYER:${o.playerId}`) }));
+  }
+  function adjustMoney(by, { target, op, amount } = {}) {
+    needCeo(by);
+    if (!['add', 'remove', 'set'].includes(op)) throw err(400, 'Choose add, remove or set.');
+    const minor = Math.round(num(amount, NaN) * 100);
+    if (!Number.isSafeInteger(minor) || minor < 0 || minor > MAX_ADJUST) throw err(400, 'Enter an amount between 0 and 10,000,000,000.');
+    if (op !== 'set' && minor === 0) throw err(400, 'Enter an amount above zero.');
+    let who;
+    if (target === 'all') who = [...new Map(list().map((o) => [o.playerId, o])).values()]; // one entry per account, even with two tabs open
+    else { const o = conns.get(target); if (!o || !o.ready) throw err(404, 'That guest is no longer connected.'); who = [o]; }
+    const verb = { add: 'added', remove: 'removed', set: 'set' }[op];
+    let changed = 0, net = 0;
+    for (const o of who) {
+      const acct = `PLAYER:${o.playerId}`, bal = ledger.balance(acct);
+      const delta = op === 'add' ? minor : op === 'remove' ? -Math.min(minor, bal) : minor - bal;
+      if (delta === 0) continue;
+      ledger.post({
+        actor: `ceo:${by.name}`, reason: delta > 0 ? 'ADMIN_TOPUP' : 'ADMIN_DEBIT', ref: o.playerId,
+        memo: `${op} ${money2(minor)} by ${by.name}`,
+        transfers: [delta > 0 ? { from: 'SYSTEM:MINT', to: acct, amount: delta } : { from: acct, to: 'SYSTEM:MINT', amount: -delta }],
+      });
+      changed++; net += delta;
+      gameCtx.balance(o.playerId);
+      if (o.id !== by.id) gameCtx.notify(o.playerId, `The Chief Executive ${verb} your liquidity: ${delta > 0 ? '+' : '−'}${money2(Math.abs(delta))} · balance ${money2(ledger.balance(acct))}`);
+    }
+    log.log?.(`[hub] ${by.name} (ceo) money ${op} ${money2(minor)} -> ${target === 'all' ? 'all guests' : who[0].name}: ${changed} changed, net ${money2(net)}`);
+    return { changed, net, balances: balances(by) };
+  }
+
   function kick(by, target) {
     needStaff(by);
     const c = conns.get(target);
@@ -199,6 +237,8 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     elevate: (c, m) => elevate(c, m.password, m.role),
     role: (c, m) => setRole(c, m.role),
     kick: (c, m) => kick(c, m.target),
+    balances: (c) => balances(c),
+    money: (c, m) => adjustMoney(c, m),
     tour: (c, m) => setTour(c, Boolean(m.on)),
     teleportAll: (c) => teleportAll(c),
     gather: (c) => gather(c),

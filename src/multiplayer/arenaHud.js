@@ -6,7 +6,8 @@
 //  · Spectators: a positions panel with live pricing on every competitor.
 import * as THREE from 'three';
 import { Horse } from '../characters/kit.js';
-import { setBalance, fmt, esc } from '../net/api.js';
+import { setBalance, fmt, esc, onMe } from '../net/api.js';
+import { BoutSpotlights } from './spotlights.js';
 
 // VT-04 dirt oval (floors/equineCentre.js TRK): straights X 128..170, bends radius 30 about (128|170, 0)
 const TRK = { x0: 128, x1: 170, rc: 30 }; TRK.len = 2 * (TRK.x1 - TRK.x0) + 2 * Math.PI * TRK.rc;
@@ -40,6 +41,7 @@ export class ArenaHud {
     this.raceHud = el('mp-race', '', '<div class="combo">0.0 taps/s</div><div class="meter"><i></i></div><div class="msg">Tap / click as fast as you can: faster clicking = a faster horse</div>');
     this.lines = el('mp-speedlines');
     this.book = el('mp-book');
+    this.spots = new BoutSpotlights(ctx.scene);
     const { rt, player } = ctx;
     const punch = () => this.punch();
     this.punchBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); punch(); });
@@ -52,7 +54,7 @@ export class ArenaHud {
     addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && this.amRacer() && !/INPUT|TEXTAREA/.test(e.target.tagName)) { e.preventDefault(); this.tap(); } });
     this.book.addEventListener('click', (e) => this.bookClick(e));
     this.book.addEventListener('keydown', (e) => e.stopPropagation());
-    this.book.addEventListener('change', (e) => { if (e.target.dataset.amt !== undefined) this.stake = Math.max(100, Math.round(Number(e.target.value) * 100) || 100); });
+    onMe((me) => { this.balance = me.balance; if (this.book.classList.contains('on')) this.paintBookValues(); }); // the slider tops out at your balance
     rt.on('meta', (m) => this.onMeta(m));
     rt.on('snap', (s) => { if (s.race) for (const [conn, d, tps, v] of s.race) this.raceD.set(conn, { d, tps, v, at: performance.now() }); });
     rt.on('hit', (m) => {
@@ -94,30 +96,60 @@ export class ArenaHud {
   tap() { if (!this.race || this.race.phase !== 'running') return; this.tapBuf++; this.localTaps.push(performance.now()); }
 
   // ---------------------------------------------------------------- positions panel (spectators)
+  // ---- positions panel (spectators): one amount slider + one tap per competitor (user, 2026-11-18)
+  // Built once per session line-up; prices, conditions and "win ¤X" update in place so the slider is
+  // never reset mid-drag. Limits match the server book: ¤1 .. ¤10,000, never more than your balance.
   paintBook() {
     const { rt } = this.ctx;
     const g = this.box || (this.race && this.race.open ? this.race : null);
     const mine = g && ((g.boxers || g.racers).some((x) => x.conn === rt.id));
-    if (!g || mine) { this.book.classList.remove('on'); return; }
+    if (!g || mine) { this.book.classList.remove('on'); this.bookSig = null; return; }
     const list = g.boxers || g.racers, kind = g.boxers ? 'box' : 'race';
-    const title = g.boxers ? 'Combat Analytics · live pricing' : 'Equine Analytics · live pricing';
-    const rows = list.map((x, i) => {
-      const pr = g.prices[i];
-      return `<div class="ln"><span class="n">${esc(x.name)}${g.boxers ? ` · ${x.hp} HP` : ` · ${Math.round(x.d)} m`}</span><span class="p">${pr ? `${pr.toFixed(2)}x` : '—'}</span><button class="mp-btn sm" data-k="${kind}" data-c="${x.conn}" ${pr ? '' : 'disabled'}>Open</button></div>`;
-    }).join('');
-    const amt = (this.stake / 100).toFixed(0);
-    this.book.innerHTML = `<h5>${title}</h5>${rows}<div class="ln"><span class="n">Allocation ¤</span><input type="number" min="1" max="10000" value="${amt}" data-amt></div>
-      <div class="fine">Pricing locks when you open a position. ${g.boxers ? 'Lower condition pays more on a comeback.' : 'Trailing horses pay more if they come through.'} All balances are notional.</div>`;
+    const sig = `${kind}:${list.map((x) => x.conn).join(',')}`;
+    if (sig !== this.bookSig) {
+      this.bookSig = sig;
+      this.book.innerHTML = `<h5>${g.boxers ? 'Back a competitor' : 'Back a rider'} <span class="live">LIVE</span></h5>
+        <div class="amt"><span class="lbl">Amount</span><b class="val"></b></div>
+        <input type="range" class="slider" data-amt min="1" step="1">
+        <div class="quick">${[['10%', 0.1], ['25%', 0.25], ['50%', 0.5], ['Max', 1]].map(([l, f]) => `<button class="mp-btn sm" data-q="${f}">${l}</button>`).join('')}</div>
+        <div class="picks">${list.map((x, i) => `<button class="pick" data-k="${kind}" data-c="${x.conn}" data-i="${i}"><span class="nm">${esc(x.name)}</span><span class="st"></span><span class="pr"></span><span class="win"></span></button>`).join('')}</div>
+        <div class="fine">Tap a name to open a position at the price shown. ${g.boxers ? 'Lower condition pays more on a comeback.' : 'Riders behind pay more if they come through.'} Notional money only.</div>`;
+      this.book.querySelector('[data-amt]').addEventListener('input', (e) => { this.stake = Number(e.target.value) * 100; this.paintBookValues(); });
+    }
+    this.bookG = g;
+    this.paintBookValues();
     this.book.classList.add('on');
   }
+  paintBookValues() {
+    const g = this.bookG; if (!g) return;
+    const list = g.boxers || g.racers;
+    const maxU = Math.max(1, Math.min(10_000, Math.floor((this.balance ?? 1_000_000) / 100)));
+    const slider = this.book.querySelector('[data-amt]');
+    if (slider && Number(slider.max) !== maxU) slider.max = maxU;
+    const amtU = Math.max(1, Math.min(maxU, Math.round(this.stake / 100)));
+    if (slider && document.activeElement !== slider) slider.value = amtU;
+    this.book.querySelector('.val').textContent = `¤${amtU.toLocaleString('en-US')}`;
+    this.book.querySelectorAll('.pick').forEach((b) => {
+      const i = Number(b.dataset.i), x = list[i], pr = g.prices[i];
+      b.disabled = !pr;
+      b.querySelector('.st').textContent = g.boxers ? `${x.hp} HP` : `${Math.round(x.d)} m`;
+      b.querySelector('.pr').textContent = pr ? `${pr.toFixed(2)}x` : 'out';
+      b.querySelector('.win').textContent = pr ? `win ¤${Math.floor(amtU * pr).toLocaleString('en-US')}` : '';
+    });
+  }
   async bookClick(e) {
+    const q = e.target.closest('[data-q]');
+    if (q) { const maxU = Math.max(1, Math.min(10_000, Math.floor((this.balance ?? 0) / 100))); this.stake = Math.max(1, Math.floor(maxU * Number(q.dataset.q))) * 100; this.paintBookValues(); return; }
     const b = e.target.closest('button[data-k]');
-    if (!b) return;
-    const inp = this.book.querySelector('[data-amt]'); if (inp) this.stake = Math.max(100, Math.round(Number(inp.value) * 100) || 100);
+    if (!b || b.disabled) return;
+    const amtU = Math.max(1, Number(this.book.querySelector('[data-amt]')?.value) || 1);
+    b.disabled = true;
     try {
-      const out = await this.ctx.rt.ask(b.dataset.k === 'box' ? 'boxStake' : 'raceStake', { [b.dataset.k === 'box' ? 'boxer' : 'racer']: b.dataset.c, amount: this.stake });
+      const out = await this.ctx.rt.ask(b.dataset.k === 'box' ? 'boxStake' : 'raceStake', { [b.dataset.k === 'box' ? 'boxer' : 'racer']: b.dataset.c, amount: amtU * 100 });
       this.ctx.hud.toast(`Position opened: ${fmt(out.stake)} on ${out.label} at ${out.price.toFixed(2)}x`, 2.5);
+      b.classList.add('done'); setTimeout(() => b.classList.remove('done'), 900);
     } catch (err) { this.ctx.hud.toast(err.message, 2.5); }
+    b.disabled = false; this.paintBookValues();
   }
 
   // ---------------------------------------------------------------- horses
@@ -215,6 +247,9 @@ export class ArenaHud {
     }
     // ---- boxing (every CEO highlight hides during a round, your own CEO plate included)
     if (player.avatar?.tag) player.avatar.tag.visible = !this.boxingLive;
+    // a spotlight on every boxer, following them (yourself included)
+    const spotTargets = (this.box ? this.box.boxers : []).map((b) => (b.conn === rt.id ? player.pos : this.ctx.remotes.get(b.conn)?.pos)).filter(Boolean);
+    this.spots.update(dt, player.floor?.id === 'VT-03', spotTargets);
     const boxer = this.box && this.box.boxers.find((b) => b.conn === rt.id);
     this.selfHp.classList.toggle('on', Boolean(boxer));
     this.punchBtn.classList.toggle('on', Boolean(boxer && boxer.hp > 0 && this.ctx.isMobile()));
@@ -229,7 +264,7 @@ export class ArenaHud {
       this.shake *= Math.exp(-dt * 6);
     }
     this.bookAcc = (this.bookAcc || 0) + dt;
-    if (this.race && this.bookAcc > 0.5 && !this.book.contains(document.activeElement)) { this.bookAcc = 0; this.paintBook(); } // live prices ~2 Hz
+    if ((this.race || this.box) && this.bookAcc > 0.5) { this.bookAcc = 0; this.paintBook(); } // live prices ~2 Hz (updated in place: the slider keeps its value)
     return overrides;
   }
 }

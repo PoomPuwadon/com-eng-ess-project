@@ -248,3 +248,37 @@ test('race: randomise prefers non-boxers; click speed drives the horse; the lead
   assert.equal(app.ledger.balance(`PLAYER:${fan.player.id}`), 995_000, 'backing the trailing horse was a strategic contribution');
   assert.ok(app.ledger.reconcile().ok);
 });
+
+// ---------------------------------------------------------------- treasury (CEO money controls)
+test('hub: a CEO adds, removes and sets any guest\'s money through the ledger; nobody else can', () => {
+  const app = mkApp();
+  const ceo = client(app, 'Boss'), adm = client(app, 'Staffer'), g1 = client(app, 'Guest1'), g2 = client(app, 'Guest2');
+  const bal = (x) => app.ledger.balance(`PLAYER:${x.player.id}`);
+  assert.equal(ceo.ask({ t: 'elevate', password: 'sesame', role: 'ceo' }).ok, true);
+  assert.equal(adm.ask({ t: 'elevate', password: 'sesame', role: 'admin' }).ok, true);
+  assert.equal(g1.ask({ t: 'money', target: g2.c.id, op: 'add', amount: 50 }).ok, false, 'guests cannot');
+  assert.equal(adm.ask({ t: 'money', target: g2.c.id, op: 'add', amount: 50 }).ok, false, 'admins cannot (CEO only)');
+  assert.equal(adm.ask({ t: 'balances' }).ok, false);
+
+  assert.equal(ceo.ask({ t: 'money', target: g1.c.id, op: 'add', amount: 250.5 }).ok, true);
+  assert.equal(bal(g1), 1_000_000 + 25_050);
+  assert.match(g1.last('toast').text, /added your liquidity: \+¤250\.50/);
+  assert.equal(g1.last('balance').balance, 1_025_050, 'the guest\'s wallet updates live');
+
+  ceo.ask({ t: 'money', target: g1.c.id, op: 'remove', amount: 99_999_999 });
+  assert.equal(bal(g1), 0, 'remove never takes a balance below zero');
+  ceo.ask({ t: 'money', target: g2.c.id, op: 'set', amount: 42 });
+  assert.equal(bal(g2), 4_200);
+
+  const all = ceo.ask({ t: 'money', target: 'all', op: 'set', amount: 1000 });
+  assert.equal(all.ok, true);
+  for (const x of [ceo, adm, g1, g2]) assert.equal(bal(x), 100_000, 'set applies to every connected guest');
+  assert.equal(all.data.balances.length, 4);
+  ceo.ask({ t: 'money', target: 'all', op: 'add', amount: 1 });
+  assert.equal(bal(g2), 100_100);
+
+  for (const bad of [{ op: 'add', amount: 0 }, { op: 'add', amount: -5 }, { op: 'add', amount: 'lots' }, { op: 'steal', amount: 5 }, { op: 'set', amount: 1e12 }])
+    assert.equal(ceo.ask({ t: 'money', target: g1.c.id, ...bad }).ok, false, JSON.stringify(bad));
+  assert.equal(ceo.ask({ t: 'money', target: 'nobody', op: 'add', amount: 5 }).ok, false);
+  assert.ok(app.ledger.reconcile().ok, 'the ledger still reconciles');
+});

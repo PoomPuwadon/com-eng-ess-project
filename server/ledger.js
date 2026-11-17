@@ -8,7 +8,8 @@ export const EXT_LOTTERY = 'EXTERNAL:LOTTERY';
 export const DEPT = { trading: 'DEPT:trading_floor', thai: 'DEPT:thai_markets', sports: 'DEPT:sports_desk' };
 export const player = (id) => `PLAYER:${id}`;
 
-const MINT_REASONS = new Set(['STARTING_BALANCE', 'ADMIN_TOPUP', 'RESET', 'TREASURY_GENESIS']);
+// ADMIN_DEBIT: a CEO removes notional money from a player (PLAYER -> MINT, never below zero)
+const MINT_REASONS = new Set(['STARTING_BALANCE', 'ADMIN_TOPUP', 'ADMIN_DEBIT', 'RESET', 'TREASURY_GENESIS']);
 const mayGoNegative = (acct) => acct === MINT || acct.startsWith('EXTERNAL:');
 const kindOf = (acct) => acct.split(':')[0];
 

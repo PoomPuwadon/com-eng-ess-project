@@ -17,6 +17,14 @@
 .mp-modal .err { color: #ff8a95; font-size: 12px; min-height: 16px; margin-top: 8px; }
 .mp-modal .seg { display: flex; gap: 6px; }
 .mp-modal .seg button.on { background: #12ff6a22; border-color: #12ff6a; color: #b9ffd4; }
+#mp-console header { cursor: move; user-select: none; touch-action: none; }
+#mp-console header button { cursor: pointer; }
+#mp-console.dragging { opacity: .92; box-shadow: 0 22px 60px rgba(0,0,0,.7); }
+#mp-console table.money input.amt { width: 92px; box-sizing: border-box; padding: 3px 6px; border-radius: 6px; border: 1px solid #3a4152; background: #171b25; color: #fff; font: 12px system-ui; }
+#mp-console table.money .mbtns { white-space: nowrap; }
+#mp-console table.money .mbtns .mp-btn { margin-left: 3px; }
+.mp-modal .mp-tabs { margin: 10px 0 8px; }
+.mp-modal .mp-tabs button.on { background: #d6b25e; border-color: #d6b25e; color: #15110a; }
 .mp-modal .fine { color: #8a8172; font-size: 11px; margin-top: 12px; }
 
 #mp-console { position: fixed; right: 12px; top: 12px; z-index: 45; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 110px); display: none; flex-direction: column;
@@ -69,11 +77,25 @@
 @keyframes mpPulse { from { transform: scale(1); } to { transform: scale(1.18); } }
 #mp-speedlines { position: fixed; inset: 0; z-index: 34; pointer-events: none; opacity: 0; background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,.0) 0deg 4deg, rgba(255,255,255,.22) 4deg 5deg);
   -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 32%, #000 70%); mask-image: radial-gradient(circle at 50% 50%, transparent 32%, #000 70%); transition: opacity .15s; }
-#mp-book { position: fixed; left: 12px; top: 50%; transform: translateY(-50%); z-index: 36; display: none; width: 250px; background: rgba(11,13,18,.92); border: 1px solid rgba(214,178,94,.6); border-radius: 10px; padding: 10px; color: #f3ecdf; font: 12px system-ui; }
+#mp-book { position: fixed; left: 12px; top: 50%; transform: translateY(-50%); z-index: 36; display: none; width: 270px; background: rgba(11,13,18,.94); border: 1px solid rgba(214,178,94,.6); border-radius: 12px; padding: 12px; color: #f3ecdf; font: 12px system-ui; box-shadow: 0 12px 36px rgba(0,0,0,.5); }
 #mp-book.on { display: block; }
-#mp-book h5 { margin: 0 0 6px; font-size: 12px; color: #f0d18a; text-transform: uppercase; letter-spacing: .06em; }
-#mp-book .ln { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid #1d2230; }
-#mp-book .ln .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#mp-book .ln .p { font: 700 13px ui-monospace, monospace; color: #3ddc84; min-width: 48px; text-align: right; }
-#mp-book input { width: 70px; background: #171b25; color: #fff; border: 1px solid #3a4152; border-radius: 5px; padding: 3px 5px; }
-#mp-book .fine { color: #8a8172; font-size: 10px; margin-top: 6px; }
+#mp-book h5 { margin: 0 0 8px; font-size: 13px; color: #f0d18a; text-transform: uppercase; letter-spacing: .06em; display: flex; align-items: center; gap: 8px; }
+#mp-book h5 .live { margin-left: auto; font-size: 10px; color: #ff6b6b; letter-spacing: .1em; animation: mpLive 1.2s ease-in-out infinite; }
+@keyframes mpLive { 50% { opacity: .35; } }
+#mp-book .amt { display: flex; align-items: baseline; justify-content: space-between; }
+#mp-book .amt .lbl { color: #8a8172; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; }
+#mp-book .amt .val { font: 800 22px ui-monospace, monospace; color: #f0d18a; }
+#mp-book .slider { width: 100%; margin: 6px 0 4px; accent-color: #d6b25e; height: 22px; cursor: pointer; }
+#mp-book .quick { display: flex; gap: 4px; margin-bottom: 10px; }
+#mp-book .quick .mp-btn { flex: 1; }
+#mp-book .picks { display: flex; flex-direction: column; gap: 6px; }
+#mp-book .pick { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "nm pr" "st win"; gap: 1px 8px; text-align: left; padding: 8px 10px; border-radius: 9px; border: 1px solid #3a4152; background: #1a1f2b; color: #f3ecdf; cursor: pointer; font: 12px system-ui; transition: border-color .15s, background .15s, transform .08s; }
+#mp-book .pick:hover:not(:disabled) { border-color: #d6b25e; background: #232a39; }
+#mp-book .pick:active:not(:disabled) { transform: scale(.98); }
+#mp-book .pick:disabled { opacity: .4; cursor: not-allowed; }
+#mp-book .pick.done { border-color: #3ddc84; background: #13301f; }
+#mp-book .pick .nm { grid-area: nm; font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mp-book .pick .pr { grid-area: pr; font: 800 15px ui-monospace, monospace; color: #3ddc84; text-align: right; }
+#mp-book .pick .st { grid-area: st; color: #8a8172; font-size: 11px; }
+#mp-book .pick .win { grid-area: win; color: #b9ffd4; font-size: 11px; text-align: right; }
+#mp-book .fine { color: #8a8172; font-size: 10px; margin-top: 8px; }

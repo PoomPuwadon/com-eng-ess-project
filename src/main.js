@@ -26,7 +26,7 @@ import { avatarFor } from './characters/roster.js';
 import { CeoPresence } from './characters/ceoMarker.js';
 import { Crowd } from './characters/crowd.js';
 import { Realtime } from './net/realtime.js';
-import { savedAccount, signIn, setBalance } from './net/api.js';
+import { savedAccount, signIn, setBalance, onMe } from './net/api.js';
 import { RemotePlayers } from './multiplayer/remotes.js';
 import { ExecConsole, showSignIn } from './multiplayer/console.js';
 import { ArenaHud } from './multiplayer/arenaHud.js';
@@ -155,10 +155,16 @@ function tick(dt, movePlayer = true) {
 }
 
 // ---------------------------------------------------------------- actions
+let ownName = null; // your account (or guest) name, on the name plate above your own avatar
+onMe((m) => {
+  if (!m?.name || m.name === ownName) return;
+  ownName = m.name;
+  player.setAvatar(scene, avatarFor(player.role, ownName));
+});
 function setRole(role) {
   if (!ROLES.includes(role)) return false;
   player.role = role;
-  player.setAvatar(scene, avatarFor(role));
+  player.setAvatar(scene, avatarFor(role, ownName));
   ceoPresence.setPlayerRole(role);
   floors.applyRole(role);
   hud.setRole(role);

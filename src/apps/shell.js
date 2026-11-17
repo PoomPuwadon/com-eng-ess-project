@@ -1,7 +1,7 @@
 // App shell: one full-screen overlay hosting the in-world applications, and the wallet bar.
 // While an app is open the game ignores movement keys and the mouse is released.
 import './apps.css';
-import { onMe, fmt, online, startSession, esc } from '../net/api.js';
+import { onMe, fmt, online, startSession, esc, savedAccount } from '../net/api.js';
 
 const APPS = new Map(); // id -> { title, sub, mount(body, ctx) -> { unmount?, tabs? } }
 let current = null;
@@ -83,6 +83,10 @@ export function buildWallet({ onOpen }) {
     last = me.balance;
     w.querySelector('.nm').textContent = me.name;
     w.querySelector('.dot').classList.add('on');
+    // guests see "Sign in / up"; account holders can switch accounts
+    const acct = savedAccount() === me.name, sb = w.querySelector('[data-app="signin"]');
+    sb.textContent = acct ? 'Switch' : 'Sign in / up';
+    sb.title = acct ? `Signed in as ${me.name}. Sign in to another account, or open a new one.` : 'Sign in, or sign up for an account';
   });
   startSession().catch(() => { w.querySelector('.nm').textContent = 'server offline — retrying'; });
   void online;
