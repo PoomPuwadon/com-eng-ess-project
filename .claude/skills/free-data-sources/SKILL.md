@@ -21,7 +21,11 @@ and terms page, update this file with the date checked, and flag any change to t
 
 | Provider | Last verified | Re-verify |
 | --- | --- | --- |
-| all | not yet (written 2026-11-05 from prior knowledge) | before first use |
+| Yahoo Finance public chart endpoint (`query1.finance.yahoo.com/v8/finance/chart/<SYM>`) | 2026-11-15: keyless, returns quote meta + 5-min/daily bars. Unofficial (no published terms for API use) — personal/non-commercial only; the `v7/quote` endpoint now returns 401 | in use as the keyless primary until a Finnhub key is added |
+| Stooq CSV | 2026-11-15: now behind a JavaScript proof-of-work page — unusable server-side | dropped |
+| Finnhub | not verified (needs the user's free key in `.env`) | before enabling |
+| GLO official API (`www.glo.or.th/api/lottery/getLatestLottery`, `getLotteryAward {date,month,year}`) | 2026-11-15: public JSON, full prize sets, history back to 2015 | in use |
+| football / odds providers | not yet | before Phase 4 football |
 
 ## 2. Architecture rules (all sources)
 

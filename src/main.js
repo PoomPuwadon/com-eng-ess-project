@@ -13,6 +13,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
 import { QUALITY, saveQuality, mountQualityButton } from './quality.js';
+import { openApp, appOpen, buildWallet } from './apps/shell.js';
+import './apps/markets.js';
+import './apps/research.js';
+import { hotspotAt, nearestTable } from './interact.js';
+import { createRouletteSeat } from './apps/rouletteSeat.js';
+import { startLiveData } from './liveData.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -120,6 +126,7 @@ const allColliders = () => floors.colliders.concat(elev.colliders(player.pos.y))
 
 // ---------------------------------------------------------------- world tick (shared by frames and scripted sims)
 function tick(dt, movePlayer = true) {
+  if (appOpen()) player.keys.clear(); // an open application owns the keyboard
   if (movePlayer) player.update(dt, allColliders(), floors.shapes);
   if (player.floor && player.floor.id !== floors.current) floors.ensureAround(player.floor.id);
   floors.update(dt, performance.now() / 1000, player.pos);
@@ -187,6 +194,23 @@ const hud = new HUD({
   onRole: setRole,
   onRide: (bank, stop, car) => requestLift(bank, stop, car),
 });
+
+// ---------------------------------------------------------------- roulette: sit at a real 3D table
+const leisureCtx = () => floors.loaded.get('VT-01');
+const rouletteSeat = createRouletteSeat({ camera, canvas, player, getLeisureCtx: leisureCtx, hud });
+function sitAtTable(table) {
+  if (rouletteSeat.active()) return true;
+  if (!table) {
+    if (player.floor?.id !== 'VT-01') teleport('VT-01', 'zone_rotational');
+    table = nearestTable(leisureCtx(), player.pos.x, player.pos.z)?.table;
+  }
+  return table ? rouletteSeat.sit(table) : false;
+}
+function openFromHud(id) {
+  if (id === 'roulette') return sitAtTable(null);
+  if (rouletteSeat.active()) rouletteSeat.stand();
+  openApp(id);
+}
 
 // ---------------------------------------------------------------- scripted walking (verification)
 // Uses the real movement, collision and lifts. In 'sim' mode the whole world is stepped at a
@@ -376,6 +400,7 @@ window.__debug.bench = bench;
 // ---------------------------------------------------------------- Perf tests panel (dev): F4 or the button
 const perfPanel = (() => {
   const btn = document.createElement('button');
+  btn.className = 'perf-btn';
   btn.textContent = 'Perf tests (F4)';
   btn.style.cssText = 'position:fixed;left:16px;top:104px;z-index:30;font:600 12px system-ui;padding:5px 10px;border-radius:6px;border:1px solid #b8924a;background:#14110dcc;color:#e3c27a;cursor:pointer';
   const box = document.createElement('div');
@@ -425,6 +450,9 @@ function adaptDpr(dt, fps) {
 }
 
 addEventListener('keydown', (e) => {
+  if (appOpen() || e.target.closest?.('input, textarea, select')) return; // applications own the keyboard
+  if (e.code === 'KeyM' && !hud.elevatorOpen) { openApp('markets'); return; }
+  if (e.code === 'KeyL' && !hud.elevatorOpen) { openApp('research'); return; }
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
@@ -432,6 +460,7 @@ addEventListener('keydown', (e) => {
     const { car, zone } = uiState();
     if (car) { document.exitPointerLock?.(); hud.openElevator(car.bank, car.at || player.floor.id, player.role, { car }); }
     else if (zone) { document.exitPointerLock?.(); hud.openElevator(zone.bank, player.floor.id, player.role); }
+    else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : openApp(h.app); }
   }
   if (e.code === 'F3') { e.preventDefault(); document.getElementById('perf').classList.toggle('hidden'); }
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
@@ -442,6 +471,10 @@ addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- start
 floors.toast = (text, secs = 2.5) => hud.toast(text, secs); // floor modules can show refusals (e.g. the Treasury Reserve layers)
 const params = new URLSearchParams(location.search);
+buildWallet({ onOpen: openFromHud });
+startLiveData();
+window.__debug.openApp = (id, opts) => openFromHud(id, opts);
+window.__debug.roulette = { sit: () => sitAtTable(null), stand: () => rouletteSeat.stand(), spin: () => rouletteSeat.spin(), view: (v) => rouletteSeat.setView(v), state: () => rouletteSeat.state() };
 setRole(params.get('role') || 'visitor');
 if (params.get('floor')) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);
 else teleport('PLAZA'); // the journey starts outside
@@ -457,6 +490,7 @@ function frame(now) {
   last = now;
   const t0 = performance.now();
   if (!simWalking) tick(dt);
+  rouletteSeat.update(dt);
   updateScreens(dt);
   updateTicker(dt);
   renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);
@@ -469,7 +503,8 @@ function frame(now) {
     const b = BANKS[ui.zone.bank];
     const a = assigned && assigned.car.bank === ui.zone.bank && assigned.from === player.floor.id ? ` · your car: ${assigned.car.label} (${assigned.car.at === assigned.from ? 'doors open' : 'arriving'})` : '';
     hud.prompt(`E — ${b.name} (${b.label})${a}`);
-  } else hud.prompt('');
+  } else if (!appOpen() && !rouletteSeat.active()) { const h = hotspotAt(player, leisureCtx()); hud.prompt(h ? h.label : ''); }
+  else hud.prompt('');
   const stats = perf.tick(now, rawMs, performance.now() - t0);
   adaptDpr(dt, stats.fps);
   hudAcc += dt;

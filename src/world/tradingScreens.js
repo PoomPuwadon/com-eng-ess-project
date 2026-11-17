@@ -4,8 +4,9 @@ import { chunked } from './geom.js';
 // Phase 1 trading-floor screens: ONE sharp atlas (2048 x 1024, 8 x 6 cells of 256 x 170) of blue
 // market graphics in the reference style — charts, bars, candles, single quotes, heat-maps, order
 // books. Every cell is clipped to its own rectangle and every text is measured to fit, so nothing
-// overlaps or bleeds into a neighbour. Drawn once (static): no per-frame uploads, no stutter.
-// Simulated figures until Phase 3 brings real delayed prices.
+// overlaps or bleeds into a neighbour. Redrawn only when new data arrives: no per-frame uploads.
+// Real delayed prices and the firm's real book once the server feed arrives (setTradingData);
+// seeded placeholder graphics until then.
 
 const COLS = 8, ROWS = 6, CW = 256, CHH = 170, W = COLS * CW, H = 1024;
 export const TCELLS = COLS * ROWS;
@@ -81,14 +82,110 @@ function drawCell(g, k, x, y) {
   g.restore();
 }
 
+// ---------------------------------------------------------------- live data (Phase 3: real delayed prices)
+// live = { quotes: [{symbol, price, change, ...}], wall: { SYM: { spark: [close], candles: [[o,h,l,c]] } }, book: { positions, nav } }
+let live = null;
+function bgCell(g, x, y) {
+  const bg = g.createLinearGradient(x, y, x, y + CHH);
+  bg.addColorStop(0, '#0d4a9e'); bg.addColorStop(1, '#082e6b');
+  g.fillStyle = bg; g.fillRect(x, y, CW, CHH);
+  g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(x + 10, y + (CHH * i) / 4); g.lineTo(x + CW - 10, y + (CHH * i) / 4); g.stroke(); }
+}
+function spark(g, pts, ix, iy, iw, ih, color, fill) {
+  if (!pts || pts.length < 2) return;
+  const mn = Math.min(...pts), mx = Math.max(...pts) || 1, rng = mx - mn || mx * 0.01;
+  const P = pts.map((v, i) => [ix + (i / (pts.length - 1)) * iw, iy + ih - ((v - mn) / rng) * ih]);
+  g.beginPath(); P.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py)));
+  if (fill) { g.save(); g.lineTo(ix + iw, iy + ih); g.lineTo(ix, iy + ih); g.closePath(); g.fillStyle = fill; g.fill(); g.restore(); g.beginPath(); P.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); }
+  g.strokeStyle = color; g.lineWidth = 3; g.stroke();
+}
+function drawLiveCell(g, k, x, y) {
+  const Q = live.quotes, n = Q.length;
+  if (!n) return false;
+  g.save(); g.beginPath(); g.rect(x, y, CW, CHH); g.clip();
+  bgCell(g, x, y);
+  const pad = 16, ix = x + pad, iy = y + 40, iw = CW - pad * 2, ih = CHH - 56;
+  g.textBaseline = 'middle'; g.textAlign = 'left';
+  const q = Q[k % n], w = live.wall?.[q.symbol], up = q.change >= 0, col = up ? '#5df2a0' : '#ff6b7d';
+  const head = (label) => { g.fillStyle = 'rgba(255,255,255,0.8)'; fitText(g, label, ix, y + 18, iw * 0.62, 18, '600'); g.textAlign = 'right'; g.fillStyle = col; fitText(g, `${up ? '▲' : '▼'}${Math.abs(q.change * 100).toFixed(2)}%`, x + CW - pad, y + 18, iw * 0.36, 18, '700', 'monospace'); g.textAlign = 'left'; };
+  if (k < 12) { // intraday line
+    head(`${q.symbol} ${q.price.toFixed(2)}`);
+    spark(g, w?.spark, ix, iy, iw, ih, '#ffffff', 'rgba(120,200,255,0.28)');
+  } else if (k < 20) { // day movers: 6 bars around a zero line
+    g.fillStyle = 'rgba(255,255,255,0.8)'; fitText(g, 'DAY MOVERS', ix, y + 18, iw, 18, '600');
+    const set = [...Q].sort((a, b) => b.change - a.change);
+    const pickSet = (k - 12) % 2 ? set.slice(-6).reverse() : set.slice(0, 6);
+    const mx = Math.max(...pickSet.map((s) => Math.abs(s.change)), 0.005), mid = iy + ih / 2, bw = iw / 6;
+    pickSet.forEach((s, i) => {
+      const h = (Math.abs(s.change) / mx) * (ih / 2 - 4);
+      g.fillStyle = s.change >= 0 ? '#5df2a0' : '#ff6b7d'; g.fillRect(ix + i * bw + 4, s.change >= 0 ? mid - h : mid, bw - 8, h);
+      g.fillStyle = '#fff'; g.textAlign = 'center'; fitText(g, s.symbol, ix + i * bw + bw / 2, s.change >= 0 ? mid + 12 : mid - 12, bw - 2, 13, '700'); g.textAlign = 'left';
+    });
+  } else if (k < 28) { // daily candles
+    head(`${q.symbol} · DAILY`);
+    const c = w?.candles || [];
+    if (c.length) {
+      const lo = Math.min(...c.map((b) => b[2])), hi = Math.max(...c.map((b) => b[1])), r = hi - lo || 1, Yp = (v) => iy + ih - ((v - lo) / r) * ih;
+      c.forEach(([o, h, l, cl], i) => {
+        const cx = ix + (i + 0.5) * (iw / c.length);
+        g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, Yp(h)); g.lineTo(cx, Yp(l)); g.stroke();
+        g.fillStyle = cl >= o ? '#5df2a0' : '#ff6b7d'; g.fillRect(cx - 6, Yp(Math.max(o, cl)), 12, Math.max(3, Math.abs(Yp(o) - Yp(cl))));
+      });
+    }
+  } else if (k < 36) { // single quote
+    g.fillStyle = '#ffffff'; fitText(g, q.symbol, ix, y + 34, iw * 0.5, 40, '800');
+    g.textAlign = 'right'; fitText(g, q.price.toFixed(2), x + CW - pad, y + 34, iw * 0.5, 34, '700', 'monospace');
+    g.fillStyle = col; fitText(g, `${up ? '▲' : '▼'} ${Math.abs(q.change * 100).toFixed(2)}%`, x + CW - pad, y + 74, iw * 0.6, 26, '700', 'monospace'); g.textAlign = 'left';
+    spark(g, w?.spark, ix, y + CHH - 74, iw, 60, col);
+  } else if (k < 42) { // heat-map of the whole universe
+    g.fillStyle = 'rgba(255,255,255,0.8)'; fitText(g, 'US EQUITIES · TODAY', ix, y + 18, iw, 18, '600');
+    const cs = 6, rs = 5, cw = iw / cs, rh = (CHH - 40) / rs;
+    Q.slice(0, cs * rs).forEach((s, i) => {
+      const t = Math.max(-1, Math.min(1, s.change / 0.03));
+      g.fillStyle = t >= 0 ? `rgba(93,242,160,${0.25 + t * 0.65})` : `rgba(255,107,125,${0.25 - t * 0.65})`;
+      const cx = ix + (i % cs) * cw, cy = y + 32 + Math.floor(i / cs) * rh;
+      g.fillRect(cx + 1, cy + 1, cw - 2, rh - 2);
+      g.fillStyle = '#fff'; g.textAlign = 'center'; fitText(g, s.symbol, cx + cw / 2, cy + rh / 2, cw - 4, 12, '700'); g.textAlign = 'left';
+    });
+  } else { // the firm's real book
+    const pos = live.book?.positions || [];
+    g.fillStyle = 'rgba(255,255,255,0.8)'; fitText(g, `FIRM BOOK · NAV ${live.book ? Math.round(live.book.nav / 100).toLocaleString() : '—'}`, ix, y + 18, iw, 18, '600');
+    const rows = pos.slice(((k - 42) * 5) % Math.max(pos.length, 1)).concat(pos).slice(0, 5);
+    if (!rows.length) { g.fillStyle = '#fff'; fitText(g, 'ORDERS QUEUED FOR THE OPEN', ix, iy + ih / 2, iw, 18, '700'); }
+    rows.forEach((p, i) => {
+      const yy = iy + 4 + i * (ih / 5);
+      g.fillStyle = '#fff'; fitText(g, `${p.symbol} ${p.qty}`, ix, yy, iw * 0.5, 18, '700', 'monospace');
+      g.textAlign = 'right'; g.fillStyle = p.unrealized >= 0 ? '#8ff5bd' : '#ff9aa6'; fitText(g, `${p.unrealized >= 0 ? '+' : '−'}${Math.abs(Math.round(p.unrealized / 100)).toLocaleString()}`, x + CW - pad, yy, iw * 0.48, 18, '700', 'monospace'); g.textAlign = 'left';
+    });
+  }
+  g.restore();
+  return true;
+}
+
+let atlasCanvas = null;
+function paintAtlas() {
+  const g = atlasCanvas.getContext('2d');
+  g.fillStyle = '#05070b'; g.fillRect(0, 0, W, H);
+  for (let k = 0; k < TCELLS; k++) {
+    const x = (k % COLS) * CW, y = Math.floor(k / COLS) * CHH;
+    if (!(live && drawLiveCell(g, k, x, y))) drawCell(g, k, x, y);
+  }
+}
+/** Feed real data to every trading-floor screen (redrawn at most when data changes, never per frame). */
+export function setTradingData(data) {
+  live = { ...(live || {}), ...data };
+  if (!atlas) return;
+  paintAtlas();
+  atlas.needsUpdate = true;
+}
+
 export function tradingAtlas() {
   if (atlas) return atlas;
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  g.fillStyle = '#05070b'; g.fillRect(0, 0, W, H);
-  for (let k = 0; k < TCELLS; k++) drawCell(g, k, (k % COLS) * CW, Math.floor(k / COLS) * CHH);
-  atlas = new THREE.CanvasTexture(c); atlas.colorSpace = THREE.SRGBColorSpace; atlas.anisotropy = 8;
-  atlas.generateMipmaps = true; atlas.minFilter = THREE.LinearMipmapLinearFilter; // static, so mips are built once
+  atlasCanvas = document.createElement('canvas'); atlasCanvas.width = W; atlasCanvas.height = H;
+  paintAtlas();
+  atlas = new THREE.CanvasTexture(atlasCanvas); atlas.colorSpace = THREE.SRGBColorSpace; atlas.anisotropy = 8;
+  atlas.generateMipmaps = true; atlas.minFilter = THREE.LinearMipmapLinearFilter; // mips rebuilt only when data changes
   return atlas;
 }
 

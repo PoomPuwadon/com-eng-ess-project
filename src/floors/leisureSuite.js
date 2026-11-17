@@ -206,7 +206,7 @@ function roulette(L, ctx, r, wheels, x, z, flip) { // long side faces the player
   const top = new THREE.PlaneGeometry(2.3, 1.3).rotateX(-Math.PI / 2); if (flip) top.rotateY(Math.PI); top.translate(x + 0.35, 0.87, z); L.geo(top, 'lsLayout');
   const wx = x - 1.05; // the wheel at the table's end
   L.cyl(wx, z, 0.62, 0.78, 0.95, 'lsMahogany', { seg: 20 });
-  wheels.push({ x: wx, z, a: r() * 6.28, w: 0.8 + r() * 1.6 });
+  wheels.push({ x: wx, z, a: r() * 6.28, w: 0.8 + r() * 1.6, tx: x, flip });
   L.cyl(wx, z, 0.05, 0.95, 1.18, 'lsGold', { seg: 6 });
   L.person(wx - 0.1, z - s * 1.25, { ...DEALER, yaw: s > 0 ? 0 : Math.PI, skin: pick(SKIN, r() * 9) });
   for (let k = 0; k < 5; k++) {
@@ -478,9 +478,11 @@ export function leisure(ctx) {
   const rotor = new THREE.CylinderGeometry(0.52, 0.52, 0.06, 32);
   const rot = new THREE.InstancedMesh(rotor, M.wheel, wheels.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
-  const placeRotors = () => { wheels.forEach((w, i) => rot.setMatrixAt(i, m4.compose(p.set(w.x, ctx.e + 0.97, w.z), q.setFromAxisAngle(up, w.a), one))); rot.instanceMatrix.needsUpdate = true; };
+  const none = new THREE.Vector3(0, 0, 0); // a table with a live (fully modelled) wheel hides its instanced rotor
+  const placeRotors = () => { wheels.forEach((w, i) => rot.setMatrixAt(i, m4.compose(p.set(w.x, ctx.e + 0.97, w.z), q.setFromAxisAngle(up, w.a), w.hidden ? none : one))); rot.instanceMatrix.needsUpdate = true; };
   placeRotors(); rot.computeBoundingSphere(); ctx.add(rot, rotor);
   ctx.onUpdate((dt) => { if (!ctx.group.visible) return; for (const w of wheels) w.a += dt * w.w; placeRotors(); });
   ctx.leisureStats = { slots: slots.length, roulette: wheels.length, people: L.people.length };
+  ctx.roulette = { wheels }; // read by the seated-table view (src/apps/rouletteSeat.js)
   L.build();
 }

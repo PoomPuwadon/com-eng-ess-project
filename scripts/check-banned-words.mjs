@@ -7,11 +7,13 @@ const BANNED = ['casino', 'gambling', 'gamble', 'gambler', 'bet slip', 'bookie',
 const files = [];
 const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); statSync(p).isDirectory() ? walk(p) : /\.(js|html)$/.test(p) && files.push(p); } };
 walk('src');
+walk('server');
 files.push('index.html');
 
 let bad = 0;
 for (const f of files) {
   const text = readFileSync(f, 'utf8')
+    .split(/\r?\n/).filter((l) => !/BANNED_WORDS|Never use the words/.test(l)).join('\n') // the runtime filter's list / instructions to the LLM
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1')
     .replace(/<!--[\s\S]*?-->/g, '');

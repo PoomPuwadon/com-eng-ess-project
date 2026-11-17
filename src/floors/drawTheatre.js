@@ -5,6 +5,7 @@ import { luxLiftHall, ceiling } from './luxHall.js';
 import { CH } from '../world/screens.js';
 import { QUALITY } from '../quality.js';
 import { deskScreens } from './theatreScreens.js';
+import { LOTTO, thDate, enDate } from '../world/lottoFeed.js';
 
 // ================================================================= PHASE 1 — OT-02 PROBABILITY RESEARCH INSTITUTE
 // Redesign (user, 2026-11-12): the "Monte Carlo Rehearsal Theatre". A bright white/navy research lab built as
@@ -109,7 +110,10 @@ const THAI = '"Leelawadee UI", "Leelawadee", Tahoma, sans-serif';
 // left, the six digits on a yellow band with digit words, the draw date, งวดที่ / ชุดที่, barcode, 80 บาท, the L6
 // mark and the under-20 warning; a teal side strip. The emblem is generic (not the official crest).
 const DIGW = ['ZER', 'ONE', 'TWO', 'THR', 'FOR', 'FIV', 'SIX', 'SEV', 'EGT', 'NIN'];
-function ticket(g, x, y, w, h, num, hue, set = 12) {
+const TH_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+const EN_MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+function ticket(g, x, y, w, h, num, hue, set = 12, dateIso = '2026-12-01') {
+  const [dy, dm, dd] = dateIso.split('-').map(Number);
   const r = rng(Number(num) % 9973 + 7);
   const X = (u) => x + u * w, Y = (v) => y + v * h, fs = (v) => Math.max(6, v * h);
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
@@ -171,8 +175,8 @@ function ticket(g, x, y, w, h, num, hue, set = 12) {
   g.textAlign = 'left';
   // draw date, watermark set number, งวดที่ / ชุดที่, faint serial
   g.fillStyle = 'rgba(80,80,90,0.28)'; g.font = `800 ${fs(0.3)}px Arial`; g.fillText(String(set).padStart(2, '0'), X(0.7), Y(0.52));
-  g.fillStyle = '#2a7fc4'; g.font = `700 ${fs(0.085)}px ${THAI}`; g.fillText('1 ธันวาคม 2569', X(0.62), Y(0.35));
-  g.font = `700 ${fs(0.045)}px Arial`; g.fillText('1 DECEMBER 2026', X(0.665), Y(0.405));
+  g.fillStyle = '#2a7fc4'; g.font = `700 ${fs(0.085)}px ${THAI}`; g.fillText(`${dd} ${TH_MONTHS[dm - 1]} ${dy + 543}`, X(0.62), Y(0.35));
+  g.font = `700 ${fs(0.045)}px Arial`; g.fillText(`${dd} ${EN_MONTHS[dm - 1]} ${dy}`, X(0.665), Y(0.405));
   g.fillStyle = '#222'; g.font = `400 ${fs(0.04)}px ${THAI}`; g.fillText('งวดที่', X(0.6), Y(0.46)); g.fillText('ชุดที่', X(0.86), Y(0.46));
   g.fillStyle = red; g.font = `800 ${fs(0.075)}px Georgia, serif`; g.fillText('23', X(0.6), Y(0.54));
   g.fillStyle = 'rgba(208,25,31,0.18)'; g.font = `700 ${fs(0.07)}px Arial`; g.fillText(String(1000000 + ((Number(num) * 37) % 8999999)), X(0.665), Y(0.54));
@@ -192,15 +196,26 @@ function ticket(g, x, y, w, h, num, hue, set = 12) {
   g.strokeStyle = 'rgba(120,120,140,0.5)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   g.restore();
 }
-const NUMS = ['482915', '071336', '995204', '160847', '338571', '724068', '503192', '849960'];
-let READY = false;
+const NUMS = ['482915', '071336', '995204', '160847', '338571', '724068', '503192', '849960']; // until the desk's real certificates load
+let READY = false, TIX = null, TIX_KEY = '';
+const drawStrip = (g, nums, date) => { for (let i = 0; i < 4; i++) ticket(g, i * 1024 + 8, 6, 1008, 500, nums[i % nums.length], [330, 120, 200, 40][i], 12 + i * 7, date); };
+const drawOne = (g, nums, date) => ticket(g, 0, 0, 1024, 512, nums[0], 330, 25, date);
+// The tickets printed all over the room (tier risers, desks, wall banners, archive, confetti) are the Head of Thai
+// Markets' REAL certificates for the next draw, printed with that draw's date.
+function setRoomTickets(nums, date) {
+  const key = nums.join(',') + date;
+  if (!TIX || !nums.length || key === TIX_KEY) return;
+  TIX_KEY = key;
+  for (const [t, fn] of [[TIX.strip, drawStrip], [TIX.one, drawOne]]) { const g = t.image.getContext('2d'); g.clearRect(0, 0, t.image.width, t.image.height); fn(g, nums, date); t.needsUpdate = true; }
+}
 function initMaterials() {
   if (READY) return;
   READY = true;
   kitMaterials();
   const std = (o) => new THREE.MeshStandardMaterial(o);
-  const strip = canvasT(4096, 512, (g) => { for (let i = 0; i < 4; i++) ticket(g, i * 1024 + 8, 6, 1008, 500, NUMS[i], [330, 120, 200, 40][i], 12 + i * 7); }); // 4 tickets = 8 m of riser
-  const one = canvasT(1024, 512, (g) => ticket(g, 0, 0, 1024, 512, NUMS[5], 330, 25), false);
+  const strip = canvasT(4096, 512, (g) => drawStrip(g, NUMS, '2026-12-01')); // 4 tickets = 8 m of riser
+  const one = canvasT(1024, 512, (g) => drawOne(g, NUMS.slice(5), '2026-12-01'), false);
+  TIX = { strip, one };
   const carpet = canvasT(256, 256, (g, w, h) => { // navy carpet with a small gold-dot grid (texture = 2 m)
     const r = rng(5); g.fillStyle = '#1c2b4d'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 2500; i++) { const k = r(); g.fillStyle = `rgba(${40 + k * 40},${55 + k * 50},${100 + k * 60},0.35)`; g.fillRect(r() * w, r() * h, 1.5, 1.5); }
@@ -519,9 +534,61 @@ export function drawTheatre(ctx) {
 
   // ================================================================ the floor's life: draw cycle, IMAX, applause
   const cheer = applause(ctx, seats, r);
-  rig.onDrop = (digit, n) => { imax.onBall(digit, n); screens.onBall(digit, n); cheer.start(); };
+  // What the Chief Draw Officer draws is real (user, 2026-11-15): each set of six balls is either
+  //   - a Monte Carlo REHEARSAL of the next draw: every ball sampled from the Institute's live model of that digit
+  //     position (run.picks.f6Digits, from the positional + Markov models over all official draws), then checked
+  //     against the certificates the desk actually holds; or
+  //   - every 4th set, a REPLAY of the latest official first prize (GLO), ball by ball.
+  // Before the first server run loads, rehearsals sample the uniform null and say so.
+  const reh = { mode: 'model', digits: [], sets: 0, label: '', model: 0, nearest: 0, firstHits: 0, last: [] };
+  const held = () => (LOTTO.data?.run?.decision?.tickets || []).filter((t) => t.bought).map((t) => t.number);
+  function startSet() {
+    const D = LOTTO.data;
+    reh.sets++; reh.digits = [];
+    reh.mode = D?.latest?.first && reh.sets % 4 === 0 ? 'official' : 'model';
+    reh.label = reh.mode === 'official' ? `OFFICIAL RESULT REPLAY · ${enDate(D.latest.date)} · GLO`
+      : D?.run?.picks?.f6Digits ? `MONTE CARLO REHEARSAL · ${enDate(D.run.target)} DRAW · MODEL RUN #${D.run.id}` : 'REHEARSAL · UNIFORM NULL (MODEL LOADING)';
+  }
+  rig.pickDigit = (i) => {
+    if (i === 0) startSet();
+    const D = LOTTO.data;
+    if (reh.mode === 'official') return Number(D.latest.first[i]);
+    const p = D?.run?.picks?.f6Digits?.[i];
+    if (!p) return Math.floor(Math.random() * 10);
+    let u = Math.random() * Object.values(p).reduce((a, b) => a + b, 0);
+    for (let d = 0; d < 10; d++) if ((u -= p[d]) <= 0) return d;
+    return 9;
+  };
+  function endSet() {
+    const num = reh.digits.join(''), tix = held();
+    // closest held certificate: digits matching in position
+    let best = -1, bestT = null;
+    for (const t of tix) { let k = 0; for (let i = 0; i < 6; i++) if (t[i] === num[i]) k++; if (k > best) { best = k; bestT = t; } }
+    const first = tix.includes(num);
+    if (reh.mode === 'model') { reh.model++; if (first) reh.firstHits++; reh.nearest = Math.max(reh.nearest, best); }
+    reh.last.unshift({ n: reh.sets, mode: reh.mode, num, best, bestT, first }); reh.last.length = Math.min(reh.last.length, 4);
+    imax.onSet(reh);
+  }
+  rig.onDrop = (digit, n) => {
+    const i = (n - 1) % 6;
+    reh.digits[i] = digit;
+    imax.onBall(digit, n, reh); screens.onBall(digit, n, reh);
+    if (i === 5) endSet();
+    cheer.start();
+  };
+  ctx.rehearsal = reh; // debug access
+  // live data: poll the shared feed's version (cheap) and push it to every screen + the room's printed tickets
+  let seen = -1;
+  const applyData = () => {
+    seen = LOTTO.version;
+    const D = LOTTO.data; if (!D) return;
+    screens.setData(D); imax.setData(D);
+    const t = held();
+    if (t.length) setRoomTickets(t, D.run.target);
+  };
   ctx.onUpdate((dt) => {
     if (!ctx.group.visible) return;
+    if (LOTTO.version !== seen) applyData();
     rig.update(dt);
     imax.update(dt);
     cheer.update(dt);
@@ -643,7 +710,7 @@ function drawMachine(ctx) {
   ik(REST);
   const handW = new THREE.Vector3(), drumW = new THREE.Vector3();
   const api = {
-    onDrop: null, hand, held,
+    onDrop: null, pickDigit: null, hand, held,
     handWorld: () => hand.getWorldPosition(handW),
     drumWorld: () => cage.getWorldPosition(drumW),
     state: () => ({ t: tAll % CYCLE, drawn: nDrawn, holding: held.visible, digit }),
@@ -655,7 +722,8 @@ function drawMachine(ctx) {
       if (cyc !== lastCycle) {
         lastCycle = cyc;
         if (nDrawn % 6 === 0) drawn.forEach((s) => { s.visible = false; });
-        colourNow = BALL_COLS[Math.floor(Math.random() * BALL_COLS.length)]; digit = Math.floor(Math.random() * 10);
+        colourNow = BALL_COLS[Math.floor(Math.random() * BALL_COLS.length)];
+        digit = api.pickDigit ? api.pickDigit(nDrawn % 6) : Math.floor(Math.random() * 10); // the floor decides what the ball is
         heldMat.color.set(colourNow);
       }
       ik(targetAt(t));
@@ -693,67 +761,93 @@ function imaxWall(ctx, L, rig) {
   ctx.disposables.push(rt, feedMat);
   const cam = new THREE.PerspectiveCamera(30, W / Hh, 0.5, 40);
   const look = new THREE.Vector3(), camPos = new THREE.Vector3(), lookS = new THREE.Vector3(RIG.x, e + STAGE_TOP + 4.5, RIG.z);
-  // overlay: LIVE badge, ball callout, rehearsal digits
-  let digits = [], callout = '', calloutT = 0;
+  // overlay: LIVE badge + what this set is (model rehearsal / official replay), ball callout, digits so far
+  let digits = [], callout = '', calloutT = 0, setLabel = 'REHEARSAL', official = false;
   const ov = display(1024, 608, (g, w, h) => {
     g.clearRect(0, 0, w, h);
     g.fillStyle = '#d62839'; g.beginPath(); g.arc(40, 38, 11, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(10,18,36,0.6)'; g.fillRect(58, 20, 330, 38);
-    g.fillStyle = '#fff'; g.font = '700 24px Arial'; g.fillText('LIVE · DRAW CAM 1 · REHEARSAL', 66, 48);
+    g.font = '700 22px Arial'; const pre = 'LIVE · DRAW CAM 1 · ', pw = g.measureText(pre).width, lw = g.measureText(setLabel).width;
+    g.fillStyle = 'rgba(10,18,36,0.6)'; g.fillRect(58, 20, Math.min(w - 76, pw + lw + 18), 38);
+    g.fillStyle = '#fff'; g.fillText(pre, 66, 47);
+    g.fillStyle = official ? '#ffd34d' : '#5ff2ff'; g.fillText(setLabel, 66 + pw, 47);
     g.fillStyle = 'rgba(10,18,36,0.66)'; g.fillRect(w - 330, h - 74, 312, 56);
-    g.fillStyle = '#d9b25c'; g.font = '700 18px Arial'; g.fillText('THIS REHEARSAL', w - 318, h - 52);
+    g.fillStyle = '#d9b25c'; g.font = '700 18px Arial'; g.fillText(official ? 'OFFICIAL FIRST PRIZE' : 'THIS REHEARSAL', w - 318, h - 52);
     g.fillStyle = '#fff'; g.font = '800 30px Arial'; g.fillText([0, 1, 2, 3, 4, 5].map((i) => (digits[i] ?? '·')).join(' '), w - 318, h - 24);
     if (callout) { g.fillStyle = 'rgba(217,178,92,0.92)'; g.fillRect(24, h - 92, 430, 64); g.fillStyle = '#14213d'; g.font = '800 34px Arial'; g.fillText(callout, 40, h - 48); }
   }, true);
   ov.redraw();
   const ovMesh = plane(W, Hh, ov.m, IMAX.x + 0.16, cy, 0, 6); ctx.disposables.push(ov.t, ov.m);
-  // results board (north)
+  // results board (north): the latest OFFICIAL result (GLO) + the stage's rehearsal log
   const pad = (n, k) => String(n).padStart(k, '0');
-  const SAMPLE = { first: '482915', front: ['071', '336'], back: ['204', '995'], two: '47', date: '16 พ.ย. 2569' };
-  let rehearsals = 0, history = [];
+  let D = null, R = null;
   const res = display(960, 1000, (g, w, h) => {
     g.fillStyle = '#0e1a33'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#d9b25c'; g.fillRect(0, 0, w, 96);
     g.fillStyle = '#14213d'; g.font = `700 46px ${THAI}`; g.fillText('ผลการออกรางวัล · RESULTS', 30, 64);
-    g.fillStyle = '#9fb3d9'; g.font = `400 26px ${THAI}`; g.fillText(`Last official draw · ${SAMPLE.date} · sample data (placeholder)`, 30, 140);
+    const L = D?.latest;
+    if (!L) { g.fillStyle = '#9fb3d9'; g.font = '700 34px Arial'; g.fillText('Connecting to the official results feed…', 30, 200); return; }
+    g.fillStyle = '#9fb3d9'; g.font = `400 26px ${THAI}`; g.fillText(`งวด ${thDate(L.date)} · official draw ${enDate(L.date)} · source: GLO`, 30, 140);
     g.fillStyle = '#fff'; g.font = `700 34px ${THAI}`; g.fillText('รางวัลที่ 1 · FIRST PRIZE', 30, 210);
-    g.fillStyle = '#ffd34d'; g.font = '800 132px Arial'; g.fillText(SAMPLE.first.split('').join(' '), 30, 340);
+    g.fillStyle = '#ffd34d'; g.font = '800 132px Arial'; g.fillText(L.first.split('').join(' '), 30, 340);
     const row = (y, label, vals) => { g.fillStyle = '#9fb3d9'; g.font = `700 28px ${THAI}`; g.fillText(label, 30, y); g.fillStyle = '#ffffff'; g.font = '800 64px Arial'; vals.forEach((v, i) => g.fillText(v, 30 + i * 300, y + 70)); };
-    row(410, 'เลขหน้า 3 ตัว · FRONT 3', SAMPLE.front);
-    row(530, 'เลขท้าย 3 ตัว · LAST 3', SAMPLE.back);
-    row(650, 'เลขท้าย 2 ตัว · LAST 2', [SAMPLE.two]);
-    g.fillStyle = '#1b2a4a'; g.fillRect(20, 780, w - 40, 200);
-    g.fillStyle = '#d9b25c'; g.font = '700 26px Arial'; g.fillText(`MONTE CARLO REHEARSALS TODAY: ${rehearsals}`, 40, 822);
-    g.fillStyle = '#fff'; g.font = '700 40px monospace';
-    history.slice(-3).reverse().forEach((n, i) => g.fillText(`#${pad(rehearsals - i, 4)}  ${n}  ${n.slice(-2) === SAMPLE.two ? '✓ MODEL VALIDATED' : '✓ CONSISTENT'}`, 40, 880 + i * 44));
+    row(410, 'เลขหน้า 3 ตัว · FRONT 3', L.last3f || []);
+    row(530, 'เลขท้าย 3 ตัว · LAST 3', L.last3b || []);
+    row(650, 'เลขท้าย 2 ตัว · LAST 2', [L.last2]);
+    // what the Institute had picked for this draw, when it had a run for it
+    const prev = D.history.find((x) => x.target === L.date);
+    g.fillStyle = '#9fb3d9'; g.font = '700 24px Arial';
+    g.fillText(prev ? `Institute top-5 for this draw: ${prev.last2.map((p) => p.v).join(' ')} → ${prev.last2.some((p) => p.v === L.last2) ? 'HIT' : 'miss'}` : 'The Institute had no run on record for this draw.', 330, 720);
+    // the stage: rehearsals sampled from the live model, checked against the certificates the desk holds
+    g.fillStyle = '#1b2a4a'; g.fillRect(20, 770, w - 40, 214);
+    g.fillStyle = '#d9b25c'; g.font = '700 22px Arial';
+    g.fillText(R ? `STAGE REHEARSALS: ${R.model} · 1ST-PRIZE MATCHES vs HELD CERTIFICATES: ${R.firstHits}` : 'STAGE REHEARSALS: starting…', 40, 806);
+    g.font = '700 28px monospace';
+    (R?.last || []).slice(0, 4).forEach((x, i) => {
+      g.fillStyle = x.mode === 'official' ? '#ffd34d' : '#fff';
+      g.fillText(`#${pad(x.n, 4)} ${x.num} ${x.mode === 'official' ? 'OFFICIAL REPLAY' : x.first ? 'MATCHES A HELD CERTIFICATE' : x.bestT ? `closest ${x.bestT}: ${x.best}/6` : 'no certificates held yet'}`, 40, 848 + i * 36);
+    });
   });
   res.redraw();
   plane(SIDE.z1 - SIDE.z0, SIDE.y1 - SIDE.y0, res.m, IMAX.x + 0.13, (SIDE.y0 + SIDE.y1) / 2, -(SIDE.z0 + SIDE.z1) / 2); ctx.disposables.push(res.t, res.m);
-  // predictive model (south): last-two-digit heat map + a confident bell curve
-  let heat = Array.from({ length: 100 }, () => Math.random());
+  // predictive model (south): the DMA ensemble's REAL probability for every last-2 number in the next draw
   const mod = display(960, 1000, (g, w, h) => {
     g.fillStyle = '#0e1a33'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#5ff2ff'; g.fillRect(0, 0, w, 96);
-    g.fillStyle = '#0e1a33'; g.font = '700 44px Arial'; g.fillText('PREDICTIVE MODEL v7.3', 30, 64);
-    g.fillStyle = '#9fb3d9'; g.font = `400 26px ${THAI}`; g.fillText('สถิติเลขท้าย 2 ตัว · last-two-digit heat map', 30, 140);
+    const run = D?.run, dist = run?.picks?.last2Dist;
+    g.fillStyle = '#0e1a33'; g.font = '700 44px Arial'; g.fillText(run ? `PREDICTIVE MODEL · RUN #${run.id}` : 'PREDICTIVE MODEL', 30, 64);
+    if (!dist) { g.fillStyle = '#9fb3d9'; g.font = '700 34px Arial'; g.fillText('Awaiting the Institute\'s next run…', 30, 200); return; }
+    g.fillStyle = '#9fb3d9'; g.font = `400 24px ${THAI}`; g.fillText(`เลขท้าย 2 ตัว งวด ${thDate(run.target)} · P(last 2) under the DMA ensemble`, 30, 136);
+    const lo = Math.min(...dist), hi = Math.max(...dist), top = run.picks.last2.slice(0, 5).map((p) => p.v);
     for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) {
-      const v = heat[i * 10 + j];
-      g.fillStyle = v > 0.85 ? '#d62839' : v > 0.6 ? '#f28c28' : v > 0.35 ? '#f6d55c' : '#3d8fd6'; g.fillRect(40 + j * 52, 170 + i * 52, 48, 48);
-      g.fillStyle = 'rgba(14,26,51,0.85)'; g.font = '700 18px monospace'; g.fillText(`${i}${j}`, 52 + j * 52, 200 + i * 52);
+      const v = (dist[i * 10 + j] - lo) / (hi - lo || 1), isTop = top.includes(`${i}${j}`);
+      g.fillStyle = v > 0.85 ? '#d62839' : v > 0.6 ? '#f28c28' : v > 0.35 ? '#f6d55c' : '#3d8fd6'; g.fillRect(40 + j * 52, 160 + i * 52, 48, 48);
+      if (isTop) { g.strokeStyle = '#ffffff'; g.lineWidth = 4; g.strokeRect(41 + j * 52, 161 + i * 52, 46, 46); }
+      g.fillStyle = 'rgba(14,26,51,0.85)'; g.font = '700 18px monospace'; g.fillText(`${i}${j}`, 52 + j * 52, 190 + i * 52);
     }
-    g.strokeStyle = '#ff7ad0'; g.lineWidth = 6; g.beginPath();
-    for (let i = 0; i <= 60; i++) { const x = 600 + i * 5.5, y = 640 - 380 * Math.exp(-(((i - 30) / 10) ** 2)); i ? g.lineTo(x, y) : g.moveTo(x, y); }
-    g.stroke();
-    g.fillStyle = '#e6fdff'; g.font = 'italic 30px Georgia, serif';
-    ['P(N = n) = 1 / 10⁶', 'E[R] = Σ pᵢvᵢ = 0.60', 'R² = 0.0003 (significant)', 'σ(hope) → ∞'].forEach((t, i) => g.fillText(t, 40, 740 + i * 46));
-    g.fillStyle = '#ffd34d'; g.font = '800 40px Arial'; g.fillText('CONFIDENCE: VERY', 560, 720);
-    g.fillStyle = '#9fb3d9'; g.font = '700 24px Arial'; g.fillText('NEXT LAST-2 (FORECAST):', 560, 790);
-    g.fillStyle = '#fff'; g.font = '800 96px Arial'; g.fillText(pad(heat.indexOf(Math.max(...heat)), 2), 560, 900);
+    g.fillStyle = '#9fb3d9'; g.font = '700 20px Arial'; g.fillText(`range ${(lo * 100).toFixed(2)}% – ${(hi * 100).toFixed(2)}% · fair 1.00% · white = top 5`, 40, 700);
+    // the forecast, and the honest record behind it
+    const f = run.picks.last2[0], en = run.ensemble, mc = run.mc;
+    g.fillStyle = '#9fb3d9'; g.font = '700 24px Arial'; g.fillText('NEXT LAST-2 (FORECAST):', 580, 190);
+    g.fillStyle = '#fff'; g.font = '800 120px Arial'; g.fillText(f.v, 580, 310);
+    g.fillStyle = '#ffd34d'; g.font = '700 28px Arial'; g.fillText(`P = ${(f.p * 100).toFixed(2)}%`, 580, 352);
+    g.fillStyle = '#e6fdff'; g.font = '700 22px Arial';
+    run.picks.last2.slice(1, 5).forEach((p, i) => g.fillText(`${p.v}  ${(p.p * 100).toFixed(2)}%`, 580, 400 + i * 32));
+    if (en) {
+      g.font = 'italic 27px Georgia, serif'; g.fillStyle = '#e6fdff';
+      [`backtest: ${en.hits}/${en.draws} top-5 hits`, `chance: ${(en.baselineRate * en.draws).toFixed(1)} · lift ${en.lift.toFixed(2)}×`, `log-loss ${en.logLossBits.toFixed(3)} vs ${en.baselineBits.toFixed(3)} bits`,
+        mc ? `Monte Carlo p = ${mc.empiricalP.toFixed(2)}` : ''].forEach((t, i) => g.fillText(t, 40, 760 + i * 44));
+    }
+    g.fillStyle = '#ffd34d'; g.font = '800 28px Arial'; g.fillText('CONVICTION:', 580, 780); g.fillText('EXCEPTIONALLY HIGH', 580, 816);
+    g.fillStyle = '#9fb3d9'; g.font = '700 20px Arial'; g.fillText('DMA WEIGHTS', 580, 868);
+    run.metrics.filter((m) => m.id !== 'ensemble').sort((a, b) => b.w - a.w).slice(0, 3).forEach((m, i) => g.fillText(`${m.name} ${(m.w * 100).toFixed(0)}%`, 580, 896 + i * 26));
   });
   mod.redraw();
   plane(SIDE.z1 - SIDE.z0, SIDE.y1 - SIDE.y0, mod.m, IMAX.x + 0.13, (SIDE.y0 + SIDE.y1) / 2, (SIDE.z0 + SIDE.z1) / 2); ctx.disposables.push(mod.t, mod.m);
-  // countdown to the next official draw (the 1st and the 16th, 16:00 Bangkok time = 09:00 UTC)
+  // countdown to the next official draw: the server's calendar (it knows the shifted dates, e.g. 1 May → 2 May),
+  // 16:00 Bangkok = 09:00 UTC; before it loads, the plain 1st / 16th rule
   const nextDraw = (now) => {
+    const nx = D?.calendar?.next;
+    if (nx) { const [yy, mm, dd] = nx.split('-').map(Number); return Date.UTC(yy, mm - 1, dd, 9, 0, 0); }
     const d = new Date(now), y = d.getUTCFullYear(), m = d.getUTCMonth();
     for (const [yy, mm, dd] of [[y, m, 1], [y, m, 16], [y, m + 1, 1], [y, m + 1, 16]]) { const t = Date.UTC(yy, mm, dd, 9, 0, 0); if (t > now) return t; }
     return now;
@@ -795,12 +889,14 @@ function imaxWall(ctx, L, rig) {
       if ((cdAcc += dt) >= 1) { cdAcc = 0; cd.redraw(); }
       if (callout && (calloutT -= dt) <= 0) { callout = ''; ov.redraw(); }
     },
-    onBall(digit, n) {
+    onBall(digit, n, reh) {
       const i = (n - 1) % 6;
       if (i === 0) digits = [];
+      setLabel = reh.label; official = reh.mode === 'official';
       digits[i] = digit; callout = `BALL ${i + 1} OF 6 · ${digit}`; calloutT = 2.8; ov.redraw();
-      if (i === 5) { rehearsals++; history.push(digits.join('')); res.redraw(); heat = heat.map((v) => Math.min(1, Math.max(0, v + (Math.random() - 0.5) * 0.3))); mod.redraw(); }
     },
+    onSet(reh) { R = reh; res.redraw(); },
+    setData(d) { D = d; res.redraw(); mod.redraw(); cd.redraw(); },
   };
 }
 

@@ -21,6 +21,10 @@ const chart = Array.from({ length: 60 }, () => 0);
 let pnl = 1_250_000;
 let t = 0;
 
+// Live feed from the game server (real delayed quotes, the firm's real book, real lottery history).
+const LIVE = { quotes: null, source: '', firm: null, nav: null, lotto: null };
+export function setLiveFeed(d) { Object.assign(LIVE, d); if (d.quotes) drawTicker(); }
+
 function cell(ch) { return [(ch % COLS) * CW, Math.floor(ch / COLS) * CHH]; }
 
 function draw() {
@@ -34,39 +38,44 @@ function draw() {
   let [x, y] = cell(CH.TICKER);
   g.fillStyle = '#05080c'; g.fillRect(x, y, CW, CHH);
   g.font = 'bold 30px monospace';
-  let off = -((t * 6) % 900);
+  const tq = LIVE.quotes || SYMBOLS.slice(0, 6).map((s, i) => ({ symbol: s, price: prices[i], change: Math.sin(t / 30 + i) * 0.01 }));
+  const span = tq.length * 190;
+  let off = -((t * 6) % span);
+  g.save(); g.beginPath(); g.rect(x, y, CW, CHH); g.clip();
   for (let k = 0; k < 2; k++) {
-    let cx = x + off + k * 900;
-    for (let i = 0; i < 6; i++) {
-      const up = Math.random() > 0.5;
+    let cx = x + off + k * span;
+    for (const q of tq) {
+      const up = q.change >= 0;
       g.fillStyle = up ? '#3dff7a' : '#ff4d5e';
-      const s = `${SYMBOLS[i]} ${prices[i].toFixed(2)} ${up ? '▲' : '▼'}`;
-      if (cx > x - 200 && cx < x + CW) g.fillText(s, cx, y + 50);
-      cx += 150;
+      if (cx > x - 220 && cx < x + CW) g.fillText(`${q.symbol} ${q.price.toFixed(2)} ${up ? '▲' : '▼'}`, cx, y + 50);
+      cx += 190;
     }
   }
+  g.restore();
   g.fillStyle = '#ffcc33'; g.font = '20px monospace';
-  g.fillText('DEMO DATA — NOT REAL PRICES', x + 10, y + 105);
+  g.fillText(LIVE.quotes ? `DELAYED · ${LIVE.source.toUpperCase().slice(0, 34)}` : 'CONNECTING TO MARKET DATA…', x + 10, y + 105);
 
   // CHART
   [x, y] = cell(CH.CHART);
   g.fillStyle = '#081018'; g.fillRect(x, y, CW, CHH);
+  const series = LIVE.nav && LIVE.nav.length > 1 ? LIVE.nav : chart;
   g.strokeStyle = '#3dd6ff'; g.lineWidth = 3; g.beginPath();
-  const mn = Math.min(...chart), mx = Math.max(...chart) + 0.001;
-  chart.forEach((v, i) => {
-    const px = x + 10 + (i / 59) * (CW - 20);
+  const mn = Math.min(...series), mx = Math.max(...series) + 0.001;
+  series.forEach((v, i) => {
+    const px = x + 10 + (i / (series.length - 1)) * (CW - 20);
     const py = y + CHH - 10 - ((v - mn) / (mx - mn)) * (CHH - 30);
     i ? g.lineTo(px, py) : g.moveTo(px, py);
   });
   g.stroke();
-  g.fillStyle = '#9ad'; g.font = '18px monospace'; g.fillText('FIRM BOOK — INTRADAY (DEMO)', x + 10, y + 20);
+  g.fillStyle = '#9ad'; g.font = '18px monospace'; g.fillText(LIVE.nav ? 'FIRM BOOK — NAV (LIVE)' : 'FIRM BOOK — AWAITING DATA', x + 10, y + 20);
 
   // PNL
   [x, y] = cell(CH.PNL);
-  g.fillStyle = pnl >= 0 ? '#062b12' : '#2b0608'; g.fillRect(x, y, CW, CHH);
-  g.fillStyle = pnl >= 0 ? '#3dff7a' : '#ff4d5e'; g.font = 'bold 46px monospace';
-  g.fillText(`P&L ${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}`, x + 20, y + 70);
-  g.fillStyle = '#aaa'; g.font = '18px monospace'; g.fillText('NOTIONAL — DEMO', x + 20, y + 105);
+  const livePnl = LIVE.firm ? Math.round((LIVE.firm.nav - 100_000_000) / 100) : pnl;
+  g.fillStyle = livePnl >= 0 ? '#062b12' : '#2b0608'; g.fillRect(x, y, CW, CHH);
+  g.fillStyle = livePnl >= 0 ? '#3dff7a' : '#ff4d5e'; g.font = 'bold 46px monospace';
+  g.fillText(`P&L ${livePnl >= 0 ? '+' : ''}${livePnl.toLocaleString()}`, x + 20, y + 70);
+  g.fillStyle = '#aaa'; g.font = '18px monospace'; g.fillText(LIVE.firm ? `NOTIONAL · ${LIVE.firm.positions.length} POSITIONS` : 'NOTIONAL — AWAITING DATA', x + 20, y + 105);
 
   // SCORE
   [x, y] = cell(CH.SCORE);
@@ -101,14 +110,25 @@ function draw() {
   }
   g.fillStyle = '#fff'; g.font = '16px monospace'; g.fillText('RACE 4 — 1,200 m (SIMULATED)', x + 280, y + 122);
 
-  // LOTTO heatmap
+  // LOTTO heatmap (real last-2 frequencies once the Institute has run)
   [x, y] = cell(CH.LOTTO);
-  for (let i = 0; i < 32; i++) for (let j = 0; j < 8; j++) {
-    const v = Math.random();
-    g.fillStyle = `hsl(${240 - v * 240},90%,${30 + v * 30}%)`;
-    g.fillRect(x + i * 16, y + j * 16, 16, 16);
+  if (LIVE.lotto) {
+    const gr = LIVE.lotto.grid, flat = gr.flat(), lo = Math.min(...flat), hi = Math.max(...flat) || 1;
+    g.fillStyle = '#05080c'; g.fillRect(x, y, CW, CHH);
+    for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) {
+      const v = (gr[i][j] - lo) / (hi - lo || 1);
+      g.fillStyle = `hsl(${240 - v * 240},90%,${30 + v * 30}%)`;
+      g.fillRect(x + 4 + j * 22, y + 4 + i * 12, 21, 11);
+    }
+    g.fillStyle = '#fff'; g.font = 'bold 18px monospace'; g.fillText('LAST-2 FREQUENCY', x + 240, y + 30);
+    g.font = '16px monospace'; g.fillStyle = '#ffd34d'; g.fillText(`NEXT DRAW ${LIVE.lotto.next}`, x + 240, y + 60);
+    g.fillStyle = '#bff9ff'; g.fillText(`PICKS ${LIVE.lotto.picks.join(' ')}`, x + 240, y + 88);
+    g.fillStyle = '#aaa'; g.font = '13px monospace'; g.fillText(`${LIVE.lotto.draws} OFFICIAL DRAWS · GLO`, x + 240, y + 112);
+  } else { // never a made-up heat-map: say what it is waiting for
+    g.fillStyle = '#05080c'; g.fillRect(x, y, CW, CHH);
+    g.fillStyle = '#ffd34d'; g.font = 'bold 20px monospace'; g.fillText('LAST-2 FREQUENCY', x + 12, y + 40);
+    g.fillStyle = '#9fb3d9'; g.font = '15px monospace'; g.fillText('awaiting the Institute run · GLO official results', x + 12, y + 72);
   }
-  g.fillStyle = '#fff'; g.font = 'bold 22px monospace'; g.fillText('P(DRAW) HEATMAP v9.1', x + 10, y + 120);
 
   atlas.needsUpdate = true;
 }
@@ -178,15 +198,18 @@ export const tickerTexture = new THREE.CanvasTexture(tc);
 tickerTexture.wrapS = THREE.RepeatWrapping;
 tickerTexture.colorSpace = THREE.SRGBColorSpace;
 function drawTicker() {
+  if (!tg) return;
   tg.fillStyle = '#000'; tg.fillRect(0, 0, 2048, 64);
-  tg.font = 'bold 40px monospace';
+  tg.font = 'bold 34px monospace';
   let x = 10;
-  SYMBOLS.forEach((s, i) => {
-    const ch = (Math.random() - 0.5) * 4;
+  const list = LIVE.quotes ? LIVE.quotes.map((q) => [q.symbol, q.price, q.change * 100]) : SYMBOLS.map((s, i) => [s, prices[i], 0]);
+  for (const [s, p, ch] of list) {
+    if (x > 2040) break;
     tg.fillStyle = ch >= 0 ? '#3dff7a' : '#ff4d5e';
-    tg.fillText(`${s} ${prices[i].toFixed(2)} ${ch >= 0 ? '+' : ''}${ch.toFixed(2)}%`, x, 46);
-    x += 170;
-  });
+    const txt = `${s} ${p.toFixed(2)} ${ch >= 0 ? '+' : ''}${ch.toFixed(2)}%`;
+    tg.fillText(txt, x, 44);
+    x += tg.measureText(txt).width + 36;
+  }
   tickerTexture.needsUpdate = true;
 }
 drawTicker();
