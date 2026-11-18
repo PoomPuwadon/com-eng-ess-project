@@ -304,7 +304,8 @@ rt.on('teleport', (m) => {
   const sub = m.objective === 'boxing' ? 'You are a competitor in the Combat Sports session' : m.by ? `Convened by ${m.by}` : '';
   withVeil(m.floor, () => {
     if (!arena.amRacer()) player.ride = null;
-    placeAt(m.floor, m.x, m.y, m.z, m.yaw ?? player.yaw);
+    if (m.toFloor) teleport(m.floor); // Tour Mode join: the very same landing spot as the CEO's floor-list button
+    else placeAt(m.floor, m.x, m.y, m.z, m.yaw ?? player.yaw);
   }, { sub }).then(() => {
     if (m.objective === 'boxing') hud.toast('You are a competitor: walk down the walkout into the ring!', 5);
     else if (m.by) hud.toast(`${m.by} has convened everyone here.`, 3);

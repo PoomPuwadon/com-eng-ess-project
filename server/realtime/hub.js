@@ -135,10 +135,11 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     Object.assign(c, { ready: true, playerId: p.id, name: p.name, device: msg.device === 'mobile' ? 'mobile' : 'pc', role: elevated.get(p.id) || 'player', account: auth?.accountOf?.(p.id) ? 'member' : 'guest' });
     send(c, { t: 'welcome', id: c.id, name: c.name, role: c.role, elevated: elevated.has(p.id), hz: SNAPSHOT_HZ, meta: meta() });
     gameCtx.announce(`${c.name} has entered the building.`);
-    // Tour Mode: guests who walk in while a tour is on are teleported exactly like the CEO's Teleport All button:
-    // same floor, same spot, same facing as the host (the client nudges them clear of any wall or prop)
+    // Tour Mode: guests who walk in while a tour is on go to the host's FLOOR and end up exactly where the CEO's own
+    // floor-teleport button (the floor list) puts anyone: the floor's standard spot. `toFloor` tells the client to run
+    // that same teleport, so the two can never disagree, and nobody lands wherever the host happens to be standing.
     const host = tour.on && c.role === 'player' && tour.host !== c.id ? conns.get(tour.host) : null;
-    if (host?.pose) send(c, { t: 'teleport', floor: host.pose.floor, x: host.pose.x, y: host.pose.y, z: host.pose.z, yaw: host.pose.yaw, safe: true, by: tour.hostName });
+    if (host?.pose) send(c, { t: 'teleport', floor: host.pose.floor, toFloor: true, safe: true, by: tour.hostName });
     dirtyMeta = true;
   }
 

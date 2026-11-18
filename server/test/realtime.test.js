@@ -319,7 +319,8 @@ test('tour: a guest who joins while Tour Mode is on arrives on the host\'s floor
   const tp = late.last('teleport');
   assert.ok(tp, 'a joiner during a tour is teleported');
   assert.equal(tp.floor, 'VT-03');
-  assert.deepEqual([tp.x, tp.y, tp.z, tp.yaw], [120, 67, 30, 0], 'lands exactly where Teleport All would put them: the host\'s own spot');
+  assert.equal(tp.toFloor, true, 'asks the client for the floor-list teleport: the same landing spot as the CEO\'s floor button');
+  assert.equal(tp.x, undefined, 'no coordinates: never the host\'s own spot (the host may be standing in the boxing ring)');
   assert.equal(tp.by, 'Boss');
 });
 
