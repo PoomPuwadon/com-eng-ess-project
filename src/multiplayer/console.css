@@ -107,3 +107,24 @@
 #mp-book .pick .st { grid-area: st; color: #8a8172; font-size: 11px; }
 #mp-book .pick .win { grid-area: win; color: #b9ffd4; font-size: 11px; text-align: right; }
 #mp-book .fine { color: #8a8172; font-size: 10px; margin-top: 8px; }
+
+/* VT-04 live leaderboard (user, 2026-11-18: much bigger and clearer), for riders and spectators */
+#mp-board { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 36; display: none; width: min(380px, 44vw); pointer-events: none;
+  background: linear-gradient(180deg, rgba(8,10,20,.94), rgba(16,20,40,.94)); border: 2px solid #e3c27a; border-radius: 16px; padding: 12px 14px 14px; color: #fff;
+  font: 700 15px "Segoe UI", system-ui, sans-serif; box-shadow: 0 14px 40px rgba(0,0,0,.6), 0 0 24px rgba(227,194,122,.25); }
+#mp-board.on { display: block; }
+#mp-board .hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+#mp-board .hd b { font: 900 18px system-ui; letter-spacing: .08em; color: #f0d18a; }
+#mp-board .hd .tag { font: 900 13px system-ui; padding: 3px 10px; border-radius: 999px; background: #e11d48; letter-spacing: .08em; }
+#mp-board .hd .tag.cd { background: #f59e0b; color: #111; }
+#mp-board .row { position: relative; display: grid; grid-template-columns: 44px 14px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; margin-top: 6px; border-radius: 10px; background: rgba(255,255,255,.07); overflow: hidden; }
+#mp-board .row.me { background: rgba(18,255,106,.14); outline: 2px solid #12ff6a; }
+#mp-board .row.lead .pos { color: #ffd400; text-shadow: 0 0 10px rgba(255,212,0,.7); }
+#mp-board .pos { font: 900 26px system-ui; color: #e3c27a; text-align: center; }
+#mp-board .sw { width: 14px; height: 30px; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,.5); }
+#mp-board .nm { font: 800 19px system-ui; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mp-board .nm small { display: block; font: 600 12px system-ui; color: rgba(255,255,255,.65); }
+#mp-board .rt { text-align: right; font: 800 15px ui-monospace, monospace; }
+#mp-board .rt small { display: block; font: 700 12px system-ui; color: #7ee0a0; }
+#mp-board .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #e3c27a, #ffd400); }
+#mp-board .ft { margin-top: 8px; font: 600 12px system-ui; color: rgba(255,255,255,.6); text-align: center; }

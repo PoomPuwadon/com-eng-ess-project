@@ -45,6 +45,7 @@ export class ArenaHud {
     this.raceHud = el('mp-race', '', '<div class="clickme"><svg viewBox="0 0 40 56" width="54" height="76"><rect x="2" y="2" width="36" height="52" rx="18" fill="#111" stroke="#fff" stroke-width="3"/><path d="M20 2 V22 H2 V20 A18 18 0 0 1 20 2 Z" class="lb" fill="#12ff6a"/><line x1="20" y1="2" x2="20" y2="22" stroke="#fff" stroke-width="2.5"/><line x1="2" y1="22" x2="38" y2="22" stroke="#fff" stroke-width="2.5"/></svg><span class="word">CLICK!</span></div><div class="combo">0.0 taps/s</div><div class="meter"><i></i></div><div class="msg">Tap / click as fast as you can: faster clicking = a faster horse</div>');
     this.lines = el('mp-speedlines');
     this.book = el('mp-book');
+    this.board = el('mp-board'); // VT-04 live leaderboard (riders + spectators)
     this.spots = new BoutSpotlights(ctx.scene);
     this.guide = new RingGuide(ctx.scene);
     const { rt, player } = ctx;
@@ -90,7 +91,7 @@ export class ArenaHud {
       player.ride = null; player.enabled = true;
       const p = player.pos; this.ctx.placeAt('VT-04', p.x, EQ_Y, p.z + 2, player.yaw);
     }
-    if (prevRace && !this.race) this.clearHorses();
+    if (prevRace && !this.race) { this.clearHorses(); this.board.classList.remove('on'); }
     if (m.race && m.race.phase === 'ended' && prevRace) { // record the real result on the VT-04 screens
       const res = m.race.result || {}, wi = prevRace.racers.findIndex((r) => r.name === res.winner);
       recordRaceResult(res.void ? null : res.winner, wi >= 0 ? prevRace.prices?.[wi] : null);
@@ -213,6 +214,28 @@ export class ArenaHud {
     pos.needsUpdate = col.needsUpdate = true;
   }
 
+  /** the big live leaderboard: every rider, place, distance, gap to the leader, price (~5 Hz) */
+  paintBoard(dt) {
+    const { rt, player } = this.ctx, r = this.race;
+    const show = Boolean(r && (this.amRacer() || player.floor?.id === 'VT-04'));
+    this.board.classList.toggle('on', show);
+    if (!show || (this.boardAcc = (this.boardAcc || 0) + dt) < 0.2) return;
+    this.boardAcc = 0;
+    const len = r.len || TRK.len;
+    const list = r.racers.map((x, i) => ({ x, i, d: Math.min(len, this.horses.get(x.conn)?.dd ?? x.d ?? 0) })).sort((a, b) => (a.x.place ?? 99) - (b.x.place ?? 99) || b.d - a.d);
+    const lead = list[0]?.d || 0, cd = r.phase === 'countdown' ? Math.max(0, Math.ceil(((r.goAt || 0) - Date.now()) / 1000)) : 0;
+    const ord = (n) => `${n}${['st', 'nd', 'rd'][n - 1] || 'th'}`;
+    this.board.innerHTML = `<div class="hd"><b>LIVE · RUNNING ORDER</b><span class="tag ${cd ? 'cd' : ''}">${cd ? `GATE IN ${cd}` : 'RACING'}</span></div>
+      ${list.map(({ x, i, d }, k) => {
+        const srv = this.raceD.get(x.conn), me = x.conn === rt.id;
+        const gap = k === 0 ? `${Math.round(len - d)} m to go` : `−${(lead - d).toFixed(1)} m`;
+        return `<div class="row ${me ? 'me' : ''} ${k === 0 ? 'lead' : ''}"><span class="pos">${ord(k + 1)}</span><span class="sw" style="background:#${COLOURS[i % COLOURS.length].toString(16).padStart(6, '0')}"></span>
+          <span class="nm">${esc(x.name)}${me ? ' (YOU)' : ''}<small>${(srv?.tps ?? x.tps ?? 0).toFixed(1)} taps/s · ${((srv?.v ?? x.v ?? 0) * 3.6).toFixed(0)} km/h</small></span>
+          <span class="rt">${gap}<small>${r.prices?.[i] ? `${r.prices[i].toFixed(2)}x` : ''}</small></span><i class="bar" style="width:${((d / len) * 100).toFixed(1)}%"></i></div>`;
+      }).join('')}
+      <div class="ft">One lap · ${Math.round(len)} m · faster clicking = a faster horse</div>`;
+  }
+
   /** fighter kit for the round only (user, 2026-11-18): shorts, gloves, mongkol; back to your own look after */
   dressBoxer(boxer) {
     const { player, scene, rt } = this.ctx;
@@ -267,6 +290,7 @@ export class ArenaHud {
         } else overrides.set(r.conn, { pos: saddle, yaw });
       });
     }
+    this.paintBoard(dt);
     // ---- HUD for the rider
     const riding = this.amRacer();
     this.tapBtn.classList.toggle('on', riding && this.ctx.isMobile());
