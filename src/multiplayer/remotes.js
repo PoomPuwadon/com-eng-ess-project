@@ -6,7 +6,7 @@
 // players on loaded floors get a full avatar; everyone else is drawn by two instanced meshes
 // (body + head, coloured by role) — at most ~2 extra draw calls however many guests there are.
 import * as THREE from 'three';
-import { avatarFor } from '../characters/roster.js';
+import { avatarFor, makeBoxer } from '../characters/roster.js';
 import { CeoMarker } from '../characters/ceoMarker.js';
 import { FLOOR_BY_ID } from '../layout/building.js';
 import { QUALITY } from '../quality.js';
@@ -102,13 +102,17 @@ export class RemotePlayers {
   hostPose(id) { const r = this.map.get(id); return r && r.buf.length ? r.pos : null; }
   list() { return [...this.map.values()]; }
 
+  /** the look a remote should wear: a boxer in a live bout wears the fighter kit (red / blue corner) */
+  lookOf(rm) { const b = this.boxers.get(rm.id); return b ? `fighter:${b.corner}` : rm.role; }
   makeAvatar(rm) {
     if (rm.av) this.scene.remove(rm.av.root);
-    const av = avatarFor(rm.role === 'player' ? 'visitor' : rm.role, rm.name);
+    if (rm.xray) { rm.xray.removeFromParent(); rm.xray = null; }
+    const look = this.lookOf(rm);
+    const av = look.startsWith('fighter:') ? makeBoxer(look.slice(8), rm.name) : avatarFor(rm.role === 'player' ? 'visitor' : rm.role, rm.name);
     av.root.traverse((o) => { o.castShadow = false; });
     if (av.tag) av.tag.visible = false; // the DOM layer draws every nametag
     this.scene.add(av.root);
-    rm.av = av; rm.avRole = rm.role;
+    rm.av = av; rm.avRole = look;
   }
 
   update(dt, { visibleIds, viewer, selfPose, overrides }) {
@@ -128,12 +132,17 @@ export class RemotePlayers {
     shown.forEach((rm, i) => {
       const full = (i < fullMax(shown.length) && rm.dist < FULL_NEAR) || this.boxers.has(rm.id);
       if (full) {
-        if (!rm.av || rm.avRole !== rm.role) this.makeAvatar(rm);
+        if (!rm.av || rm.avRole !== this.lookOf(rm)) this.makeAvatar(rm);
         const a = rm.av;
         a.root.visible = true;
         a.root.position.copy(rm.pos);
         const v = rm.vel / Math.max(1e-3, dt);
         if (v > 0.2 && rm.lastPos) { const d = Math.atan2(rm.pos.x - rm.lastPos.x, rm.pos.z - rm.lastPos.z); let dd = d - rm.bodyYaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); rm.bodyYaw += dd * Math.min(1, dt * 12); }
+        const bx = this.boxers.get(rm.id);
+        if (bx) { // a boxer faces where they aim once in the ring; knocked down = on the canvas
+          a.ko = bx.hp <= 0; a.walkIn = !bx.inRing;
+          if (bx.inRing && rm.buf.length) { let d = rm.buf[rm.buf.length - 1].yaw + Math.PI - rm.bodyYaw; d = Math.atan2(Math.sin(d), Math.cos(d)); rm.bodyYaw += d * Math.min(1, dt * 14); }
+        }
         a.root.rotation.y = rm.bodyYaw;
         rm.t += dt; a.update(dt, rm.t, Math.min(10, v));
       } else {
@@ -200,7 +209,7 @@ export class RemotePlayers {
 
   // ---------------------------------------------------------------- VT-03 boxers: x-ray silhouette + name + health bar
   setBoxers(list, selfId) {
-    this.boxers = new Map((list || []).filter((b) => b.conn !== selfId).map((b) => [b.conn, b]));
+    this.boxers = new Map((list || []).map((b, i) => [b.conn, { ...b, corner: b.corner || (i % 2 ? 'blue' : 'red') }]).filter(([id]) => id !== selfId));
     for (const rm of this.map.values()) {
       const on = this.boxers.has(rm.id);
       if (on && rm.av && !rm.xray) { rm.xray = new THREE.Mesh(this.xrayGeo, this.xrayMat); rm.xray.renderOrder = 990; rm.av.root.add(rm.xray); }

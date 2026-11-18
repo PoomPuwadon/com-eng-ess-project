@@ -4,7 +4,7 @@ import { createApp } from '../app.js';
 import { VAULT } from '../ledger.js';
 import { slotOffset, memberPose, dropPoint, BASKET_Y } from '../realtime/basket.js';
 import { fightPrices, racePrices, payoutFor, priceFromProb, MARGIN, speedFromTps, MAX_TPS } from '../realtime/pricing.js';
-import { resolvePunch, inRing, RING, PAVILION_Y } from '../realtime/boxing.js';
+import { resolvePunch, inRing, RING, PAVILION_Y, COOLDOWN_MS, DMG } from '../realtime/boxing.js';
 import { pickRacers, TRACK_LEN, grandstandSpot } from '../realtime/race.js';
 
 const quiet = { log() {}, warn() {}, error() {} };
@@ -163,6 +163,8 @@ test('pricing: equal at the bell; low health / trailing pays more; payouts round
   assert.equal(priceFromProb(0.5), +(Math.floor(((1 - MARGIN) / 0.5) * 100) / 100).toFixed(2));
   assert.equal(payoutFor(333, 1.88), 626); // 626.04 -> 626
   assert.equal(speedFromTps(100), speedFromTps(MAX_TPS), 'tap rate is capped');
+  // a fast clicker (10-14 taps/s) needs 25-40 s for the lap (user, 2026-11-18)
+  for (const tps of [10, 12, MAX_TPS]) { const secs = TRACK_LEN / speedFromTps(tps); assert.ok(secs >= 25 && secs <= 40, `${tps} tps -> ${secs.toFixed(1)} s`); }
 });
 
 test('boxing: server hit detection (reach, facing, cooldown), KO ends the bout and settles the book', () => {
@@ -206,7 +208,9 @@ test('boxing: server hit detection (reach, facing, cooldown), KO ends the bout a
   assert.ok(s2.data.price > 1.88);
   // knock red out (fast-forward the clock past each cooldown)
   const box = app.hub.boxing;
-  for (let i = 0; i < 30 && box.active(); i++) { app.hub.advanceClock(500); blue.say({ t: 'punch', yaw: -Math.PI / 2 }); }
+  let landed = 1;
+  for (let i = 0; i < 60 && box.active(); i++) { app.hub.advanceClock(COOLDOWN_MS + 10); if (blue.ask({ t: 'punch', yaw: -Math.PI / 2 }).data?.hit) landed++; }
+  assert.ok(landed >= Math.ceil(100 / DMG[1]), `a knockout takes many clean hits (${landed})`);
   const v = box.view();
   assert.equal(v.phase, 'ended');
   assert.equal(v.winner, blue.c.id);

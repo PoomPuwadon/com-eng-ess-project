@@ -184,7 +184,7 @@ export function pavilion(ctx) {
     ctx.deco(C.x + rp - 0.03, C.x + rp + 0.03, yy, yy + 0.05, C.z - rp, C.z + rp, col);
   }
   for (const [x0, x1, h] of [[R, R + 0.8, 0.8], [R + 0.8, R + 1.6, 0.4]]) ctx.deco(C.x + x0, C.x + x1, 0, h, C.z - 1, C.z + 1, 0x2a2e38); // ring steps (walkout side)
-  ctx.npc(C.x - 1.4, C.z, 0xcc2222, Math.PI / 2, RING.top); ctx.npc(C.x + 1.4, C.z, 0x2244cc, -Math.PI / 2, RING.top); ctx.npc(C.x, C.z + 2, 0xffffff, Math.PI, RING.top);
+  // no placeholder fighters: the ring is for real competitors only
   ctx.deco(C.x - 4, C.x + 4, 0, 0.75, C.z - 10.2, C.z - 9.2, 0x3b2414); // judges' / officials' table
   for (let i = 0; i < 5; i++) ctx.npc(C.x - 3.2 + i * 1.6, C.z - 10.9, 0x111111, 0);
   ctx.deco(C.x - 9.8, C.x - 7.2, 0, 0.4, C.z + 6.5, C.z + 9.5, 0x5a3a20); // pi-phat musicians' stage (live traditional music)

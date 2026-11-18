@@ -170,6 +170,7 @@ export const RIFLE_DIR = new V3(0.3, -0.25, 0.92).normalize();
 const RIFLE_FORE = RIFLE_GRIP.clone().addScaledVector(RIFLE_DIR, 0.3).add(new V3(0, -0.03, 0));
 
 // ---------------------------------------------------------------- poses (hand targets in torso space)
+export const PUNCH_T = 0.26, HIT_T = 0.35; // boxing animation lengths (s)
 const _a = new V3(), _b = new V3();
 const ss = (x) => x * x * (3 - 2 * x);
 export const POSES = {
@@ -212,6 +213,22 @@ export const POSES = {
     o.R.set(-0.13, 0.74, 0.26); o.L.set(0.13, 0.72, 0.3); o.pR.set(-1, -0.8, 0); o.pL.set(1, -0.8, 0);
     const j = Math.max(0, Math.sin(t * 1.9)) ** 8, k = Math.max(0, Math.sin(t * 1.9 + 2.2)) ** 8;
     o.L.z += j * 0.34; o.R.x += k * 0.12; o.R.z += k * 0.36; o.twist = (k - j) * 0.3; o.hp = 0.12; o.swing = false;
+  },
+  // live VT-03 boxer (players): high guard, a straight punch while c.punchT runs (alternating hands,
+  // c.punchSide), a snap-back while c.hitT runs. Timers are counted down in Character.update.
+  box(c, t, o) {
+    o.legs = c.walkIn ? 'stand' : 'stance'; o.bounce = c.walkIn ? 0 : Math.abs(Math.sin(t * 5)) * 0.035; o.swing = false; o.hp = 0.1; // walking out: normal legs, gloves up
+    o.R.set(-0.12, 0.76, 0.24); o.L.set(0.12, 0.74, 0.28); o.pR.set(-1, -0.8, 0); o.pL.set(1, -0.8, 0);
+    o.R.y += Math.sin(t * 5) * 0.015; o.L.y += Math.sin(t * 5 + 1.4) * 0.015; // gloves bob in the guard
+    const p = c.punchT > 0 ? Math.sin(Math.PI * (1 - c.punchT / PUNCH_T)) : 0;
+    if (p > 0) {
+      const A = c.punchSide > 0 ? o.L : o.R, s = c.punchSide > 0 ? 1 : -1;
+      A.z += p * 0.42; A.x -= s * p * 0.1; A.y -= p * 0.04; // straight down the centre line
+      o.twist = -s * p * 0.38; o.lean = p * 0.1; o.face = 'shout';
+    }
+    const h = c.hitT > 0 ? Math.sin(Math.PI * (c.hitT / HIT_T)) : 0;
+    if (h > 0) { o.hp = 0.1 - h * 0.55; o.lean -= h * 0.22; o.twist += h * 0.25; o.face = 'panic'; o.R.z -= h * 0.1; o.L.z -= h * 0.1; }
+    if (c.ko) { o.face = 'cry'; o.R.set(-0.3, 0.1, 0.1); o.L.set(0.3, 0.1, 0.1); o.legs = 'stand'; o.bounce = 0; }
   },
   deal(c, t, o) { o.R.set(-0.15 + Math.sin(t * 3) * 0.05, 0.13, 0.42); o.L.set(0.15, 0.13, 0.42 + Math.sin(t * 2.4) * 0.04); o.pR.set(-1, -0.4, -0.3); o.pL.set(1, -0.4, -0.3); o.hp = 0.35; o.lean = 0.06; },
   ride(c, t, o) { o.legs = 'ride'; o.lean = 0.95; o.R.set(-0.1, 0.32, 0.42 + Math.sin(t * 9) * 0.04); o.L.set(0.1, 0.32, 0.42 + Math.sin(t * 9) * 0.04); o.pR.set(-1, -0.3, 0); o.pL.set(1, -0.3, 0); o.hp = -0.8; o.swing = false; },
@@ -302,6 +319,9 @@ export function animateRig(c, dt, t, speed = 0, snap = false) {
   } else {
     for (const l of [legL, legR]) { l.hip.rotation.set(0, 0, 0); l.knee.rotation.x = 0; }
   }
+  // knocked down (VT-03): the whole body tips over backwards onto the canvas and stays there
+  c.koK = (c.koK || 0) + ((c.ko ? 1 : 0) - (c.koK || 0)) * (snap ? 1 : 1 - Math.exp(-dt * 7));
+  if (c.koK > 0.001 || c.body.rotation.x) { c.body.rotation.x = -1.48 * c.koK; by += 0.16 * c.koK; }
   c.body.position.y = by;
   c.torso.position.y = D.hipY + Math.sin(tt * 1.6) * 0.004;
   c.torso.rotation.set(o.lean, o.twist, 0);
@@ -315,6 +335,11 @@ export function animateRig(c, dt, t, speed = 0, snap = false) {
 }
 
 // ---------------------------------------------------------------- the character (rig + meshes)
+/** start a punch animation on a Character (alternating hands) */
+export function throwPunch(c) { if (!c) return; c.punchSide = -(c.punchSide || 1); c.punchT = PUNCH_T; }
+/** start a hit (snap-back) reaction on a Character */
+export function takeHit(c) { if (c) c.hitT = HIT_T; }
+
 export class Character {
   static faceOverride = null;
   constructor(spec) {
@@ -364,6 +389,8 @@ export class Character {
   get tagY() { return D.hipY + D.headY + HC.y + D.headR * HEAD_SY + 0.22; }
   setFace(e) { if (this.faceMesh && this._face !== e) { this._face = e; this.faceMesh.material = faceMat(e); } }
   update(dt, t, speed = 0, snap = false) {
+    if (this.punchT > 0) this.punchT -= dt;
+    if (this.hitT > 0) this.hitT -= dt;
     const f = animateRig(this, dt, t, speed, snap);
     this.setFace(Character.faceOverride || f);
   }

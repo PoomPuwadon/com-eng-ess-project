@@ -284,6 +284,14 @@ export function makeFighter(corner = 'red', skin) {
     extras: [A.mongkol, (c) => A.prajioud(c, col), (c) => A.shorts(c, col), (c) => A.gloves(c, col), A.ankleWraps],
   });
 }
+/** a player in a live VT-03 bout (user, 2026-11-18): the fighter kit for the round only, guard pose;
+ * the skin tone follows the name so a player keeps the same look round after round */
+export function makeBoxer(corner = 'red', name = '') {
+  let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const c = makeFighter(corner, SKINS[h % SKINS.length]);
+  c.pose = 'box'; c.fighter = corner;
+  return c;
+}
 export function makeReferee(skin) {
   return new Character({
     build: 'avg', skin: skinOf(skin), hair: 'short', hairColor: 0x8f8f8f, face: 'focus', pose: 'ref',

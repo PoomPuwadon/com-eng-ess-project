@@ -35,6 +35,10 @@ export function racePrices(dists) {
 /** returned amount for a realised gain (stake included), minor units, rounded down */
 export const payoutFor = (stake, price) => Math.floor(stake * price);
 
-/** Click-speed horse: taps per second -> metres per second (capped so auto-clickers gain nothing past 14 tps). */
+/**
+ * Click-speed horse: taps per second -> metres per second (capped so auto-clickers gain nothing past 14 tps).
+ * Tuned (user, 2026-11-18: "far too quick") so one 272 m lap takes a fast clicker 25-40 s:
+ * 10 tps -> 7.8 m/s (~35 s), 12 tps -> 9.2 m/s (~30 s), the 14 tps cap -> 10.6 m/s (~26 s); idle 0.8 m/s.
+ */
 export const MAX_TPS = 14;
-export const speedFromTps = (tps) => 3 + 1.6 * Math.min(MAX_TPS, Math.max(0, tps));
+export const speedFromTps = (tps) => 0.8 + 0.7 * Math.min(MAX_TPS, Math.max(0, tps));

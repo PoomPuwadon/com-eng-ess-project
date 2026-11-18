@@ -6,7 +6,9 @@ import { fightPrices } from './pricing.js';
 
 export const RING = { x: 120, z: 0, half: 5.5, top: 1.2 }; // VT-03 ring (world x/z; top above the slab)
 export const PAVILION_Y = 67;
-export const REACH = 1.9, COOLDOWN_MS = 450, DMG = [8, 13], CONE = Math.cos((65 * Math.PI) / 180);
+// slower drain (user, 2026-11-18): 4-7 per landed punch, one punch per 650 ms -> at least ~18 clean hits
+// (~12 s of perfect hitting, usually 30 s+) to empty a 100-point condition bar
+export const REACH = 1.9, COOLDOWN_MS = 650, DMG = [4, 7], CONE = Math.cos((65 * Math.PI) / 180);
 
 /** walkout start for boxer i of n: the black focus room / walkout road (east of the ring) */
 export function walkoutSpot(i, n) {
@@ -99,6 +101,7 @@ export function createBoxing(ctx) {
     if (now - me.last < COOLDOWN_MS) return { cooldown: true };
     me.last = now;
     if (!me.inRing) return { miss: true, reason: 'Walk into the ring first.' };
+    ctx.broadcast({ t: 'swing', by: conn.id }); // every spectator sees the punch thrown (kit punch animation)
     const poses = round.boxers.filter((b) => b.inRing).map((b) => { const p = ctx.poseOf(b.conn); return p && { id: b.conn, x: p.x, z: p.z, hp: b.hp, b }; }).filter(Boolean);
     const mine = ctx.poseOf(conn.id);
     if (!mine) return null;

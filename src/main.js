@@ -305,7 +305,7 @@ function sitAtTable(table) {
   }
   return table ? rouletteSeat.sit(table) : false;
 }
-const arena = new ArenaHud({ rt, scene, camera, canvas, player, remotes, hud, isMobile, placeAt });
+const arena = new ArenaHud({ rt, scene, camera, canvas, player, remotes, hud, isMobile, placeAt, restoreAvatar: () => player.setAvatar(scene, avatarFor(player.role, ownName)) });
 const execConsole = new ExecConsole({ rt, toast: (t, s = 2.5) => hud.toast(t, s) });
 function openFromHud(id) {
   if (id === 'signin') { document.exitPointerLock?.(); showSignIn(); return; }

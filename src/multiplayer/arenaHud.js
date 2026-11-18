@@ -5,7 +5,9 @@
 //    (server-measured); speed lines, dust-to-fire trail, pulsing meter, camera FOV + shake scale with the rate.
 //  · Spectators: a positions panel with live pricing on every competitor.
 import * as THREE from 'three';
-import { Horse } from '../characters/kit.js';
+import { Horse, throwPunch, takeHit } from '../characters/kit.js';
+import { makeBoxer } from '../characters/roster.js';
+import { RingGuide, RING_AT } from './ringGuide.js';
 import { setBalance, fmt, esc, onMe } from '../net/api.js';
 import { BoutSpotlights } from './spotlights.js';
 import { setLiveRace, recordRaceResult } from '../world/raceScreens.js';
@@ -44,6 +46,7 @@ export class ArenaHud {
     this.lines = el('mp-speedlines');
     this.book = el('mp-book');
     this.spots = new BoutSpotlights(ctx.scene);
+    this.guide = new RingGuide(ctx.scene);
     const { rt, player } = ctx;
     const punch = () => this.punch();
     this.punchBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); punch(); });
@@ -59,8 +62,11 @@ export class ArenaHud {
     onMe((me) => { this.balance = me.balance; if (this.book.classList.contains('on')) this.paintBookValues(); }); // the slider tops out at your balance
     rt.on('meta', (m) => this.onMeta(m));
     rt.on('snap', (s) => { if (s.race) for (const [conn, d, tps, v] of s.race) this.raceD.set(conn, { d, tps, v, at: performance.now() }); });
+    // every punch thrown in the ring (hit or miss) animates the thrower for everyone; a hit snaps the target back
+    rt.on('swing', (m) => { if (m.by !== rt.id) throwPunch(ctx.remotes.get(m.by)?.av); });
     rt.on('hit', (m) => {
-      if (m.to === rt.id) { this.shake = 0.5; ctx.hud.toast(`Hit! −${m.dmg} · condition ${m.hp}`, 1.2); }
+      if (m.to === rt.id) { this.shake = 0.5; ctx.hud.toast(`Hit! −${m.dmg} · condition ${m.hp}`, 1.2); takeHit(player.avatar); }
+      else takeHit(ctx.remotes.get(m.to)?.av);
       if (this.box) { const b = this.box.boxers.find((x) => x.conn === m.to); if (b) b.hp = m.hp; ctx.remotes.setBoxers(this.box.boxers, rt.id); }
     });
     rt.on('balance', (m) => setBalance(m.balance));
@@ -97,7 +103,7 @@ export class ArenaHud {
     if (!this.amBoxer()) return;
     const { rt, player } = this.ctx;
     rt.ask('punch', { yaw: player.yaw }).then((r) => { if (r?.miss && r.reason) this.ctx.hud.toast(r.reason, 1.2); }).catch(() => {});
-    const a = player.avatar; if (a) { a.punchT = 0.25; }
+    throwPunch(player.avatar); // at once, before the server answers (the server broadcasts it to everyone else)
   }
   tap() {
     if (!this.race || this.race.phase !== 'running') return;
@@ -207,6 +213,22 @@ export class ArenaHud {
     pos.needsUpdate = col.needsUpdate = true;
   }
 
+  /** fighter kit for the round only (user, 2026-11-18): shorts, gloves, mongkol; back to your own look after */
+  dressBoxer(boxer) {
+    const { player, scene, rt } = this.ctx;
+    const a = player.avatar;
+    if (boxer && !a?.fighter) {
+      const i = this.box.boxers.findIndex((b) => b.conn === rt.id);
+      player.setAvatar(scene, makeBoxer(i % 2 ? 'blue' : 'red', boxer.name));
+    } else if (!boxer && a?.fighter) this.ctx.restoreAvatar();
+    const f = player.avatar;
+    if (!boxer || !f?.fighter) return;
+    f.ko = boxer.hp <= 0; f.walkIn = !boxer.inRing;
+    if (boxer.inRing && player.enabled) { // in the ring you face where you aim (the server checks the camera yaw)
+      player.bodyYaw = player.yaw + Math.PI; f.root.rotation.y = player.bodyYaw;
+    }
+  }
+
   /** per frame, after the world tick: horses, riding, effects. Returns overrides for remote racers. */
   update(dt) {
     const { rt, player, camera } = this.ctx;
@@ -271,12 +293,16 @@ export class ArenaHud {
     const spotTargets = (this.box ? this.box.boxers : []).map((b) => (b.conn === rt.id ? player.pos : this.ctx.remotes.get(b.conn)?.pos)).filter(Boolean);
     this.spots.update(dt, player.floor?.id === 'VT-03', spotTargets);
     const boxer = this.box && this.box.boxers.find((b) => b.conn === rt.id);
+    this.dressBoxer(boxer);
+    const walkIn = Boolean(boxer && boxer.hp > 0 && !boxer.inRing && player.floor?.id === 'VT-03');
+    this.guide.update(dt, walkIn, player.pos);
     this.selfHp.classList.toggle('on', Boolean(boxer));
     this.punchBtn.classList.toggle('on', Boolean(boxer && boxer.hp > 0 && this.ctx.isMobile()));
     if (boxer) {
       this.selfHp.querySelector('.hp i').style.width = `${boxer.hp}%`;
       this.obj.classList.add('on');
-      this.obj.textContent = boxer.hp <= 0 ? 'You are down. The session continues without you.' : boxer.inRing ? (this.ctx.isMobile() ? 'FIGHT! Tap PUNCH' : 'FIGHT! Left-click to punch') : 'Objective: walk into the ring';
+      this.obj.textContent = boxer.hp <= 0 ? 'You are down. The session continues without you.' : boxer.inRing ? (this.ctx.isMobile() ? 'FIGHT! Tap PUNCH' : 'FIGHT! Left-click to punch · aim with the camera')
+        : `Objective: walk into the ring · ${Math.max(0, Math.round(RingGuide.dist(player.pos) - RING_AT.half))} m · follow the yellow arrow`;
     } else if (!riding) this.obj.classList.remove('on');
     // ---- camera shake (hits, galloping)
     if (this.shake > 0.001) {
