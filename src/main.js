@@ -590,7 +590,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
-    if ((car || zone) && !canUseLifts(player.role)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel
+    if ((car || zone) && !canUseLifts(player.role, (car || zone).bank)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel
     if (car) { document.exitPointerLock?.(); hud.openElevator(car.bank, car.at || player.floor.id, player.role, { car }); }
     else if (zone) { document.exitPointerLock?.(); hud.openElevator(zone.bank, player.floor.id, player.role); }
     else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : openApp(h.app); }
@@ -644,7 +644,7 @@ function frame(now) {
   updateTicker(dt);
   renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);
   const ui = uiState();
-  if ((ui.car || ui.zone) && !canUseLifts(player.role)) {
+  if ((ui.car || ui.zone) && !canUseLifts(player.role, (ui.car || ui.zone).bank)) {
     hud.prompt(`Staff lift · ${LIFT_REFUSAL}`);
   } else if (ui.car) {
     const c = ui.car;

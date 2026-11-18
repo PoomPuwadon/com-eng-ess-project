@@ -12,13 +12,15 @@ const ACCEL = 1.4; // m/s²
 const DOOR_TIME = 1.1; // s to open/close
 const DWELL = 4; // s doors stay open
 
-// Lifts are for staff only (user, 2026-11-18): every kind of visitor (visitor, cleared, tour) is refused;
+// Lifts are for staff (user, 2026-11-18), except the public Wellness Tower banks (vt_low, vt_high), which
+// visitors may ride when not on tour (user, 2026-11-19). Every other bank refuses visitors; on tour
 // guests change floors with their host (Tour Mode teleports, the executive basket).
 export const LIFT_ROLES = new Set(['admin', 'ceo']);
 export const LIFT_REFUSAL = 'Lift access is reserved for staff. Your host will escort you between floors.';
-export const canUseLifts = (role) => LIFT_ROLES.has(role);
+const isPublicBank = (bank) => !!bank && BANKS[bank]?.tower === 'VT' && Object.keys(BANKS[bank].stopArea).every((k) => BANKS[bank].stopArea[k] === 'public');
+export const canUseLifts = (role, bank) => LIFT_ROLES.has(role) || (role !== 'tour' && isPublicBank(bank));
 export function rideCheck(role, bank, target, from) {
-  if (!canUseLifts(role)) return { ok: false, reason: LIFT_REFUSAL };
+  if (!canUseLifts(role, bank)) return { ok: false, reason: LIFT_REFUSAL };
   const b = BANKS[bank];
   if (!b.stops.includes(target)) return { ok: false, reason: 'This lift does not serve that floor.' };
   if (target === from) return { ok: false, reason: 'You are already here.' };
