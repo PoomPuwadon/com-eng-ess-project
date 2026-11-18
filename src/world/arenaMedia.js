@@ -115,15 +115,28 @@ function stopVideo(sl) {
 }
 const stopAll = () => SLOTS.forEach(stopVideo);
 function advance(sl) { sl.idx++; sl.t = 0; stopVideo(sl); apply(); }
+// Clips are fetched into memory and played from a blob: URL. Download-manager extensions (e.g. IDM)
+// pop a "Download File Info" dialog for any <video> pointed straight at an .mp4 address; they ignore
+// in-memory blobs. One fetch per clip, kept for the few clips in rotation.
+const blobs = new Map(); // src -> Promise<objectURL>
+function clipUrl(src) {
+  if (!blobs.has(src)) {
+    blobs.set(src, fetch(src).then((r) => { if (!r.ok) throw new Error(`clip ${r.status}`); return r.blob(); }).then((b) => URL.createObjectURL(b)));
+    blobs.get(src).catch(() => blobs.delete(src)); // a failed fetch is retried next time
+    while (blobs.size > 4) { const [old, p] = blobs.entries().next().value; blobs.delete(old); p.then((u) => setTimeout(() => URL.revokeObjectURL(u), 60_000)).catch(() => {}); }
+  }
+  return blobs.get(src);
+}
 function playFile(sl, v) {
   stopVideo(sl);
-  const vid = Object.assign(document.createElement('video'), { src: v.src, muted: true, playsInline: true, preload: 'auto' });
+  const vid = Object.assign(document.createElement('video'), { muted: true, playsInline: true, preload: 'auto' });
+  const token = (sl.token = (sl.token || 0) + 1);
+  clipUrl(v.src).then((u) => { if (sl.token === token && sl.video === vid) { vid.src = u; vid.play().catch(() => {}); } }).catch(() => { if (sl.video === vid) advance(sl); });
   vid.dataset.id = v.id;
   vid.addEventListener('ended', () => advance(sl));
   vid.addEventListener('error', () => advance(sl));
   sl.video = vid;
   sl.tex = new THREE.VideoTexture(vid); sl.tex.colorSpace = THREE.SRGBColorSpace; sl.tex.generateMipmaps = false; sl.tex.minFilter = THREE.LinearFilter;
-  vid.play().catch(() => {});
 }
 let ytScreens = [];
 
