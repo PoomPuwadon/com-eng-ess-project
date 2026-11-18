@@ -306,3 +306,18 @@ test('race start: riders stay for their horses, every other player goes to the V
   const a = grandstandSpot(0, 40), b = grandstandSpot(39, 40);
   assert.ok(Math.abs(a.x - b.x) < 80, 'a crowd of 40 still fits on the stand');
 });
+
+test('tour: a guest who joins while Tour Mode is on arrives on the host\'s floor; admins and non-tour joiners are not moved', () => {
+  const app = mkApp();
+  const early = client(app, 'Early');
+  assert.equal(early.inbox.filter((m) => m.t === 'teleport').length, 0, 'no tour: nobody is moved on join');
+  const ceo = client(app, 'Boss');
+  ceo.ask({ t: 'elevate', password: 'sesame', role: 'ceo' });
+  ceo.pose('VT-03', 120, 67, 30, 0, 'muay_thai_arena');
+  ceo.ask({ t: 'tour', on: true });
+  const late = client(app, 'Late');
+  const tp = late.last('teleport');
+  assert.ok(tp, 'a joiner during a tour is teleported');
+  assert.equal(tp.floor, 'VT-03');
+  assert.ok(Math.hypot(tp.x - 120, tp.z - 30) < 3.5, 'lands in a ring round the host');
+});
