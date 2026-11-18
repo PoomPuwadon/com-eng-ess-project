@@ -30,6 +30,7 @@ import { Realtime } from './net/realtime.js';
 import { savedAccount, signIn, setBalance, onMe } from './net/api.js';
 import { RemotePlayers } from './multiplayer/remotes.js';
 import { ExecConsole, showSignIn } from './multiplayer/console.js';
+import { TourGuides } from './multiplayer/tourGuides.js';
 import { ArenaHud } from './multiplayer/arenaHud.js';
 import { withVeil } from './multiplayer/teleportVeil.js';
 import { memberPose } from '../server/realtime/basket.js';
@@ -318,6 +319,7 @@ setInterval(sendPose, 100);
 // ---------------------------------------------------------------- roulette: sit at a real 3D table
 const leisureCtx = () => floors.loaded.get('VT-01');
 const rouletteSeat = createRouletteSeat({ camera, canvas, player, getLeisureCtx: leisureCtx, hud });
+const tourGuides = new TourGuides({ scene, camera, rt, remotes, player, leisureCtx, seated: () => rouletteSeat.active() }); // Tour Mode: CEO trackers + Leisure Suite arrows
 function sitAtTable(table) {
   if (rouletteSeat.active()) return true;
   if (!table) {
@@ -611,7 +613,7 @@ const AUTOMATION = ['shots', 'bench', 'guest', 'role', 'review'].some((k) => par
 if (!savedAccount() && !AUTOMATION) showSignIn();
 rt.start();
 window.__debug.mp = {
-  rt, remotes, arena, console: execConsole, signIn: (n, p) => signIn(n, p),
+  rt, remotes, arena, console: execConsole, tourGuides: () => tourGuides.state, signIn: (n, p) => signIn(n, p),
   ask: (t, d) => rt.ask(t, d), players: () => rt.players, meta: () => rt.meta, basket: () => basket,
 };
 if (params.get('floor')) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);
@@ -631,6 +633,7 @@ function frame(now) {
   const overrides = arena.update(dt);
   remotes.update(dt, { visibleIds: floors.visibleIds(), viewer: player.pos, selfPose: { pos: player.pos, floor: player.floor?.id }, overrides });
   rouletteSeat.update(dt);
+  tourGuides.update(dt);
   updateArenaFeed(dt, floors.visibleIds().includes('VT-02'));
   updateArenaMedia(dt, floors.visibleIds().includes('VT-02'), camera, scene);
   updateScreens(dt);
