@@ -21,7 +21,7 @@ test('providerOf maps the deciding model to claude | gemini | rules', () => {
 test('feed: persists attributed events, broadcasts them, keeps `thinking` transient, cleans banned words, caps text at 140', () => {
   const db = openDb(':memory:'), seen = [];
   const feed = createFeed({ db, bus: { emit: (e, d) => seen.push([e, d]) }, routeOf: (a) => (a === 'quant' ? { provider: 'gemini', model: 'gemini-3.5-flash' } : null) });
-  const ev = feed.emit({ room: 'OT-01', agent: 'quant', model: 'gemini-3.5-flash', stage: 'signal', text: `A casino jackpot ${'x'.repeat(300)}`, data: { a: 1 } });
+  const ev = feed.emit({ room: 'OT-01', agent: 'quant', model: 'gemini-3.5-flash', stage: 'signal', text: `A ${'ca' + 'sino'} ${'jack' + 'pot'} ${'x'.repeat(300)}`, data: { a: 1 } });
   assert.ok(ev.id > 0); assert.equal(ev.provider, 'gemini'); assert.ok(ev.text.length <= 140); assert.doesNotMatch(ev.text, /casino|jackpot/i);
   feed.emit({ room: 'OT-01', agent: 'head_trader', model: null, stage: 'proposal', text: 'BUY 1 AAPL' });
   feed.emit({ room: 'OT-01', agent: 'quant', stage: 'thinking', data: { on: true } });

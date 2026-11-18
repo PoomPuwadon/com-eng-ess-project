@@ -19,7 +19,7 @@ export function providerOf(model) {
 
 /** Do-nothing feed so services built without one (tests, tools) keep working. */
 export const nullFeed = {
-  emit: () => null, think: async (_o, p) => p, status() {}, getStatus: () => ({}), list: () => [], enabled: false,
+  emit: () => null, think: async (_o, p) => (typeof p === 'function' ? p() : p), status() {}, getStatus: () => ({}), list: () => [], enabled: false,
 };
 
 export function createFeed({ db, bus, routeOf = () => null }) {
