@@ -114,6 +114,8 @@ function stopVideo(sl) {
   sl.video.pause(); sl.video.removeAttribute('src'); sl.video.load(); sl.video = null; sl.tex?.dispose(); sl.tex = null;
 }
 const stopAll = () => SLOTS.forEach(stopVideo);
+const FAILED = new Set(); // clip addresses that 404'd or would not decode: skipped for a few minutes (no retry storm, no black screen)
+const markFailed = (v) => { if (!v || FAILED.has(v.src)) return; FAILED.add(v.src); setTimeout(() => { FAILED.delete(v.src); apply(); }, 5 * 60_000); };
 function advance(sl) { sl.idx++; sl.t = 0; stopVideo(sl); apply(); }
 // Clips are fetched into memory and played from a blob: URL. Download-manager extensions (e.g. IDM)
 // pop a "Download File Info" dialog for any <video> pointed straight at an .mp4 address; they ignore
@@ -131,10 +133,10 @@ function playFile(sl, v) {
   stopVideo(sl);
   const vid = Object.assign(document.createElement('video'), { muted: true, playsInline: true, preload: 'auto' });
   const token = (sl.token = (sl.token || 0) + 1);
-  clipUrl(v.src).then((u) => { if (sl.token === token && sl.video === vid) { vid.src = u; vid.play().catch(() => {}); } }).catch(() => { if (sl.video === vid) advance(sl); });
+  clipUrl(v.src).then((u) => { if (sl.token === token && sl.video === vid) { vid.src = u; vid.play().catch(() => {}); } }).catch(() => { if (sl.video === vid) { markFailed(v); advance(sl); } });
   vid.dataset.id = v.id;
   vid.addEventListener('ended', () => advance(sl));
-  vid.addEventListener('error', () => advance(sl));
+  vid.addEventListener('error', () => { markFailed(v); advance(sl); });
   sl.video = vid;
   sl.tex = new THREE.VideoTexture(vid); sl.tex.colorSpace = THREE.SRGBColorSpace; sl.tex.generateMipmaps = false; sl.tex.minFilter = THREE.LinearFilter;
 }
@@ -142,7 +144,8 @@ let ytScreens = [];
 
 /** choose what each screen group shows for the current state */
 function apply() {
-  const f = currentMedia();
+  const f0 = currentMedia();
+  const f = f0 && { ...f0, videos: f0.videos.filter((v) => v.kind !== 'file' || !FAILED.has(v.src)) }; // clips that failed are skipped
   if (!f) { stopAll(); setArenaYoutube(null); for (const k of ['h2h', 'reel', 'reel2']) setMediaScreens(k, null); return; }
   setMediaScreens('h2h', f.h2h.length ? H2H.t : null);
   if (!f.videos.length) { stopAll(); setArenaYoutube(null); for (const sl of SLOTS) setMediaScreens(sl.kind, f.h2h.length ? H2H.t : null); return; } // a dossier but no clips

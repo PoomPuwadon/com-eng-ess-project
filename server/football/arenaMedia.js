@@ -71,6 +71,18 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
   const listeners = new Set();
   const thumbs = new Map();
 
+  // Uploads live on this server's disk; on a host with an ephemeral disk (a redeploy wipes it) the saved list
+  // would still name clips whose files are gone, and every viewer's screen went black. Drop such entries.
+  function pruneMissing() {
+    let n = 0;
+    for (const f of Object.values(state.fixtures)) {
+      const keep = f.videos.filter((v) => v.kind !== 'file' || existsSync(join(dir, v.file)));
+      if (keep.length !== f.videos.length) { n += f.videos.length - keep.length; f.videos = keep; }
+    }
+    if (n) { state.audit.unshift({ at: now(), by: 'system', what: `dropped ${n} uploaded highlight(s) whose file is no longer on the server` }); state.audit.length = Math.min(state.audit.length, 40); db.kvSet(KEY, state); log.warn?.(`[media] dropped ${n} uploaded highlight(s) with no file on disk`); }
+    return n;
+  }
+  pruneMissing();
   const save = () => db.kvSet(KEY, state);
   const changed = () => { save(); const v = view(); for (const fn of listeners) { try { fn(v); } catch (e) { log.warn?.('[media]', e.message); } } };
   const audit = (by, what) => { state.audit.unshift({ at: now(), by, what }); state.audit.length = Math.min(state.audit.length, 40); };
@@ -282,6 +294,7 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
     return { ...f, videos: f.videos.map((v) => (v.kind === 'file' ? { id: v.id, kind: 'file', title: v.title, src: `/api/arena-media/file/${v.file}`, mime: v.mime, size: v.size, at: v.at, by: v.by } : { id: v.id, kind: 'youtube', yt: v.yt, title: v.title, thumb: `/api/arena-media/thumb/${v.yt}`, at: v.at, by: v.by })) };
   }
   function view() {
+    pruneMissing();
     return { onScreens: state.onScreens, fixtures: Object.fromEntries(Object.entries(state.fixtures).map(([k, f]) => [k, publicFixture(f)])), audit: state.audit.slice(0, 12), limits: { uploadMb: MAX_UPLOAD / 1024 / 1024, videos: MAX_VIDEOS, rows: MAX_ROWS } };
   }
 
@@ -298,6 +311,6 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
     };
   }
 
-  return { view, fetchH2H, autoFill, setH2H, addYoutube, upload, removeVideo, clear, show, serveFile, thumb, hubOps, onChange: (fn) => listeners.add(fn), dir };
+  return { view, pruneMissing, fetchH2H, autoFill, setH2H, addYoutube, upload, removeVideo, clear, show, serveFile, thumb, hubOps, onChange: (fn) => listeners.add(fn), dir };
 }
 

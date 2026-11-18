@@ -160,3 +160,18 @@ test('arena media: every write is staff-only on the hub and over HTTP; changes r
   assert.ok(existsSync(join(dir, 'media')));
   cleanup(dir);
 });
+
+test('arena media: after a redeploy wipes the disk, uploaded clips with no file are dropped (YouTube clips stay)', async () => {
+  const dir = tmp(), dbFile = join(dir, 'firm.db'), mdir = join(dir, 'media');
+  const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ title: 'Official clip' }) });
+  const m1 = createArenaMedia({ db: openDb(dbFile), football: fakeFootball(), dir: mdir, log: quiet, fetchImpl });
+  await m1.addYoutube(MATCH.id, 'https://youtu.be/dQw4w9WgXcQ', 'Classic meeting', 'admin:Ana');
+  await m1.upload(MATCH.id, Readable.from([mp4(4096), Buffer.alloc(4096, 1)]), { title: 'Goals', length: 8192, by: 'ceo:Bo' });
+  assert.equal(m1.view().fixtures[MATCH.id].videos.length, 2);
+  for (const n of readdirSync(mdir)) rmSync(join(mdir, n)); // the host wiped the disk; the database still lists the clip
+  const m2 = createArenaMedia({ db: openDb(dbFile), football: fakeFootball(), dir: mdir, offline: true, log: quiet });
+  const v = m2.view();
+  assert.deepEqual(v.fixtures[MATCH.id].videos.map((x) => x.kind), ['youtube'], 'the missing upload is no longer advertised');
+  assert.ok(v.audit.some((a) => a.by === 'system' && /no longer on the server/.test(a.what)), 'and the audit log says so');
+  cleanup(dir);
+});
