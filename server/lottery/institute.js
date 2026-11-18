@@ -52,6 +52,17 @@ const SCHEMA = {
   properties: { tickets: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['number', 'rationale'], properties: { number: { type: 'string' }, rationale: { type: 'string' } } } }, note: { type: 'string' } },
 };
 
+const QUANT_SYSTEM = `You are the Lottery Quant (Principal Quantitative Researcher) at a satirically over-confident luxury financial firm's
+Probability Research Institute, which treats the Thai Government Lottery like a quant fund. You receive the research pipeline output for the
+next draw: stage summaries, candidate certificates with model-implied value, backtest metrics vs the uniform null, Monte Carlo p-value.
+Rank the candidates into a "shortlist" (best first, 3-8 numbers, ONLY from the candidate list) for the Head of Thai Markets, and write
+"note": 2-4 sentences (max 80 words), deadpan, rigorous-sounding, truthful about the numbers (if there is no edge over chance, say so
+with a straight face). Never invent numbers. Never use the words casino, gambling, gamble, jackpot, rigged.`;
+const QUANT_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['shortlist', 'note'],
+  properties: { shortlist: { type: 'array', items: { type: 'string' } }, note: { type: 'string' } },
+};
+
 export function createInstitute({ db, ledger, data, gateway, llm, bus, players, log = console }) {
   let running = false;
 
@@ -143,20 +154,30 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     if (db.get("SELECT 1 FROM lottery_tickets WHERE owner = ? AND target_date = ?", DEPT.thai, run.target)) return null;
     const e = run.stages.find((s) => s.id === 'models').data.L2.metrics.find((m) => m.id === 'ensemble');
     const mc = run.stages.find((s) => s.id === 'montecarlo').data;
-    const cands = run.picks.candidates;
+    let cands = run.picks.candidates;
     const budget = ledger.balance(DEPT.thai);
     if (budget < 8 * TICKET_PRICE) return null; // budget still in transit with the ALC: decide on a later cycle
-    let chosen = cands.slice(0, 5).map((c) => ({ number: c.number, rationale: `Highest model-implied value (¤${c.modelValue}).` }));
-    let note = null, usedLLM = false;
-    const out = await llm.json({ job: 'lottery_decision', agent: 'thai_head', system: SYSTEM, maxTokens: 2000, user: JSON.stringify({
-      targetDraw: run.target, budget: budget / 100, certificatePrice: TICKET_PRICE / 100, candidates: cands,
-      backtestLast2: { hits: e.hits, draws: e.draws, hitRate: e.hitRate, nullRate: e.baselineRate, lift: e.lift, ci95: e.ci95, pValue: e.pValue, logLossBits: e.logLossBits, nullBits: e.baselineBits },
+    // Lottery Quant (its own model, llm.js ROUTES): ranks the candidates and writes the research note
+    const backtest = { hits: e.hits, draws: e.draws, hitRate: e.hitRate, nullRate: e.baselineRate, lift: e.lift, ci95: e.ci95, pValue: e.pValue, logLossBits: e.logLossBits, nullBits: e.baselineBits };
+    const lq = await llm.ask({ job: 'lottery_research', agent: 'lottery_quant', system: QUANT_SYSTEM, schema: QUANT_SCHEMA, maxTokens: 900, user: JSON.stringify({
+      targetDraw: run.target, stages: run.stages.map((s) => ({ stage: s.name, summary: s.summary })), candidates: cands, backtestLast2: backtest, monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, certificatePrice: TICKET_PRICE / 100 }) });
+    let quantModel = null, quantNote = null;
+    if (lq && Array.isArray(lq.data.shortlist)) {
+      const byNum = new Map(cands.map((c) => [c.number, c]));
+      const ranked = [...new Set(lq.data.shortlist.map(String))].filter((n) => byNum.has(n)).map((n) => byNum.get(n));
+      if (ranked.length) { cands = [...ranked, ...cands.filter((c) => !ranked.includes(c))]; quantModel = lq.model; quantNote = lq.data.note; }
+    }
+    let chosen = cands.slice(0, 5).map((c) => ({ number: c.number, rationale: quantModel ? `Lottery Quant shortlist (model-implied ¤${c.modelValue}).` : `Highest model-implied value (¤${c.modelValue}).` }));
+    let note = null, usedLLM = false, model = null;
+    const out = await llm.ask({ job: 'lottery_decision', agent: 'thai_head', system: SYSTEM, maxTokens: 2000, user: JSON.stringify({
+      targetDraw: run.target, budget: budget / 100, certificatePrice: TICKET_PRICE / 100, candidates: cands, lotteryQuantNote: quantNote,
+      backtestLast2: backtest,
       monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, modelWeights: run.stages.find((s) => s.id === 'ensemble').data.L2.weights,
     }), schema: SCHEMA });
-    if (out && Array.isArray(out.tickets)) {
+    if (out && Array.isArray(out.data.tickets)) {
       const valid = new Set(cands.map((c) => c.number));
-      chosen = out.tickets.filter((t) => valid.has(t.number)).slice(0, 8);
-      note = out.note; usedLLM = true;
+      chosen = out.data.tickets.filter((t) => valid.has(t.number)).slice(0, 8);
+      note = out.data.note; usedLLM = true; model = out.model;
     }
     note ||= `For the ${run.target} draw the Institute deploys ${chosen.length} certificates. The DMA ensemble scored ${e.hits}/${e.draws} top-5 hits on the last two digits against ${(e.baselineRate * e.draws).toFixed(1)} expected by chance (lift ${e.lift.toFixed(2)}×, 95% CI ${(e.ci95[0] / e.baselineRate).toFixed(2)}–${(e.ci95[1] / e.baselineRate).toFixed(2)}×, p = ${e.pValue.toFixed(2)}). Statistically, this is indistinguishable from a fair draw. Conviction remains exceptionally high.`;
     const bought = [], rejected = [];
@@ -164,23 +185,23 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     try {
       const commit = gateway.check('thai_head', 'BUY_TICKETS', spend);
       db.tx(() => {
-        for (const t of chosen) bought.push(buyFor(DEPT.thai, t.number, run.target, { runId: run.id, source: 'agent', actor: 'agent:thai_head' }));
+        for (const t of chosen) bought.push(buyFor(DEPT.thai, t.number, run.target, { runId: run.id, source: 'agent', actor: 'agent:thai_head', model: model || 'rules' }));
         commit();
       });
     } catch (e2) { gateway.reject('thai_head', { tickets: chosen.map((t) => t.number) }, e2.message); rejected.push(e2.message); }
-    run.decision = { agent: 'Head of Thai Markets', at: Date.now(), usedLLM, note, tickets: chosen.map((t) => ({ ...t, bought: bought.some((b) => b.number === t.number) })), spend: bought.length * TICKET_PRICE, rejected };
+    run.decision = { agent: 'Head of Thai Markets', at: Date.now(), usedLLM, model, quantModel, quantNote, note, tickets: chosen.map((t) => ({ ...t, bought: bought.some((b) => b.number === t.number) })), spend: bought.length * TICKET_PRICE, rejected };
     saveRun(run);
-    gateway.report('thai_head', note, { target: run.target, tickets: run.decision.tickets, spend: run.decision.spend }, usedLLM);
-    gateway.report('lottery_quant', run.stages.map((s) => s.summary).slice(1, 6).join(' '), { runId: run.id });
+    gateway.report('thai_head', note, { target: run.target, tickets: run.decision.tickets, spend: run.decision.spend }, model || false);
+    gateway.report('lottery_quant', quantNote || run.stages.map((s) => s.summary).slice(1, 6).join(' '), { runId: run.id, shortlist: cands.slice(0, 8).map((c) => c.number) }, quantModel || false);
     bus.emit('lottery', { type: 'decision', id: run.id });
     return run.decision;
   }
 
   // ---------------------------------------------------------------- certificates
-  function buyFor(owner, number, target, { runId = null, source = 'player', actor } = {}) {
+  function buyFor(owner, number, target, { runId = null, source = 'player', actor, model = null } = {}) {
     if (!/^\d{6}$/.test(number)) throw err('A certificate number has exactly six digits.');
-    const { lastInsertRowid } = db.run('INSERT INTO lottery_tickets(owner, number, target_date, sale_day, price, status, run_id, source, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      owner, number, target, bkkDate(), TICKET_PRICE, 'pending', runId, source, Date.now());
+    const { lastInsertRowid } = db.run('INSERT INTO lottery_tickets(owner, number, target_date, sale_day, price, status, run_id, source, created_at, model) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      owner, number, target, bkkDate(), TICKET_PRICE, 'pending', runId, source, Date.now(), model);
     const id = Number(lastInsertRowid);
     const internal = owner.startsWith('PLAYER:'); // visitors buy from the firm; the desk buys from the real-world market
     ledger.post({ actor: actor || owner, reason: 'LOTTERY_TICKET', ref: `ticket:${id}`, idem: `ticket:${id}:buy`,

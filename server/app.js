@@ -14,6 +14,7 @@ import { createLLM } from './agents/llm.js';
 import { createGateway, AGENTS } from './agents/gateway.js';
 import { createTradingDesk } from './agents/tradingDesk.js';
 import { createChartAnalyst } from './agents/chartAnalyst.js';
+import { createLeague } from './agents/league.js';
 import { createFootball } from './football/service.js';
 import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
@@ -51,6 +52,7 @@ export function createApp(config, log = console) {
   const llm = createLLM(db, config, log);
   const gateway = createGateway(db);
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log });
+  const league = createLeague({ db, market, desk });
   const chartDesk = createChartAnalyst({ llm, log });
   const football = createFootball({ db, ledger, treasury, llm, config, log });
   const media = createArenaMedia({ db, football, dir: config.mediaDir || join(ROOT, 'data', 'arena-media'), offline: Boolean(config.offline), log });
@@ -117,7 +119,7 @@ export function createApp(config, log = console) {
     const book = trading.portfolio(DEPT.trading);
     return {
       book, navHistory: trading.navHistory(DEPT.trading), trades: trading.trades(DEPT.trading, 60), orders: trading.orders(DEPT.trading, 30),
-      agents: gateway.latestReports('trading_floor', 3), budget: { inTransit: treasury.inTransit(DEPT.trading) }, llm: llm.status(),
+      agents: gateway.latestReports('trading_floor', 3), desks: desk.sleeves(), league: league.table(), budget: { inTransit: treasury.inTransit(DEPT.trading) }, llm: llm.status(),
       lastTick: desk.lastTick(), nextTickInMs: desk.lastTick() ? Math.max(0, desk.lastTick() + desk.intervalMs() - Date.now()) : null,
     };
   }
@@ -157,7 +159,8 @@ export function createApp(config, log = console) {
     'POST /api/market/cancel': async (req) => { const p = need(req); return { order: trading.cancelOrder(p.account, Number((await readBody(req)).id)), portfolio: trading.portfolio(p.account) }; },
     'GET /api/market/leaderboard': () => ({ leaders: trading.leaderboard(players, config.startingBalance), firm: { nav: trading.portfolio(DEPT.trading).nav, start: 100_000_000 } }),
     'GET /api/firm/book': () => firmBook(),
-    'GET /api/football/state': (req) => { const p = authOf(req); return football.snapshot(p ? p.account : null); },
+    'GET /api/ai/league': () => ({ league: league.table(), llm: llm.status() }),
+    'GET /api/football/state': (req) => { const p = authOf(req); return { ...football.snapshot(p ? p.account : null), league: league.table(), llm: llm.status() }; },
     'GET /api/arena-media': () => media.view(),
     'POST /api/football/position': async (req) => { const p = need(req); limit(p.id); const b = await readBody(req); const out = football.open({ owner: p.account, matchId: b.matchId, market: b.market, pick: b.pick, stake: Math.round(Number(b.amount)), actor: `player:${p.id}` }); return { position: out, balance: ledger.balance(p.account) }; },
     // OT-01 Chart Desk: image -> UP/DOWN (AI when a key is set, labelled demo otherwise)
@@ -170,7 +173,7 @@ export function createApp(config, log = console) {
         calendar: institute.calendar(), latest: lotto.latest(), sales: institute.sales(institute.calendar().next),
         recentDraws: lotto.draws().slice(-12).reverse().map((d) => ({ date: d.date, first: d.first, last2: d.last2, last3f: d.last3f, last3b: d.last3b })), draws: lotto.count(), backfill: lotto.state, attribution: ATTRIBUTION, price: TICKET_PRICE,
         run, history: institute.history(), models: MODELS.map(({ id, name, desc }) => ({ id, name, desc })), targets: Object.fromEntries(Object.entries(TARGETS).map(([k, t]) => [k, { label: t.label, k: t.k, topK: t.topK }])),
-        agents: gateway.latestReports('thai_markets', 2), tickets: p ? institute.tickets(p.account) : [], llm: llm.status(),
+        agents: gateway.latestReports('thai_markets', 2), league: league.table(), tickets: p ? institute.tickets(p.account) : [], llm: llm.status(),
       };
     },
     'POST /api/lottery/buy': async (req) => { const p = need(req); limit(p.id); const b = await readBody(req); return institute.buy(p.id, b.number, b.qty || 1); },
@@ -240,5 +243,5 @@ export function createApp(config, log = console) {
   const start0 = start, stop0 = stop;
   start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
   stop = () => { ws?.stop(); football.stop(); stop0(); };
-  return { auth, hub, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  return { auth, hub, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

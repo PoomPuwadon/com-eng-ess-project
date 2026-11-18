@@ -93,6 +93,10 @@ export function openDb(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  // additive migrations: which model made each decision (Claude v Gemini league table)
+  for (const t of ['orders', 'trades', 'lottery_tickets']) {
+    if (!db.prepare(`PRAGMA table_info(${t})`).all().some((c) => c.name === 'model')) db.exec(`ALTER TABLE ${t} ADD COLUMN model TEXT`);
+  }
   // statement cache
   const cache = new Map();
   db.q = (sql) => { let s = cache.get(sql); if (!s) { s = db.prepare(sql); cache.set(sql, s); } return s; };

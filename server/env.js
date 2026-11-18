@@ -2,6 +2,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { parseRoutes } from './agents/llm.js';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -29,7 +30,9 @@ export const CONFIG = {
   geminiKey: process.env.GEMINI_API_KEY || '',
   // which provider the agents use when both keys are set: 'claude' (default) or 'gemini'
   llmProvider: (process.env.LLM_PROVIDER || '').toLowerCase(),
-  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  geminiModel: process.env.GEMINI_MODEL || '', // comma list = fallback chain; empty = DEFAULT_GEMINI in agents/llm.js
+  // per-agent provider overrides, e.g. "head_trader=claude,co_head_trader=gemini" (defaults: ROUTES in agents/llm.js)
+  agentProviders: parseRoutes(process.env.AGENT_PROVIDERS),
   footballKey: process.env.FOOTBALL_DATA_API_KEY || '',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
   mediaDir: process.env.MEDIA_DIR || join(ROOT, 'data', 'arena-media'), // VT-02 uploaded highlights (gitignored)

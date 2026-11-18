@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from '../db.js';
-import { createLLM, pickProvider } from '../agents/llm.js';
+import { createLLM, pickProvider, parseRoutes } from '../agents/llm.js';
 import { createChartAnalyst, parseImage, heuristicVerdict } from '../agents/chartAnalyst.js';
 
 const quiet = { log() {}, warn() {}, error() {} };
@@ -18,6 +18,48 @@ test('provider selection: claude by default, gemini when it is the only key, LLM
   const llm = createLLM(openDb(':memory:'), { ...base, anthropicKey: '', geminiKey: '' }, quiet);
   assert.equal(llm.enabled(), false);
   assert.match(llm.status().reason, /rule-based fallback/);
+});
+
+test('per-agent routing: Claude and Gemini side by side, fallback to whichever key exists, .env overrides', async () => {
+  const both = createLLM(openDb(':memory:'), { ...base, anthropicKey: 'a', geminiKey: 'g' }, quiet);
+  assert.equal(both.route('head_trader').provider, 'claude');
+  assert.equal(both.route('co_head_trader').provider, 'gemini');
+  assert.equal(both.route('co_head_trader').model, 'gemini-2.5-flash');
+  assert.equal(both.route('risk_officer').model, 'claude-haiku-5-5');
+  assert.equal(both.status().providers.length, 2);
+  const geminiOnly = createLLM(openDb(':memory:'), { ...base, anthropicKey: '', geminiKey: 'g' }, quiet);
+  assert.equal(geminiOnly.route('head_trader').provider, 'gemini', 'no Claude key: Desk A falls back to Gemini');
+  assert.deepEqual(parseRoutes('head_trader=gemini, quant=claude, x=gpt'), { head_trader: 'gemini', quant: 'claude' });
+  const over = createLLM(openDb(':memory:'), { ...base, anthropicKey: 'a', geminiKey: 'g', agentProviders: { head_trader: 'gemini' } }, quiet);
+  assert.equal(over.route('head_trader').provider, 'gemini');
+  // a Gemini-routed agent's call goes to Gemini and reports the model it used
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":1}' }] }, finishReason: 'STOP' }], usageMetadata: {} }), { status: 200 });
+  try { assert.deepEqual(await both.ask({ job: 't', agent: 'co_head_trader', system: 's', user: 'u', schema: {} }), { data: { ok: 1 }, provider: 'gemini', model: 'gemini-2.5-flash' }); }
+  finally { globalThis.fetch = real; }
+});
+
+test('gemini fallback chain: a retired (404) or overloaded (503) model hands over to the next, and the answering model is recorded', async () => {
+  const db = openDb(':memory:');
+  const llm = createLLM(db, { ...base, anthropicKey: '', geminiKey: 'g', geminiModel: 'gemini-old, gemini-busy, gemini-3.1-flash-lite' }, quiet);
+  const real = globalThis.fetch;
+  const hits = [];
+  globalThis.fetch = async (url) => {
+    const m = url.match(/models\/([^:]+):/)[1]; hits.push(m);
+    if (m === 'gemini-old') return new Response('{}', { status: 404 });
+    if (m === 'gemini-busy') return new Response('{}', { status: 503 });
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":1}' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 10 } }), { status: 200 });
+  };
+  try {
+    const r = await llm.ask({ job: 't', agent: 'quant', system: 's', user: 'u', schema: {} });
+    assert.equal(r.model, 'gemini-3.1-flash-lite');
+    assert.deepEqual(hits, ['gemini-old', 'gemini-busy', 'gemini-3.1-flash-lite']);
+    assert.equal(db.get('SELECT model FROM llm_spend').model, 'gemini-3.1-flash-lite');
+    hits.length = 0;
+    await llm.ask({ job: 't', agent: 'quant', system: 's', user: 'u', schema: {} });
+    assert.deepEqual(hits, ['gemini-3.1-flash-lite'], 'the retired model is skipped for good, the overloaded one is cooling down');
+    assert.equal(llm.route('quant').model, 'gemini-3.1-flash-lite');
+  } finally { globalThis.fetch = real; }
 });
 
 test('gemini provider: REST call, JSON parsed, spend metered against the shared monthly cap', async () => {

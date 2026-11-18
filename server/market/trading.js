@@ -26,12 +26,13 @@ export function createTrading(db, ledger, market, bus, config) {
     if (!q || !(q.price > 0)) throw err('Pricing under review. Markets will reopen shortly.', 409);
     const limit = type === 'limit' ? minor(Number(o.limit)) : null;
     if (type === 'limit' && !(limit > 0)) throw err('Enter a limit price.');
-    if (db.get("SELECT 1 FROM orders WHERE owner = ? AND symbol = ? AND status = 'pending'", owner, symbol) && meta.agent) throw err('An order for this instrument is already working.', 409);
+    // one working order per symbol per agent (the two trading desks may each work the same name)
+    if (meta.agent && db.get("SELECT 1 FROM orders WHERE owner = ? AND symbol = ? AND status = 'pending' AND agent = ?", owner, symbol, meta.agent)) throw err('An order for this instrument is already working.', 409);
 
     return db.tx(() => {
       const now = Date.now();
-      const { lastInsertRowid } = db.run('INSERT INTO orders(owner, symbol, side, qty, type, limit_price, status, created_at, agent, rationale) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        owner, symbol, side, qty, type, limit, 'pending', now, meta.agent || null, meta.rationale ? String(meta.rationale).slice(0, 400) : null);
+      const { lastInsertRowid } = db.run('INSERT INTO orders(owner, symbol, side, qty, type, limit_price, status, created_at, agent, rationale, model) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        owner, symbol, side, qty, type, limit, 'pending', now, meta.agent || null, meta.rationale ? String(meta.rationale).slice(0, 400) : null, meta.model || null);
       const id = Number(lastInsertRowid);
       if (side === 'buy') {
         const reserve = type === 'limit' ? limit * qty : Math.ceil(minor(q.price) * qty * 1.05); // 5 % collar on market orders
@@ -79,9 +80,9 @@ export function createTrading(db, ledger, market, bus, config) {
         db.run('UPDATE positions SET qty = qty - ?, cost = cost - ?, reserved_qty = reserved_qty - ?, realized = realized + ? WHERE owner = ? AND symbol = ?', o.qty, costOut, o.qty, realized, o.owner, o.symbol);
       }
       db.run("UPDATE orders SET status = 'filled', fill_price = ?, filled_at = ? WHERE id = ?", px, now, o.id);
-      db.run('INSERT INTO trades(owner, symbol, side, qty, price, amount, realized, order_id, agent, rationale, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-        o.owner, o.symbol, o.side, o.qty, px, gross, realized, o.id, o.agent, o.rationale, now);
-      const trade = { owner: o.owner, symbol: o.symbol, side: o.side, qty: o.qty, price: px, amount: gross, realized, agent: o.agent, rationale: o.rationale, at: now };
+      db.run('INSERT INTO trades(owner, symbol, side, qty, price, amount, realized, order_id, agent, rationale, created_at, model) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+        o.owner, o.symbol, o.side, o.qty, px, gross, realized, o.id, o.agent, o.rationale, now, o.model || null);
+      const trade = { owner: o.owner, symbol: o.symbol, side: o.side, qty: o.qty, price: px, amount: gross, realized, agent: o.agent, model: o.model || null, rationale: o.rationale, at: now };
       bus.emit('trade', trade);
       return trade;
     });

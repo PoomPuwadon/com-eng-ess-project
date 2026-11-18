@@ -144,14 +144,16 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
       home: { name: m.homeTeam.name, position: rowOf(m, m.homeTeam)?.position ?? null, points: rowOf(m, m.homeTeam)?.points ?? null, following: follow.views(m.homeTeam.id) },
       away: { name: m.awayTeam.name, position: rowOf(m, m.awayTeam)?.position ?? null, points: rowOf(m, m.awayTeam)?.points ?? null, following: follow.views(m.awayTeam.id) },
     }));
-    const out = await llm.json({ job: 'fixture_scout', agent: 'fixture_scout', system: SCOUT_SYSTEM, user: JSON.stringify({ now: new Date().toISOString(), note: 'following = last month of encyclopedia readership for the club (null = unknown)', candidates: cands }), schema: SCOUT_SCHEMA, maxTokens: 700, minBreaker: 1 });
-    if (out && list.some((m) => m.id === out.id)) { pick = list.find((m) => m.id === out.id); preview = out.preview; points = (out.points || []).slice(0, 3); by = 'llm'; }
+    const res = await llm.ask({ job: 'fixture_scout', agent: 'fixture_scout', system: SCOUT_SYSTEM, user: JSON.stringify({ now: new Date().toISOString(), note: 'following = last month of encyclopedia readership for the club (null = unknown)', candidates: cands }), schema: SCOUT_SCHEMA, maxTokens: 700, minBreaker: 1 });
+    const out = res?.data;
+    let model = null;
+    if (out && list.some((m) => m.id === out.id)) { pick = list.find((m) => m.id === out.id); preview = out.preview; points = (out.points || []).slice(0, 3); by = 'llm'; model = res.model; }
     if (!preview) {
       const hp = rowOf(pick, pick.homeTeam)?.position, ap = rowOf(pick, pick.awayTeam)?.position;
       preview = `${pick.competition.name}: ${pick.homeTeam.shortName || pick.homeTeam.name} host ${pick.awayTeam.shortName || pick.awayTeam.name}. Liquidity is positioning accordingly.`;
       points = [isDerby(pick) ? 'A local derby: the whole city is watching' : hp && ap ? `Table: ${hp}${['st', 'nd', 'rd'][hp - 1] || 'th'} v ${ap}${['st', 'nd', 'rd'][ap - 1] || 'th'}` : 'Form under review by the quant desk', `Kick-off ${new Date(pick.utcDate).toUTCString().slice(0, 22)} UTC`, 'House pricing from the Analytics Desk goals model'];
     }
-    marquee = { id: pick.id, by, preview, points, at: Date.now(), reason, v: MARQUEE_V };
+    marquee = { id: pick.id, by, model, preview, points, at: Date.now(), reason, v: MARQUEE_V };
     db.kvSet('football:marquee', marquee);
     log.log?.(`[football] marquee (${by}): ${pick.homeTeam.name} v ${pick.awayTeam.name}`);
     return marquee;
@@ -246,7 +248,7 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
     const mq = marquee && matches.find((m) => m.id === marquee.id);
     return {
       source: state.source, attribution: ATTRIBUTION, simulated: state.source === 'simulated', pricingNote: 'House pricing (Analytics Desk goals model). The free data tier carries no bookmaker prices.',
-      marquee: mq ? { ...view(mq), preview: marquee.preview, points: marquee.points, by: marquee.by } : null,
+      marquee: mq ? { ...view(mq), preview: marquee.preview, points: marquee.points, by: marquee.by, model: marquee.model || null } : null,
       fixtures: upcoming().slice(0, 30).map(view), markets: MARKETS, lastFetch: state.lastFetch, lastError: state.lastError,
       mine: owner ? db.all('SELECT id, match_id, label, stake, price, status, payout, created_at FROM fixture_positions WHERE owner = ? ORDER BY id DESC LIMIT 30', owner) : [],
       desk: { balance: ledger.balance(DEPT_SPORTS), positions: db.all('SELECT label, stake, price, status, payout FROM fixture_positions WHERE owner = ? ORDER BY id DESC LIMIT 8', DEPT_SPORTS) },

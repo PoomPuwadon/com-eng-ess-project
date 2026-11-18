@@ -2,6 +2,7 @@
 // fixtures with real crests, house pricing, a position ticket on the ledger, and your open positions.
 import { registerApp } from './shell.js';
 import { api, fmt, esc, setBalance, ago } from '../net/api.js';
+import { leagueCard } from './league.js';
 
 const crestImg = (t, s = 28) => (t.crest ? `<img src="/api/football/crest?u=${encodeURIComponent(t.crest)}" alt="" width="${s}" height="${s}" style="object-fit:contain;vertical-align:middle">` : `<span style="display:inline-block;width:${s}px;text-align:center;font-weight:800">${esc(t.tla || '')}</span>`);
 const when = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -20,7 +21,7 @@ registerApp('sports', {
       const mq = s.marquee;
       const ticket = m && m.pricing ? Object.entries(s.markets).map(([k, def]) => `<div style="margin:6px 0"><div class="muted" style="font-size:11px;text-transform:uppercase">${esc(def.label)}</div>${Object.entries(def.picks).map(([p, l]) => `<button class="btn ${market === k && pick === p ? '' : 'ghost'}" data-m="${k}" data-p="${p}" style="margin:2px">${esc(l)} <b>${m.pricing.prices[k][p].toFixed(2)}x</b></button>`).join('')}</div>`).join('') : '<div class="empty">Pricing closed.</div>';
       body.innerHTML = `<div class="grid g2">
-        <div class="card"><h3>Marquee fixture · picked by the Fixture Scout${mq ? ` (${mq.by === 'llm' ? 'AI' : 'rule book'})` : ''}</h3>
+        <div class="card"><h3>Marquee fixture · picked by the Fixture Scout${mq ? ` (${mq.by === 'llm' ? `AI · ${esc(mq.model || 'LLM')}` : 'rule book'})` : ''}</h3>
           ${mq ? `<div style="display:flex;align-items:center;gap:12px;font:800 18px system-ui">${crestImg(mq.homeTeam, 48)} ${esc(mq.homeTeam.name)} <span class="muted">v</span> ${esc(mq.awayTeam.name)} ${crestImg(mq.awayTeam, 48)}</div>
             <div class="muted">${esc(mq.competition.name)} · ${when(mq.utcDate)}</div><p>${esc(mq.preview)}</p><ul style="margin:0 0 0 18px">${(mq.points || []).map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '<div class="empty">No fixture selected yet.</div>'}
         </div>
@@ -33,7 +34,8 @@ registerApp('sports', {
         <div class="card"><h3>Your positions</h3>${s.mine.length ? `<table class="tbl" style="width:100%">${s.mine.map((p) => `<tr><td>${esc(p.label)}</td><td>${fmt(p.stake)} @ ${p.price.toFixed(2)}x</td><td>${STATUS[p.status] || p.status}${p.payout ? ` · ${fmt(p.payout)}` : ''}</td></tr>`).join('')}</table>` : '<div class="empty">No positions yet. Positions settle on the real full-time result (90 minutes + stoppage).</div>'}
           <h3 style="margin-top:14px">Sports Desk (AI) book</h3><div class="muted">Desk liquidity ${fmt(s.desk.balance)}</div>${s.desk.positions.map((p) => `<div>${esc(p.label)} · ${fmt(p.stake)} @ ${p.price.toFixed(2)}x · ${STATUS[p.status] || p.status}</div>`).join('') || '<div class="muted">No desk positions yet.</div>'}
           <div class="muted" style="margin-top:12px;font-size:11px">${esc(s.attribution)}. Club crests are the clubs' trademarks, shown for identification only.${s.lastFetch ? ` Updated ${ago(s.lastFetch)}.` : ''}</div></div>
-      </div>`;
+      </div>
+      <div style="margin-top:12px">${leagueCard(s.league, s.llm, 'all')}</div>`;
     }
     body.addEventListener('click', async (e) => {
       const b = e.target.closest('[data-m],[data-open],[data-f]');
