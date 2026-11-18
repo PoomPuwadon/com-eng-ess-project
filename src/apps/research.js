@@ -117,7 +117,17 @@ registerApp('research', {
     // ------------------------------------------------------------ track record
     function renderHistory() {
       const h = state?.history || [];
-      body.innerHTML = `<div class="card"><h3>Track record — predictions vs official results</h3><table class="t"><tr><th>Draw</th><th>Ensemble last-2 picks</th><th>Front 3 / back 3 picks</th><th>Official result</th><th>Outcome</th><th class="r">Desk certificates</th></tr>
+      const bl = state?.blind || [];
+      const blindCard = `<div class="card" style="margin-bottom:14px"><h3>Blind test <span class="pill">result withheld from the desk</span></h3>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">For each official draw the Institute reruns every model on the history <b>without</b> that draw, the desk guesses and buys certificates, and only then are they scored against the real result. The net goes into Thai Markets earnings.</div>
+        <table class="t"><tr><th>Draw</th><th>Saw history through</th><th>Last-2 guess</th><th>Official result</th><th>Certificates</th><th class="r">Net</th></tr>
+        ${bl.map((b) => `<tr><td>${date(b.date)}</td><td class="muted">${date(b.through)}</td>
+          <td><div class="balls">${b.guess.last2.map((x) => `<div class="ball${x === b.actual.last2 ? ' hit' : ''}" style="min-width:30px;height:30px;font-size:12px">${x}</div>`).join('')}</div></td>
+          <td><b class="mono gold">${b.actual.first}</b><div class="muted mono" style="font-size:12px">L2 ${b.actual.last2} · F3 ${b.actual.last3f.join(',')} · B3 ${b.actual.last3b.join(',')}</div> ${b.last2Hit ? '<span class="pill ok">last-2 hit</span>' : '<span class="pill">no hit</span>'}</td>
+          <td class="mono">${b.tickets.length} · ${b.tickets.filter((t) => t.payout > 0).length} paid</td>
+          <td class="r"><span class="${b.net >= 0 ? 'up' : 'down'}">${fmt(b.net, { sign: true })}</span></td></tr>`).join('') || '<tr><td colspan="6" class="empty">The first blind round plays once the desk has budget and the latest official result is on file.</td></tr>'}
+        </table></div>`;
+      body.innerHTML = blindCard + `<div class="card"><h3>Track record — predictions vs official results</h3><table class="t"><tr><th>Draw</th><th>Ensemble last-2 picks</th><th>Front 3 / back 3 picks</th><th>Official result</th><th>Outcome</th><th class="r">Desk certificates</th></tr>
         ${h.map((r) => { const s = r.settlement; return `<tr><td>${date(r.target)}</td>
           <td><div class="balls">${r.last2.map((x) => `<div class="ball${s && x.v === s.last2 ? ' hit' : ''}" style="min-width:30px;height:30px;font-size:12px">${x.v}</div>`).join('')}</div></td>
           <td class="mono">${r.front3.map((x) => x.v).join(' ')} / ${r.back3.map((x) => x.v).join(' ')}</td>

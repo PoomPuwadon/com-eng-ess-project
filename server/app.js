@@ -192,7 +192,7 @@ export function createApp(config, log = console, extra = {}) {
       return {
         calendar: institute.calendar(), latest: lotto.latest(), sales: institute.sales(institute.calendar().next),
         recentDraws: lotto.draws().slice(-12).reverse().map((d) => ({ date: d.date, first: d.first, last2: d.last2, last3f: d.last3f, last3b: d.last3b })), draws: lotto.count(), backfill: lotto.state, attribution: ATTRIBUTION, price: TICKET_PRICE,
-        run, history: institute.history(), models: MODELS.map(({ id, name, desc }) => ({ id, name, desc })), targets: Object.fromEntries(Object.entries(TARGETS).map(([k, t]) => [k, { label: t.label, k: t.k, topK: t.topK }])),
+        run, history: institute.history(), blind: institute.blindRounds(), models: MODELS.map(({ id, name, desc }) => ({ id, name, desc })), targets: Object.fromEntries(Object.entries(TARGETS).map(([k, t]) => [k, { label: t.label, k: t.k, topK: t.topK }])),
         agents: gateway.latestReports('thai_markets', 2), league: league.table(), tickets: p ? institute.tickets(p.account) : [], llm: llm.status(),
       };
     },

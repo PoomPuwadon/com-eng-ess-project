@@ -76,15 +76,18 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
   }
 
   // ---------------------------------------------------------------- the research pipeline
-  function runPipeline(trigger = 'scheduled') {
-    const draws = data.draws();
+  // `given` = a hold-out history (a blind round): the pipeline sees ONLY these draws and works toward `forTarget`;
+  // such a run is returned but never stored as the Institute's current run.
+  function runPipeline(trigger = 'scheduled', { draws: given = null, target: forTarget = null } = {}) {
+    const blind = Boolean(given);
+    const draws = given || data.draws();
     if (draws.length < 40) return null;
     const cal = calendar();
     const stages = [];
     const stage = (id, name, agent, fn) => { const t0 = performance.now(); const out = fn(); stages.push({ id, name, agent, ms: Math.round(performance.now() - t0), ...out }); return out; };
 
     stage('ingest', 'Data ingestion', 'Lottery Quant', () => ({
-      summary: `${draws.length} confirmed official draws, ${draws[0].date} → ${draws[draws.length - 1].date}.`,
+      summary: `${draws.length} confirmed official draws, ${draws[0].date} → ${draws[draws.length - 1].date}.${blind ? ' BLIND TEST: the most recent official result is withheld from every model.' : ''}`,
       data: { draws: draws.length, from: draws[0].date, to: draws[draws.length - 1].date, source: ATTRIBUTION, recent: draws.slice(-8).reverse().map((d) => ({ date: d.date, first: d.first, last2: d.last2, last3f: d.last3f, last3b: d.last3b })) },
     }));
     const au = stage('audit', 'Randomness audit', 'Lottery Quant', () => {
@@ -136,11 +139,12 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
       };
     });
 
-    const run = { target: cal.next, createdAt: Date.now(), trigger, draws: draws.length, stages, picks: picks.data, decision: null, settlement: null };
+    const run = { target: forTarget || cal.next, createdAt: Date.now(), trigger, draws: draws.length, stages, picks: picks.data, decision: null, settlement: null, blind };
+    void mc;
+    if (blind) return run; // never persisted: cycle() and the Institute screens only ever see real runs
     const { lastInsertRowid } = db.run('INSERT INTO lottery_runs(target_date, created_at, json) VALUES (?,?,?)', cal.next, run.createdAt, JSON.stringify(run));
     run.id = Number(lastInsertRowid);
     bus.emit('lottery', { type: 'run', id: run.id, target: cal.next });
-    void mc;
     return run;
   }
 
@@ -148,19 +152,18 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
   const getRun = (id) => { const r = id ? db.get('SELECT id, json FROM lottery_runs WHERE id = ?', id) : db.get('SELECT id, json FROM lottery_runs ORDER BY id DESC LIMIT 1'); return r ? { ...JSON.parse(r.json), id: r.id } : null; };
 
   // ---------------------------------------------------------------- Head of Thai Markets: the decision
-  async function decide(run) {
-    const cal = calendar();
-    if (!cal.salesOpen || run.target !== cal.next) return null;
-    if (db.get("SELECT 1 FROM lottery_tickets WHERE owner = ? AND target_date = ?", DEPT.thai, run.target)) return null;
+  const BLIND_NOTE = '\nThis round is a BLIND TEST: the target draw has already been held, but its result has been withheld from you and from every model input. Guess as if the draw were still in the future. Never claim to know the result.';
+
+  /** Lottery Quant ranks the candidates, the Head of Thai Markets picks 0-8; always falls back to the rule book. */
+  async function pick(run, budget, { blind = false } = {}) {
     const e = run.stages.find((s) => s.id === 'models').data.L2.metrics.find((m) => m.id === 'ensemble');
     const mc = run.stages.find((s) => s.id === 'montecarlo').data;
     let cands = run.picks.candidates;
-    const budget = ledger.balance(DEPT.thai);
-    if (budget < 8 * TICKET_PRICE) return null; // budget still in transit with the ALC: decide on a later cycle
+    const exercise = blind ? 'BLIND TEST: this draw has already happened; its result is withheld. Guess it.' : undefined;
     // Lottery Quant (its own model, llm.js ROUTES): ranks the candidates and writes the research note
     const backtest = { hits: e.hits, draws: e.draws, hitRate: e.hitRate, nullRate: e.baselineRate, lift: e.lift, ci95: e.ci95, pValue: e.pValue, logLossBits: e.logLossBits, nullBits: e.baselineBits };
-    const lq = await llm.ask({ job: 'lottery_research', agent: 'lottery_quant', system: QUANT_SYSTEM, schema: QUANT_SCHEMA, maxTokens: 900, user: JSON.stringify({
-      targetDraw: run.target, stages: run.stages.map((s) => ({ stage: s.name, summary: s.summary })), candidates: cands, backtestLast2: backtest, monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, certificatePrice: TICKET_PRICE / 100 }) });
+    const lq = await llm.ask({ job: 'lottery_research', agent: 'lottery_quant', system: QUANT_SYSTEM + (blind ? BLIND_NOTE : ''), schema: QUANT_SCHEMA, maxTokens: 900, user: JSON.stringify({
+      targetDraw: run.target, exercise, stages: run.stages.map((s) => ({ stage: s.name, summary: s.summary })), candidates: cands, backtestLast2: backtest, monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, certificatePrice: TICKET_PRICE / 100 }) });
     let quantModel = null, quantNote = null;
     if (lq && Array.isArray(lq.data.shortlist)) {
       const byNum = new Map(cands.map((c) => [c.number, c]));
@@ -169,8 +172,8 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     }
     let chosen = cands.slice(0, 5).map((c) => ({ number: c.number, rationale: quantModel ? `Lottery Quant shortlist (model-implied ¤${c.modelValue}).` : `Highest model-implied value (¤${c.modelValue}).` }));
     let note = null, usedLLM = false, model = null;
-    const out = await llm.ask({ job: 'lottery_decision', agent: 'thai_head', system: SYSTEM, maxTokens: 2000, user: JSON.stringify({
-      targetDraw: run.target, budget: budget / 100, certificatePrice: TICKET_PRICE / 100, candidates: cands, lotteryQuantNote: quantNote,
+    const out = await llm.ask({ job: 'lottery_decision', agent: 'thai_head', system: SYSTEM + (blind ? BLIND_NOTE : ''), maxTokens: 2000, user: JSON.stringify({
+      targetDraw: run.target, exercise, budget: budget / 100, certificatePrice: TICKET_PRICE / 100, candidates: cands, lotteryQuantNote: quantNote,
       backtestLast2: backtest,
       monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, modelWeights: run.stages.find((s) => s.id === 'ensemble').data.L2.weights,
     }), schema: SCHEMA });
@@ -180,6 +183,16 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
       note = out.data.note; usedLLM = true; model = out.model;
     }
     note ||= `For the ${run.target} draw the Institute deploys ${chosen.length} certificates. The DMA ensemble scored ${e.hits}/${e.draws} top-5 hits on the last two digits against ${(e.baselineRate * e.draws).toFixed(1)} expected by chance (lift ${e.lift.toFixed(2)}×, 95% CI ${(e.ci95[0] / e.baselineRate).toFixed(2)}–${(e.ci95[1] / e.baselineRate).toFixed(2)}×, p = ${e.pValue.toFixed(2)}). Statistically, this is indistinguishable from a fair draw. Conviction remains exceptionally high.`;
+    return { chosen, note, usedLLM, model, quantModel, quantNote, cands };
+  }
+
+  async function decide(run) {
+    const cal = calendar();
+    if (!cal.salesOpen || run.target !== cal.next) return null;
+    if (db.get("SELECT 1 FROM lottery_tickets WHERE owner = ? AND target_date = ?", DEPT.thai, run.target)) return null;
+    const budget = ledger.balance(DEPT.thai);
+    if (budget < 8 * TICKET_PRICE) return null; // budget still in transit with the ALC: decide on a later cycle
+    const { chosen, note, usedLLM, model, quantModel, quantNote, cands } = await pick(run, budget);
     const bought = [], rejected = [];
     const spend = chosen.length * TICKET_PRICE;
     try {
@@ -195,6 +208,54 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     gateway.report('lottery_quant', quantNote || run.stages.map((s) => s.summary).slice(1, 6).join(' '), { runId: run.id, shortlist: cands.slice(0, 8).map((c) => c.number) }, quantModel || false);
     bus.emit('lottery', { type: 'decision', id: run.id });
     return run.decision;
+  }
+
+  // ---------------------------------------------------------------- blind round: guess the draw that just happened
+  // The desk is not told the latest official result. The whole pipeline reruns on the history WITHOUT that draw,
+  // the desk guesses (buys certificates, on the real ledger, from the outside market), and only then are the
+  // certificates scored against the real result. The net lands in the Thai desk's earnings, credited to the
+  // model that guessed. One round per official draw.
+  const BLIND_KEY = 'lottery:blind:v1';
+  const blindRounds = (limit = 6) => db.kvGet(BLIND_KEY, []).slice(0, limit);
+  async function blindRound() {
+    const all = data.draws();
+    if (all.length < 41) return null;
+    const actual = all[all.length - 1];
+    const rounds = db.kvGet(BLIND_KEY, []);
+    if (rounds.some((r) => r.date === actual.date)) return null; // once per draw
+    if (ledger.balance(DEPT.thai) < 16 * TICKET_PRICE) return null; // always leave enough for the real purchase
+    const run = runPipeline('blind', { draws: all.slice(0, -1), target: actual.date });
+    if (!run) return null;
+    const p = await pick(run, ledger.balance(DEPT.thai), { blind: true });
+    const tickets = [];
+    let rejected = null;
+    try {
+      const commit = gateway.check('thai_head', 'BUY_TICKETS', p.chosen.length * TICKET_PRICE);
+      db.tx(() => {
+        for (const t of p.chosen) {
+          const b = buyFor(DEPT.thai, t.number, actual.date, { source: 'blind', actor: 'agent:thai_head', model: p.model || 'rules' });
+          const { prizes, payout } = prizesFor(t.number, actual);
+          if (payout) ledger.post({ actor: 'system:settlement', reason: 'WAGER_WON', ref: `ticket:${b.id}`, idem: `ticket:${b.id}:settle`, transfers: [{ from: EXT_LOTTERY, to: DEPT.thai, amount: payout }] });
+          db.run("UPDATE lottery_tickets SET status = 'settled', payout = ?, prizes = ?, settled_date = ? WHERE id = ?", payout, JSON.stringify(prizes), actual.date, b.id);
+          tickets.push({ number: t.number, rationale: t.rationale, payout, prizes });
+        }
+        commit();
+      });
+    } catch (e) { gateway.reject('thai_head', { blind: actual.date, tickets: p.chosen.map((t) => t.number) }, e.message); rejected = e.message; tickets.length = 0; }
+    const cost = tickets.length * TICKET_PRICE, payout = tickets.reduce((s, t) => s + t.payout, 0);
+    const guessL2 = run.picks.last2.map((x) => x.v), guessF = run.picks.front3.map((x) => x.v), guessB = run.picks.back3.map((x) => x.v);
+    const rec = {
+      date: actual.date, through: all[all.length - 2].date, at: Date.now(), model: p.model || 'rules', // `through` = the last draw the desk was allowed to see
+ quantModel: p.quantModel, usedLLM: p.usedLLM, note: p.note, quantNote: p.quantNote,
+      guess: { last2: guessL2.slice(0, 5), front3: guessF.slice(0, 3), back3: guessB.slice(0, 3) },
+      actual: { first: actual.first, last2: actual.last2, last3f: actual.last3f, last3b: actual.last3b }, // revealed only after the guess was locked in
+      last2Hit: guessL2.slice(0, 5).includes(actual.last2), last2Rank: guessL2.indexOf(actual.last2) + 1 || null,
+      tickets, cost, payout, net: payout - cost, rejected,
+    };
+    db.kvSet(BLIND_KEY, [rec, ...rounds].slice(0, 20));
+    gateway.report('thai_head', `Blind test for the ${actual.date} draw (result withheld): ${tickets.length} certificates, cost ¤${(cost / 100).toFixed(2)}, returned ¤${(payout / 100).toFixed(2)}, net ${rec.net >= 0 ? '+' : '−'}¤${(Math.abs(rec.net) / 100).toFixed(2)}. Last-2 shortlist ${rec.last2Hit ? 'HIT' : 'missed'} (actual ${actual.last2}).`, { blind: true, date: actual.date, net: rec.net }, p.model || false);
+    bus.emit('lottery', { type: 'blind', date: actual.date });
+    return rec;
   }
 
   // ---------------------------------------------------------------- certificates
@@ -282,6 +343,7 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
         if (prior) { run.decision = { ...prior.decision, carriedFrom: prior.id }; saveRun(run); bus.emit('lottery', { type: 'decision', id: run.id }); }
       }
       if (run && !run.decision && run.target === cal.next) await decide(run);
+      try { await blindRound(); } catch (e) { log.warn?.('[lottery] blind round failed:', e.message); } // never lets an experiment block the real desk
       void latestDraw;
     } finally { running = false; }
   }
@@ -295,5 +357,5 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
   const sales = (target) => db.get("SELECT COUNT(*) AS n, COUNT(DISTINCT owner) AS buyers FROM lottery_tickets WHERE owner LIKE 'PLAYER:%' AND target_date = ?", target);
   const tickets = (owner, limit = 100) => db.all('SELECT * FROM lottery_tickets WHERE owner = ? ORDER BY id DESC LIMIT ?', owner, limit).map((t) => ({ ...t, prizes: t.prizes ? JSON.parse(t.prizes) : [] }));
 
-  return { runPipeline, decide, buy, settle, cycle, calendar, getRun, history, tickets, sales, PRIZE_LABEL };
+  return { runPipeline, decide, blindRound, blindRounds, buy, settle, cycle, calendar, getRun, history, tickets, sales, PRIZE_LABEL };
 }

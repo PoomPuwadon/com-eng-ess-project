@@ -164,7 +164,7 @@ export class ExecConsole {
   }
 
   click(ev) {
-    const mb = ev.target.closest('[data-mop]');
+    const mb = ev.target.closest('[data-mop]:not([data-money])'); // Treasury's Add / Remove / Set also carry data-mop; they are not media ops
     if (mb) { this.mediaOp(mb.dataset.mop, mb.dataset); return; }
     const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-bring],[data-money]');
     if (!b) return;

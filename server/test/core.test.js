@@ -269,3 +269,38 @@ test('certificates: purchase escrow, settlement on the next confirmed draw, cons
   assert.equal(app.ledger.balance(player.account), 1_000_000 - 2 * TICKET_PRICE + 2 * 600_000);
   assert.ok(app.ledger.reconcile().ok);
 });
+
+test('blind round: the desk guesses the latest official draw without seeing it; the net lands in the Thai desk earnings, once per draw', async () => {
+  const app = mkApp();
+  const r = rng(11);
+  const mk = (i) => ({ ...DRAW, date: `${2020 + Math.floor(i / 24)}-${String(1 + Math.floor(i / 2) % 12).padStart(2, '0')}-${i % 2 ? '16' : '01'}`,
+    first: String(Math.floor(r() * 1e6)).padStart(6, '0'), last2: String(Math.floor(r() * 100)).padStart(2, '0'),
+    last3f: [String(Math.floor(r() * 1000)).padStart(3, '0'), String(Math.floor(r() * 1000)).padStart(3, '0')], last3b: [String(Math.floor(r() * 1000)).padStart(3, '0'), String(Math.floor(r() * 1000)).padStart(3, '0')] });
+  const hist = Array.from({ length: 60 }, (_, i) => mk(i));
+  for (const d of hist) app.lotto.store(d, { confirmed: true });
+  const lastDraw = hist[hist.length - 1];
+  app.db.run('UPDATE cash_trips SET eta = 0'); app.treasury.deliverDue();
+  const before = app.ledger.balance(DEPT.thai), runsBefore = app.db.get('SELECT COUNT(*) AS n FROM lottery_runs').n;
+  const rec = await app.institute.blindRound();
+  assert.ok(rec, 'a round is played');
+  assert.equal(rec.date, lastDraw.date);
+  assert.equal(rec.through, hist[hist.length - 2].date, 'the desk only saw history up to the draw BEFORE the one it guessed');
+  assert.equal(rec.tickets.length, 5);
+  assert.equal(rec.cost, 5 * TICKET_PRICE);
+  assert.deepEqual(rec.actual.last2, lastDraw.last2, 'the real result is attached only to the scored record');
+  assert.equal(app.db.get('SELECT COUNT(*) AS n FROM lottery_runs').n, runsBefore, 'a blind run is never stored as the Institute\'s current run');
+  const rows = app.db.all("SELECT status, payout, source, target_date, model FROM lottery_tickets WHERE owner = ? AND source = 'blind'", DEPT.thai);
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every((t) => t.status === 'settled' && t.target_date === lastDraw.date && t.model === 'rules'), 'settled at once, model recorded for the league');
+  assert.equal(app.ledger.balance(DEPT.thai), before - rec.cost + rec.payout, 'the Thai desk budget moves by exactly the net');
+  assert.equal(rec.net, rec.payout - rec.cost);
+  assert.equal(app.league.lottery().rules.net, rec.net, 'the net is in the model league / dashboard earnings');
+  assert.ok(app.ledger.reconcile().ok, 'money is conserved');
+  assert.equal(await app.institute.blindRound(), null, 'one round per official draw');
+  assert.equal(app.institute.blindRounds().length, 1);
+  // a new official draw arrives: the previous result is now history, and the next round guesses the NEW one
+  const next = { ...mk(60), date: '2027-01-17' };
+  app.lotto.store(next, { confirmed: true });
+  const rec2 = await app.institute.blindRound();
+  assert.equal(rec2.date, '2027-01-17'); assert.equal(rec2.through, lastDraw.date);
+});
