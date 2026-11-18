@@ -3,13 +3,14 @@
 // Source: the free public MediaWiki API of English Wikipedia (no key, no paid tier). ONE request per
 // 40 clubs resolves each club's article from its football-data.org name (redirects followed) AND returns
 // its daily page views for the last 30 days (prop=pageviews), summed into a monthly readership figure.
-// Budget: only clubs in the 7-day scouting window (~60 clubs -> 2 requests), 2 s apart, cached 7 days;
+// Budget: only clubs in the 7-day scouting window (~100 clubs -> 3 batches, each answered in a few
+// continuation parts), 5 s apart, at most 80 clubs per 30-min cycle, cached 7 days;
 // a 429 stops the run until the next cycle (free-data-sources skill).
 // Never names or ranks any club by hand: every number comes from the readership data.
 
 const WIKI = 'https://en.wikipedia.org/w/api.php';
 const UA = 'FirmGreyboxFixtureScout/1.0 (educational game; notional money only)'; // Wikimedia asks for a descriptive agent
-const TTL = 7 * 86400_000, RETRY_MS = 6 * 3600_000, GAP_MS = 2000, PER_CALL = 40, MAX_PER_RUN = 120;
+const TTL = 7 * 86400_000, RETRY_MS = 6 * 3600_000, GAP_MS = 5000, PER_CALL = 40, MAX_PER_RUN = 80; // gentle: anonymous Wikimedia clients are rate-limited hard
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** 0..2.5 stature score from monthly views: ~10k views -> 0, ~100k -> 1, ~1M -> 2, 3M+ -> 2.5 */
@@ -53,7 +54,18 @@ export function createFollowing({ db, offline = false, log = console, fetchImpl 
         if (i) await sleep(GAP_MS);
         const chunk = stale.slice(i, i + PER_CALL), names = chunk.map((t) => t.name);
         const q = new URLSearchParams({ action: 'query', format: 'json', formatversion: '2', redirects: '1', prop: 'pageviews', pvipdays: '30', titles: names.join('|') });
-        const got = parseViews(names, await get(`${WIKI}?${q}`));
+        // prop=pageviews answers in parts: follow `continue` and merge the pages (a few calls at most)
+        let j = await get(`${WIKI}?${q}`);
+        const merged = { query: { normalized: j.query?.normalized, redirects: j.query?.redirects, pages: [...(j.query?.pages || [])] } };
+        for (let k = 0; j.continue && k < 6; k++) {
+          await sleep(GAP_MS);
+          j = await get(`${WIKI}?${q}&${new URLSearchParams(j.continue)}`);
+          for (const p of j.query?.pages || []) {
+            const have = merged.query.pages.find((x) => x.title === p.title);
+            if (have) have.pageviews = { ...(have.pageviews || {}), ...(p.pageviews || {}) }; else merged.query.pages.push(p);
+          }
+        }
+        const got = parseViews(names, merged);
         for (const t of chunk) { const g = got.get(t.name); cache[t.id] = { title: g.title, views: g.views, at: Date.now() }; n++; }
       }
     } catch (e) { log.warn?.('[following]', e.message); }
