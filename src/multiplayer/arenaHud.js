@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import { Horse } from '../characters/kit.js';
 import { setBalance, fmt, esc, onMe } from '../net/api.js';
 import { BoutSpotlights } from './spotlights.js';
+import { setLiveRace, recordRaceResult } from '../world/raceScreens.js';
+import { racePrices } from '../../server/realtime/pricing.js'; // same maths as the server book
 
 // VT-04 dirt oval (floors/equineCentre.js TRK): straights X 128..170, bends radius 30 about (128|170, 0)
 const TRK = { x0: 128, x1: 170, rc: 30 }; TRK.len = 2 * (TRK.x1 - TRK.x0) + 2 * Math.PI * TRK.rc;
@@ -38,7 +40,7 @@ export class ArenaHud {
     this.selfHp = el('mp-selfhp', '', '<div class="nm">YOUR CONDITION</div><div class="hp"><i style="width:100%"></i></div>');
     this.punchBtn = document.createElement('button'); this.punchBtn.id = 'mp-punch'; this.punchBtn.className = 'mp-actbtn'; this.punchBtn.textContent = 'PUNCH'; document.body.append(this.punchBtn);
     this.tapBtn = document.createElement('button'); this.tapBtn.id = 'mp-tap'; this.tapBtn.className = 'mp-actbtn'; this.tapBtn.innerHTML = 'TAP!<br><small>faster = faster</small>'; document.body.append(this.tapBtn);
-    this.raceHud = el('mp-race', '', '<div class="combo">0.0 taps/s</div><div class="meter"><i></i></div><div class="msg">Tap / click as fast as you can: faster clicking = a faster horse</div>');
+    this.raceHud = el('mp-race', '', '<div class="clickme"><svg viewBox="0 0 40 56" width="54" height="76"><rect x="2" y="2" width="36" height="52" rx="18" fill="#111" stroke="#fff" stroke-width="3"/><path d="M20 2 V22 H2 V20 A18 18 0 0 1 20 2 Z" class="lb" fill="#12ff6a"/><line x1="20" y1="2" x2="20" y2="22" stroke="#fff" stroke-width="2.5"/><line x1="2" y1="22" x2="38" y2="22" stroke="#fff" stroke-width="2.5"/></svg><span class="word">CLICK!</span></div><div class="combo">0.0 taps/s</div><div class="meter"><i></i></div><div class="msg">Tap / click as fast as you can: faster clicking = a faster horse</div>');
     this.lines = el('mp-speedlines');
     this.book = el('mp-book');
     this.spots = new BoutSpotlights(ctx.scene);
@@ -46,11 +48,11 @@ export class ArenaHud {
     const punch = () => this.punch();
     this.punchBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); punch(); });
     this.tapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.tap(); });
-    ctx.canvas.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      if (this.amBoxer()) punch();
-      else if (this.amRacer()) this.tap();
-    });
+    // Left clicks count even while the right button is held (camera orbit): a second button pressed
+    // during a drag sends no new pointerdown, but every press sends a mousedown. Touch/pen use pointerdown.
+    const act = () => { if (this.amBoxer()) punch(); else if (this.amRacer()) this.tap(); };
+    ctx.canvas.addEventListener('mousedown', (e) => { if (e.button === 0) act(); });
+    ctx.canvas.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' && e.button === 0) act(); });
     addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && this.amRacer() && !/INPUT|TEXTAREA/.test(e.target.tagName)) { e.preventDefault(); this.tap(); } });
     this.book.addEventListener('click', (e) => this.bookClick(e));
     this.book.addEventListener('keydown', (e) => e.stopPropagation());
@@ -83,6 +85,10 @@ export class ArenaHud {
       const p = player.pos; this.ctx.placeAt('VT-04', p.x, EQ_Y, p.z + 2, player.yaw);
     }
     if (prevRace && !this.race) this.clearHorses();
+    if (m.race && m.race.phase === 'ended' && prevRace) { // record the real result on the VT-04 screens
+      const res = m.race.result || {}, wi = prevRace.racers.findIndex((r) => r.name === res.winner);
+      recordRaceResult(res.void ? null : res.winner, wi >= 0 ? prevRace.prices?.[wi] : null);
+    }
     if (m.race && m.race.phase === 'ended' && prevRace) this.ctx.hud.toast(m.race.result?.void ? 'Equine session cancelled: positions returned.' : `${m.race.result?.winner} takes the line!`, 3);
     this.paintBook();
   }
@@ -93,7 +99,11 @@ export class ArenaHud {
     rt.ask('punch', { yaw: player.yaw }).then((r) => { if (r?.miss && r.reason) this.ctx.hud.toast(r.reason, 1.2); }).catch(() => {});
     const a = player.avatar; if (a) { a.punchT = 0.25; }
   }
-  tap() { if (!this.race || this.race.phase !== 'running') return; this.tapBuf++; this.localTaps.push(performance.now()); }
+  tap() {
+    if (!this.race || this.race.phase !== 'running') return;
+    this.tapBuf++; this.localTaps.push(performance.now());
+    const c = this.raceHud.querySelector('.clickme'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); // the icon pops on every click
+  }
 
   // ---------------------------------------------------------------- positions panel (spectators)
   // ---- positions panel (spectators): one amount slider + one tap per competitor (user, 2026-11-18)
@@ -206,8 +216,17 @@ export class ArenaHud {
     const now = performance.now();
     this.localTaps = this.localTaps.filter((t) => now - t < 1000);
     const overrides = new Map();
+    // the VT-04 screens show only this live player race (no placeholder field)
+    setLiveRace(this.race ? {
+      phase: this.race.phase, goIn: Math.max(0, Math.ceil(((this.race.goAt || 0) - Date.now()) / 1000)),
+      racers: this.race.racers.map((r, i) => ({ name: r.name, d: this.horses.get(r.conn)?.dd ?? r.d ?? 0, price: this.race.prices?.[i] })),
+    } : null);
     // ---- race
     let myTps = 0;
+    if (this.race) { // odds follow the live gaps (snapshots ~9 Hz), not only the occasional meta update
+      for (const r of this.race.racers) { const srv = this.raceD.get(r.conn); if (srv) r.d = srv.d; }
+      this.race.prices = racePrices(this.race.racers.map((r) => r.d));
+    }
     if (this.race) {
       this.race.racers.forEach((r, i) => {
         const h = this.horseFor(r.conn, i), srv = this.raceD.get(r.conn) || { d: r.d, tps: r.tps, v: r.v, at: now };
@@ -236,6 +255,7 @@ export class ArenaHud {
       this.raceHud.querySelector('.combo').textContent = cd ? `GATE OPENS IN ${cd}` : `${myTps.toFixed(1)} taps/s${heat > 0.75 ? ' 🔥' : ''}`;
       this.raceHud.querySelector('.meter i').style.width = `${(heat * 100).toFixed(0)}%`;
       this.raceHud.classList.toggle('hot', heat > 0.6);
+      this.raceHud.querySelector('.word').textContent = this.ctx.isMobile() ? 'TAP!' : 'CLICK!';
       this.raceHud.querySelector('.msg').textContent = this.ctx.isMobile() ? 'Tap the button as fast as you can: faster tapping = a faster horse' : 'Click (or Space) as fast as you can: faster clicking = a faster horse';
       this.lines.style.opacity = (heat * 0.9).toFixed(2);
       camera.fov += ((70 + heat * 22) - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();

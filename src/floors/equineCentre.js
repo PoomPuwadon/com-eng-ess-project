@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Lux, LM, plaque, addLuxMaterials, peopleInstanced } from '../world/lux.js';
 import { kitMaterials } from './luxKit.js';
 import { luxLiftHall, ceiling } from './luxHall.js';
-import { RC, RACE, RUNNERS, buildRaceScreens, updateRaceScreens, setTrackLength } from '../world/raceScreens.js';
+import { RC, buildRaceScreens, updateRaceScreens, setTrackLength } from '../world/raceScreens.js';
 
 // ================================================================= PHASE 1 — VT-04 EQUINE PERFORMANCE CENTRE
 // Redesign (user, 2026-11-12): modern Dubai-style night race meeting. White GRC, champagne gold, marble,
@@ -643,15 +643,16 @@ export function equineCentre(ctx) {
     for (const [x, y, z, yw] of seats) if (r() < 0.68) guest(x, z, { y: y - 0.02, yaw: yw, sit: true });
   }
 
-  // ================================================================ horses: the field on the track, the ring, the stalls
+  // ================================================================ horses: the parade ring and the stalls
+  // No placeholder field on the track (user, 2026-11-18): the only horses that race are the players'
+  // (multiplayer/arenaHud.js). NT (track runners) stays in the code as 0.
   const G = horseGeo();
-  const NT = RUNNERS.length, NR = 6, NS = 5, NH = NT + NR + NS;
+  const NT = 0, NR = 6, NS = 5, NH = NT + NR + NS;
   const mk = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.frustumCulled = false; ctx.add(m); return m; };
   const coat = mk(G.coat, LM.people, NH), dark = mk(G.dark, LM.ecHorseDark, NH), cloth = mk(G.cloth, LM.people, NH);
   const silk = mk(G.silk, LM.people, NT), legs = mk(G.legs, LM.ecJockeyWhite, NT);
   const col = new THREE.Color();
   for (let i = 0; i < NH; i++) { coat.setColorAt(i, col.set(COATS[(i * 5 + 1) % COATS.length])); cloth.setColorAt(i, col.set(i < NT ? 0xf4f2ee : i < NT + NR ? 0x141a33 : 0x7a1418)); }
-  for (let i = 0; i < NT; i++) silk.setColorAt(i, col.set(RUNNERS[i].silk));
   const grooms = peopleInstanced(ctx, NR);
   for (let i = 0; i < NR; i++) grooms.color(i, 0x141a33, pick(SKIN, r()), 0x111111);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eu = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
@@ -665,10 +666,6 @@ export function equineCentre(ctx) {
     t += dt;
     updateRaceScreens(dt, ctx.group.visible);
     if (!ctx.group.visible) return;
-    for (let i = 0; i < NT; i++) {
-      const lane = -3.5 + (i % 4) * 1.6 + Math.floor(i / 4) * 0.8, [x, z, yaw] = trackPos(RACE.dist[i], lane), ph = t * 7.5 + i * 1.7;
-      setH(i, x, Math.abs(Math.sin(ph)) * 0.14, z, yaw, Math.sin(ph) * 0.06);
-    }
     for (let i = 0; i < NR; i++) { // walking clockwise round the ring, each led by a groom on the inside
       const th = -(t * 1.4) / ((RA + RB) / 2) + (i / NR) * TAU, x = RING.cx + RA * Math.cos(th), z = RING.cz + RB * Math.sin(th);
       const dx = RA * Math.sin(th), dz = -RB * Math.cos(th), yaw = Math.atan2(dx, dz);
@@ -681,7 +678,6 @@ export function equineCentre(ctx) {
   });
   for (const m of [coat, cloth, silk]) if (m.instanceColor) m.instanceColor.needsUpdate = true;
   // initial placement (also covers frames before the first update)
-  for (let i = 0; i < NT; i++) { const [x, z, yaw] = trackPos(RACE.dist[i], -3 + i * 0.8); setH(i, x, 0, z, yaw); }
   for (let i = 0; i < NR; i++) setH(NT + i, RING.cx + RA * Math.cos((i / NR) * TAU), 0, RING.cz + RB * Math.sin((i / NR) * TAU), 0);
 
   // ================================================================ finish

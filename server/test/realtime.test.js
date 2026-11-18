@@ -5,7 +5,7 @@ import { VAULT } from '../ledger.js';
 import { slotOffset, memberPose, dropPoint, BASKET_Y } from '../realtime/basket.js';
 import { fightPrices, racePrices, payoutFor, priceFromProb, MARGIN, speedFromTps, MAX_TPS } from '../realtime/pricing.js';
 import { resolvePunch, inRing, RING, PAVILION_Y } from '../realtime/boxing.js';
-import { pickRacers, TRACK_LEN } from '../realtime/race.js';
+import { pickRacers, TRACK_LEN, grandstandSpot } from '../realtime/race.js';
 
 const quiet = { log() {}, warn() {}, error() {} };
 const mkApp = () => createApp({ dbFile: ':memory:', startingBalance: 1_000_000, offline: true, llmEnabled: false, anthropicKey: '', finnhubKey: '', modelTick: 'claude-haiku-5-5', llmMonthlyCapUsd: 75, allowClosedFills: true, lotteryBackfillFrom: '2020-01-01', adminPassword: 'sesame', maxPlayers: 50 }, quiet);
@@ -281,4 +281,24 @@ test('hub: a CEO adds, removes and sets any guest\'s money through the ledger; n
     assert.equal(ceo.ask({ t: 'money', target: g1.c.id, ...bad }).ok, false, JSON.stringify(bad));
   assert.equal(ceo.ask({ t: 'money', target: 'nobody', op: 'add', amount: 5 }).ok, false);
   assert.ok(app.ledger.reconcile().ok, 'the ledger still reconciles');
+});
+
+test('race start: riders stay for their horses, every other player goes to the VT-04 grandstand facing the track', () => {
+  const app = mkApp();
+  const ceo = client(app, 'Host'), r1 = client(app, 'Rider1'), r2 = client(app, 'Rider2'), s1 = client(app, 'Fan1'), s2 = client(app, 'Fan2');
+  assert.equal(ceo.ask({ t: 'elevate', password: 'sesame', role: 'ceo' }).ok, true);
+  const tps = (x) => x.inbox.filter((m) => m.t === 'teleport').length;
+  const before = [r1, r2].map(tps);
+  assert.equal(ceo.ask({ t: 'raceStart', ids: [r1.c.id, r2.c.id] }).ok, true);
+  assert.deepEqual([r1, r2].map(tps), before, 'riders are not sent to the stand');
+  const spots = [ceo, s1, s2].map((x) => x.last('teleport'));
+  for (const t of spots) {
+    assert.equal(t.floor, 'VT-04');
+    assert.ok(t.z < -50 && t.z > -60 && Math.abs(t.x - 149) < 10, `on the grandstand top walkway (${t.x.toFixed(1)}, ${t.z.toFixed(1)})`);
+    assert.ok(Math.abs(t.y - 99.5) < 0.01);
+    assert.ok(Math.abs(Math.atan2(-Math.sin(t.yaw), -Math.cos(t.yaw)) - Math.atan2(149 - t.x, 0 - t.z)) < 1e-6, 'facing the middle of the track');
+  }
+  assert.ok(new Set(spots.map((t) => t.x.toFixed(2))).size === 3, 'everyone gets their own spot');
+  const a = grandstandSpot(0, 40), b = grandstandSpot(39, 40);
+  assert.ok(Math.abs(a.x - b.x) < 80, 'a crowd of 40 still fits on the stand');
 });

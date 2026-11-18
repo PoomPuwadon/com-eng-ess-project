@@ -68,8 +68,16 @@
 #mp-punch { right: 28px; bottom: 120px; background: radial-gradient(circle at 35% 30%, #ff6a3d, #b3170a); box-shadow: 0 0 22px rgba(255,80,40,.7); }
 #mp-tap { right: 28px; bottom: 110px; width: 150px; height: 150px; background: radial-gradient(circle at 35% 30%, #ffd46b, #c2410c); box-shadow: 0 0 28px rgba(255,180,40,.75); font-size: 19px; }
 #mp-tap:active, #mp-punch:active { transform: scale(.94); }
-#mp-race { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 36; display: none; min-width: 300px; text-align: center; color: #fff; font: 800 13px system-ui; text-shadow: 0 1px 3px #000; pointer-events: none; }
+#mp-race { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); z-index: 36; display: none; min-width: 300px; text-align: center; color: #fff; font: 800 13px system-ui; text-shadow: 0 1px 3px #000; pointer-events: none; }
 #mp-race.on { display: block; }
+#mp-race .clickme { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; animation: mpClickBob .55s ease-in-out infinite alternate; }
+#mp-race .clickme svg { filter: drop-shadow(0 0 10px rgba(18,255,106,.8)); }
+#mp-race .clickme .lb { animation: mpLb .55s steps(1) infinite; }
+#mp-race .clickme .word { font: 900 34px system-ui; letter-spacing: .06em; color: #12ff6a; text-shadow: 0 0 12px rgba(18,255,106,.9), 0 2px 0 #000; }
+#mp-race .clickme.hit svg { animation: mpHit .18s ease-out; }
+@keyframes mpClickBob { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+@keyframes mpLb { 50% { fill: #0a6b31; } }
+@keyframes mpHit { from { transform: scale(1.25); } to { transform: scale(1); } }
 #mp-race .meter { height: 18px; width: 300px; margin: 4px auto; border: 2px solid #fff; border-radius: 9px; overflow: hidden; background: rgba(0,0,0,.5); }
 #mp-race .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3ddc84, #ffd46b 60%, #ff3d00); transition: width .15s; }
 #mp-race .combo { font-size: 26px; color: #ffd46b; letter-spacing: .04em; }

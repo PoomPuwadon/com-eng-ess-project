@@ -8,6 +8,19 @@ import { racePrices, speedFromTps, MAX_TPS } from './pricing.js';
 export const TRACK_LEN = 2 * (170 - 128) + 2 * Math.PI * 30; // one lap of the VT-04 dirt oval (centre line)
 export const COUNTDOWN_MS = 3000, CLOSE_AT = 0.85, WINDOW_MS = 1000;
 
+// Spectators go to the top walkway of the crescent Members' Grandstand (floors/equineCentre.js: arcs
+// about (149, 160), walkway r 214.45..218.5 at +7 m), spread either side of the centre, facing the track.
+export const EQ_FLOOR_Y = 92;
+const STAND = { gx: 149, gz: 160, r: 216.6, y: 7.5, mid: -Math.PI / 2 };
+/** grandstand spot i of n (world), looking at the middle of the track (149, 0) */
+export function grandstandSpot(i, n) {
+  const step = Math.min(0.012, 0.36 / Math.max(1, n)); // ~2.6 m apart, never wider than the stand
+  const a = STAND.mid + (i - (n - 1) / 2) * step;
+  const x = STAND.gx + STAND.r * Math.cos(a), z = STAND.gz + STAND.r * Math.sin(a);
+  const dx = 149 - x, dz = 0 - z;
+  return { floor: 'VT-04', x, y: EQ_FLOOR_Y + STAND.y, z, yaw: Math.atan2(-dx, -dz) };
+}
+
 /**
  * Randomise racers: prefer players who have not boxed in VT-03; if there are too few, fill up from
  * the rest. candidates: [{ id, boxed }]; rand: () => [0,1).
@@ -42,6 +55,9 @@ export function createRace(ctx) {
       book: createBook(ctx.ledger, id), finishOrder: [],
     };
     for (const c of list) ctx.release(c.id);
+    // everyone else (the host included) goes to the grandstand, like the stands for a VT-03 bout
+    const spectators = all.filter((c) => !list.includes(c));
+    spectators.forEach((c, i) => { ctx.release(c.id); ctx.teleport(c.id, grandstandSpot(i, spectators.length)); });
     ctx.broadcast({ t: 'race_go', race: view() });
     ctx.announce(`Equine session: ${race.racers.map((r) => r.name).join(', ')} to the gate. Tap faster = faster horse.`);
     ctx.changed();
