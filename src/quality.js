@@ -1,5 +1,6 @@
-// Graphics quality: 'high' (default) or 'low' (performance mode).
-//   ?q=low / ?q=high forces it for this visit; otherwise the player's saved choice (Graphics button / G key).
+// Graphics quality: 'low' (default, performance mode) or 'high'.
+//   ?q=low / ?q=high forces it for this visit; otherwise the player's saved choice (Graphics button / G key);
+//   with no choice saved the game starts on Low.
 // Low = no glow (post-processing skipped), no sun shadows, no lamp point lights, resolution capped at 1x
 // and lowered automatically when the frame rate sags.
 const KEY = 'firm.quality';
@@ -8,7 +9,7 @@ const param = new URLSearchParams(location.search).get('q');
 let saved = null;
 try { saved = localStorage.getItem(KEY); } catch { /* storage blocked */ }
 
-export const QUALITY = { low: (valid(param) ? param : valid(saved) ? saved : 'high') === 'low' };
+export const QUALITY = { low: (valid(param) ? param : valid(saved) ? saved : 'low') === 'low' };
 
 export function saveQuality(low) {
   try { localStorage.setItem(KEY, low ? 'low' : 'high'); } catch { /* storage blocked: lasts this visit only */ }
