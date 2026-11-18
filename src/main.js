@@ -3,7 +3,7 @@ import { FLOOR_BY_ID, ROLES, findRoom, canAccess, landingZone, BANKS } from './l
 import { buildExterior, FloorManager } from './world/world.js';
 import { updateScreens, updateTicker } from './world/screens.js';
 import { Player } from './player.js';
-import { ElevatorSystem, zoneAt, rideCheck } from './elevators.js';
+import { ElevatorSystem, zoneAt, rideCheck, canUseLifts, LIFT_REFUSAL } from './elevators.js';
 import { Life } from './life.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
@@ -581,6 +581,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
+    if ((car || zone) && !canUseLifts(player.role)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel
     if (car) { document.exitPointerLock?.(); hud.openElevator(car.bank, car.at || player.floor.id, player.role, { car }); }
     else if (zone) { document.exitPointerLock?.(); hud.openElevator(zone.bank, player.floor.id, player.role); }
     else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : openApp(h.app); }
@@ -632,7 +633,9 @@ function frame(now) {
   updateTicker(dt);
   renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);
   const ui = uiState();
-  if (ui.car) {
+  if ((ui.car || ui.zone) && !canUseLifts(player.role)) {
+    hud.prompt(`Staff lift · ${LIFT_REFUSAL}`);
+  } else if (ui.car) {
     const c = ui.car;
     const dir = c.state === 'closed' && c.queue.length ? (FLOOR_BY_ID[c.queue[0]].elevation > c.y ? '▲' : '▼') : '';
     hud.prompt(`Car ${c.label} · ${c.at || `${c.y.toFixed(0)} m`} ${dir} ${c.queue.length ? `→ ${c.queue.join(' → ')}` : ''} · E: choose floor`);
