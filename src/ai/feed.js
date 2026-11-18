@@ -85,3 +85,6 @@ export function startAiFeed() {
 let BOOK = null;
 export const setBook = (b) => { BOOK = b; for (const fn of S.subs) { try { fn({ stage: 'sync' }, false); } catch (e) { console.error(e); } } };
 export const book = () => BOOK;
+
+/** 'claude' | 'gemini' | 'rules' from a model id (null / 'rules' = the rule book) */
+export const providerFromModel = (m) => (/^claude/i.test(m || '') ? 'claude' : /^gemini/i.test(m || '') ? 'gemini' : 'rules');

@@ -42,8 +42,8 @@ export class Board {
     this.cv = document.createElement('canvas'); this.cv.width = Math.round(w * px); this.cv.height = Math.round(h * px);
     this.g = this.cv.getContext('2d');
     this.tex = new THREE.CanvasTexture(this.cv); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 4;
-    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    this.mesh.name = name; this.mesh.frustumCulled = true;
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.tex, toneMapped: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    this.mesh.name = name; this.mesh.frustumCulled = true; this.mesh.renderOrder = 20; // drawn after translucent light beams so nothing washes over the text
     this.bg = bg; this.dirty = true; this.acc = 0; this.shakeT = 0; this.redraws = 0; this.base = null;
   }
   touch() { this.dirty = true; }
