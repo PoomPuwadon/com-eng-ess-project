@@ -10,6 +10,9 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 
+-- sign-in accounts (scrypt-hashed passwords); replicated to Supabase like everything else
+CREATE TABLE IF NOT EXISTS users (key TEXT PRIMARY KEY, name TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, player_id TEXT NOT NULL, created_at INTEGER NOT NULL, last_login INTEGER);
+
 -- ---------------------------------------------------------------- ledger (money-ledger skill)
 CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, kind TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS balances (account_id TEXT PRIMARY KEY REFERENCES accounts(id), balance INTEGER NOT NULL);
@@ -89,13 +92,26 @@ CREATE TABLE IF NOT EXISTS lottery_tickets (
 CREATE INDEX IF NOT EXISTS tickets_status ON lottery_tickets(status);
 `;
 
-export function openDb(file) {
+/** seed: { table: rows[] } read from Supabase at boot (server/store.js); empty for tests and local-only runs. */
+export function openDb(file, { seed } = {}) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
   // additive migrations: which model made each decision (Claude v Gemini league table)
   for (const t of ['orders', 'trades', 'lottery_tickets']) {
     if (!db.prepare(`PRAGMA table_info(${t})`).all().some((c) => c.name === 'model')) db.exec(`ALTER TABLE ${t} ADD COLUMN model TEXT`);
+  }
+  if (seed) {
+    db.exec('BEGIN');
+    for (const [t, rows] of Object.entries(seed)) {
+      if (!rows.length) continue;
+      const have = new Set(db.prepare(`PRAGMA table_info("${t}")`).all().map((c) => c.name));
+      if (!have.size) continue; // a table this build does not know about
+      const cols = Object.keys(rows[0]).filter((c) => have.has(c));
+      const ins = db.prepare(`INSERT OR REPLACE INTO "${t}"(${cols.map((c) => `"${c}"`).join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
+      for (const r of rows) ins.run(...cols.map((c) => r[c] ?? null));
+    }
+    db.exec('COMMIT');
   }
   // statement cache
   const cache = new Map();

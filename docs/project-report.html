@@ -23,6 +23,8 @@ code{font-size:9.3pt;background:#f4f4f6;padding:0 2px}
 <p>Instead of a club problem from the Problem Bank, our team proposed a Free Track project: a multiplayer, walkable 3D web world of an absurdly luxurious mock financial firm, played as satire. It is not a game with a score or an ending. It is a living simulation that runs 24/7: AI employees trade, research and bet using real-world free data with <b>fake money only</b>, while real players walk through the building, chat and play.</p>
 <p>The aim was to show how far one team can get with AI-assisted development (vibe coding) on a project that combines real-time 3D, a server-side simulation, real external APIs and several AI models, while keeping cost at or near zero.</p>
 
+<p><b>Legal context.</b> Stock trading and the government lottery are legal activities in Thailand, which is why the trading floor and lottery room use real market data and official draw results. The project itself is fake-money only by design: there are no deposits, purchases or payouts, and all balances are notional.</p>
+
 <h2>2. What the system does</h2>
 <ul>
 <li><b>Building:</b> a grand lobby splitting into a staff Office Tower and a public Visitors' Tower, joined by a glass bridge, with a basement vault, working elevators and a minimap.</li>
@@ -36,10 +38,10 @@ code{font-size:9.3pt;background:#f4f4f6;padding:0 2px}
 <h2>3. Requirements checklist</h2>
 <table>
 <tr><th style="width:24%">Requirement</th><th>How it is met</th></tr>
-<tr><td>User Login</td><td>Sign-up, log-in and log-out with per-user accounts. Passwords are hashed with scrypt and a per-user salt. Roles and balances are stored per account.</td></tr>
+<tr><td>User Login</td><td>Sign-up, log-in and log-out with per-user accounts. Accounts are stored in Supabase Postgres with scrypt-hashed passwords and a per-user salt. Roles, clearances and balances are stored per account.</td></tr>
 <tr><td>API Integration</td><td>Yahoo Finance and Finnhub (stocks), football-data.org (fixtures, results, crests), Thai Government Lottery Office (draw results), Anthropic Claude and Google Gemini (agents, chart reading). Real data drives the trading screens, arena boards and settlements.</td></tr>
 <tr><td>Challenging: Tier S</td><td>Computer Vision. In the Chart Desk the uploaded image is the input; the vision model's structured answer is shown to the user. Tier B Dashboard &amp; Data Visualization is also present (market, Model League and ledger dashboards); the section cap is 20/20.</td></tr>
-<tr><td>Deployed &amp; Live</td><td>&lt;add public URL and host here&gt;</td></tr>
+<tr><td>Deployed &amp; Live</td><td>https://com-eng-ess-project.onrender.com — Render free web service (Node, Singapore region), built from the GitHub repo with <code>npm install &amp;&amp; npm run build</code> and started with <code>node server/index.js</code>.</td></tr>
 </table>
 
 <h2>4. Architecture</h2>
@@ -47,7 +49,9 @@ code{font-size:9.3pt;background:#f4f4f6;padding:0 2px}
 <tr><th style="width:24%">Layer</th><th>Choice and reason</th></tr>
 <tr><td>Client</td><td>Three.js with Vite. Instanced low-poly meshes for seats, screens and people, and floors built as you reach them, so huge rooms stay smooth on a laptop.</td></tr>
 <tr><td>Server</td><td>One Node.js process: HTTP API plus WebSockets (<code>ws</code>) for presence, chat and live events. A server tick runs the firm whether or not anyone is online.</td></tr>
-<tr><td>Database</td><td>SQLite (<code>node:sqlite</code>, WAL mode). Every money write is one transaction, and triggers make the ledger append-only, so money cannot be duplicated or silently removed.</td></tr>
+<tr><td>Database</td><td>Supabase Postgres is the database of record. At startup the server loads every table from Supabase into an in-memory SQLite working set; every row change is captured by triggers and replicated to Supabase in ordered batches every 1.5 seconds, plus a final flush on shutdown. Money writes are single transactions in the working set, and append-only triggers in both SQLite and Postgres stop the ledger being edited.</td></tr>
+<tr><td>Auth</td><td>Server-side sign-up, log-in and log-out against the Supabase <code>users</code> table; the server verifies each session token before any action. Row-level security is on for every table and the public Data API has no access, so only the server can read or write.</td></tr>
+<tr><td>Hosting</td><td>Render free web service serves the built client and the API/WebSocket from one public URL, so it stays reachable with every team PC off. A free uptime monitor pings it to avoid idle sleep.</td></tr>
 <tr><td>Secrets</td><td>API keys live only in <code>.env.local</code> on the server (gitignored), never in client code. <code>.env.example</code> is committed.</td></tr>
 </table>
 
@@ -77,10 +81,11 @@ code{font-size:9.3pt;background:#f4f4f6;padding:0 2px}
 <li>Real two-player boxing and racing were simulated locally and not yet run with two live players.</li>
 <li>Free data tiers are rate-limited, so some boards fill in over several polling cycles.</li>
 <li>There is no dark-mode toggle and no per-user favourites list.</li>
-<li>The server needs a host that keeps a Node process running. Serverless-only hosts will not work.</li>
+<li>All data lives in Supabase, so the free Render instance can restart without losing accounts or balances. Writes in the last second or so before a crash may be lost, and the free Supabase tier has storage limits and pauses after a week of inactivity.</li>
+<li>The free instance sleeps after idle time (first load can take about a minute); an uptime ping mitigates this.</li>
 </ul>
 
 <h2>9. Team and credit</h2>
-<p>Team members: &lt;Name 1 (ID)&gt; · &lt;Name 2 (ID)&gt; · &lt;Name 3 (ID)&gt;<br>
+<p>Team members: Buddharat Attipa (6830249921) · Puwadon Thammavimutti (6830275121) · Mathis Thayathorn Dubas (6830284821)<br>
 Source: https://github.com/PoomPuwadon/com-eng-ess-project · Built with Claude Code as the AI coding assistant. All data and money are mock or fake.</p>
 </body></html>

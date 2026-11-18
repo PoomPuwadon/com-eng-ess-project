@@ -20,7 +20,7 @@ import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
 import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
-import { createAuth, jsonFileStore, memoryStore } from './auth.js';
+import { createAuth, dbStore, memoryStore } from './auth.js';
 import { createHub } from './realtime/hub.js';
 import { attachWs } from './realtime/ws.js';
 
@@ -38,13 +38,15 @@ function createBus() {
   };
 }
 
-export function createApp(config, log = console) {
-  const db = openDb(config.dbFile);
+/** extra.store / extra.seed: the Supabase write-through store and the rows it loaded (see server/store.js and index.js). */
+export function createApp(config, log = console, extra = {}) {
+  const db = openDb(config.dbFile, { seed: extra.seed });
+  extra.store?.attach(db);
   const bus = createBus();
   const ledger = createLedger(db);
   const treasury = createTreasury(db, ledger, bus);
   const players = createPlayers(db, ledger, config);
-  const auth = createAuth({ store: config.dbFile === ':memory:' ? memoryStore() : jsonFileStore(config.usersFile), players, adminPassword: config.adminPassword || 'admin123' });
+  const auth = createAuth({ store: config.dbFile === ':memory:' && !extra.store ? memoryStore() : dbStore(db, config.usersFile), players, adminPassword: config.adminPassword || 'admin123' });
   const hub = createHub({ players, auth, ledger, config, log });
   const roulette = createRoulette(db, ledger, bus, players);
   const market = createMarketData(db, bus, config, log);
@@ -243,5 +245,5 @@ export function createApp(config, log = console) {
   const start0 = start, stop0 = stop;
   start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
   stop = () => { ws?.stop(); football.stop(); stop0(); };
-  return { auth, hub, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  return { store: extra.store, auth, hub, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

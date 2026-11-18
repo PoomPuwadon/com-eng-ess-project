@@ -22,9 +22,9 @@ li{margin:0 0 1px}
 <table>
 <tr><th>Problem chosen</th><td>Free Track (own idea; same grading criteria as P1–P4)</td></tr>
 <tr><th>Optional tier claimed</th><td><b>Tier S — Computer Vision</b> (Chart Desk: AI reads an uploaded chart image). Extra: Tier B Dashboard &amp; Data Visualization (live market, league and ledger dashboards).</td></tr>
-<tr><th>Live URL</th><td>&lt;add deployed public URL&gt;</td></tr>
+<tr><th>Live URL</th><td>https://com-eng-ess-project.onrender.com</td></tr>
 <tr><th>GitHub URL</th><td>https://github.com/PoomPuwadon/com-eng-ess-project</td></tr>
-<tr><th>Team members</th><td>&lt;Name 1 (ID)&gt; · &lt;Name 2 (ID)&gt; · &lt;Name 3 (ID)&gt;</td></tr>
+<tr><th>Team members</th><td>Buddharat Attipa (6830249921) · Puwadon Thammavimutti (6830275121) · Mathis Thayathorn Dubas (6830284821)</td></tr>
 </table>
 
 <h2>What it does</h2>
@@ -33,10 +33,10 @@ li{margin:0 0 1px}
 <h2>Features built</h2>
 <div class="two">
 <ul>
-<li><b>Accounts:</b> sign-up, log-in, log-out; scrypt-hashed passwords; roles (Visitor, CEO, Staff admin).</li>
+<li><b>Accounts:</b> sign-up, log-in, log-out; accounts stored in Supabase Postgres with scrypt-hashed passwords; roles (Visitor, CEO, Staff admin).</li>
 <li><b>3D building:</b> lobby, Office Tower, Visitors' Tower, glass bridge, vault, working elevators, minimap.</li>
 <li><b>Multiplayer:</b> WebSocket presence, text chat, per-visitor clearances.</li>
-<li><b>Fake-money ledger:</b> append-only double-entry SQLite ledger; vault, budgets, cash-robot trips, audit log.</li>
+<li><b>Fake-money ledger:</b> append-only double-entry ledger in Supabase Postgres; vault, budgets, cash-robot trips, audit log.</li>
 <li><b>Trading floor:</b> real delayed US stock data, rival AI desks, risk officer veto, live P&amp;L screens.</li>
 </ul>
 <ul>
@@ -52,7 +52,7 @@ li{margin:0 0 1px}
 <p style="margin:2px 0">Yahoo Finance / Finnhub (stock quotes and charts) · football-data.org (fixtures, results, crests) · Thai Government Lottery Office API (official draw results) · Anthropic Claude API and Google Gemini API (agent decisions, research notes, chart reading). All free tiers; keys stay on the server in <code>.env.local</code>, never in client code.</p>
 
 <h2>Tech stack</h2>
-<p style="margin:2px 0">Three.js + Vite (client, instanced low-poly rendering) · Node.js server with WebSockets (<code>ws</code>) · SQLite (<code>node:sqlite</code>, WAL) · Claude SDK + Gemini REST · ~24,000 lines of JavaScript, 45+ commits, server tests via <code>node --test</code>.</p>
+<p style="margin:2px 0">Three.js + Vite (client, instanced low-poly rendering) · Node.js server with WebSockets (<code>ws</code>) · <b>Supabase Postgres</b> (database of record, write-through from an in-memory SQLite working set) · Render (free web service) · Claude SDK + Gemini REST · ~24,000 lines of JavaScript, 45+ commits, server tests via <code>node --test</code>.</p>
 
-<div class="note">Mock data only: all money is fake, all visitors and staff are invented. Fiction note: the firm's "wellness" tower and its euphemistic copy are satire.</div>
+<div class="note">Legal context: stock trading and the government lottery are legal in Thailand; this project uses fake money only, by design. Mock data only: all money is fake, all visitors and staff are invented. Fiction note: the firm's "wellness" tower and its euphemistic copy are satire.</div>
 </body></html>

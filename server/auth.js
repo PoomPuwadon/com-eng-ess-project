@@ -39,6 +39,22 @@ export function jsonFileStore(file) {
   };
 }
 
+/** Accounts in the `users` table (replicated to Supabase). importFile: one-time import of a legacy users.json. */
+export function dbStore(db, importFile) {
+  const toRec = (r) => r && { key: r.key, name: r.name, salt: r.salt, hash: r.hash, playerId: r.player_id, createdAt: r.created_at, lastLogin: r.last_login };
+  const insert = (rec) => db.run('INSERT INTO users(key, name, salt, hash, player_id, created_at, last_login) VALUES (?,?,?,?,?,?,?)',
+    rec.key, rec.name, rec.salt, rec.hash, rec.playerId, rec.createdAt || Date.now(), rec.lastLogin ?? null);
+  if (importFile && existsSync(importFile) && !db.get('SELECT 1 AS x FROM users LIMIT 1')) {
+    try { for (const rec of Object.values(JSON.parse(readFileSync(importFile, 'utf8')))) insert(rec); } catch { /* unreadable legacy file: start empty */ }
+  }
+  return {
+    find: (k) => toRec(db.get('SELECT * FROM users WHERE key = ?', k)) || null,
+    insert,
+    update: (k, patch) => { if (patch.lastLogin !== undefined) db.run('UPDATE users SET last_login = ? WHERE key = ?', patch.lastLogin, k); },
+    all: () => db.all('SELECT * FROM users').map(toRec),
+  };
+}
+
 const hashPw = (pw, salt) => scryptSync(String(pw), salt, 32).toString('hex');
 const same = (a, b) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 

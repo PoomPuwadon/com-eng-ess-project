@@ -24,7 +24,9 @@ const bool = (k, d) => (process.env[k] ? /^(1|true|yes)$/i.test(process.env[k]) 
 
 export const CONFIG = {
   port: num('GAME_PORT', 8787),
-  dbFile: process.env.DB_FILE || join(ROOT, 'data', 'firm.db'),
+  // DATABASE_URL (Supabase Postgres, session-pooler URI) makes Supabase the database of record; SQLite is then only the in-memory working set
+  databaseUrl: process.env.DATABASE_URL || '',
+  dbFile: process.env.DB_FILE || (process.env.DATABASE_URL ? ':memory:' : join(ROOT, 'data', 'firm.db')),
   finnhubKey: process.env.FINNHUB_API_KEY || '',
   anthropicKey: process.env.ANTHROPIC_API_KEY || '',
   geminiKey: process.env.GEMINI_API_KEY || '',
