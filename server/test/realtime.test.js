@@ -319,7 +319,8 @@ test('tour: a guest who joins while Tour Mode is on arrives on the host\'s floor
   const tp = late.last('teleport');
   assert.ok(tp, 'a joiner during a tour is teleported');
   assert.equal(tp.floor, 'VT-03');
-  assert.ok(Math.hypot(tp.x - 120, tp.z - 30) < 3.5, 'lands in a ring round the host');
+  assert.deepEqual([tp.x, tp.y, tp.z, tp.yaw], [120, 67, 30, 0], 'lands exactly where Teleport All would put them: the host\'s own spot');
+  assert.equal(tp.by, 'Boss');
 });
 
 test('bring: a CEO can teleport one guest to their position; guests cannot, and you cannot bring yourself', () => {
