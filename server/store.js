@@ -26,7 +26,10 @@ export async function connect(url, log = console, { pool: injected } = {}) {
   const pool = injected || new pg.Pool({ connectionString: url, max: 3, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false }, connectionTimeoutMillis: 15_000 });
   pool.on?.('error', (e) => log.warn('[store] idle client error:', e.message));
   await pool.query('SELECT 1');
-  await pool.query(readFileSync(join(HERE, 'schema.pg.sql'), 'utf8'));
+  // The DDL takes heavy locks (DROP/CREATE TRIGGER, ALTER TABLE): applied only on a fresh database, never on a
+  // normal boot, or two overlapping servers (a Render deploy) deadlock against each other's flushes.
+  const have = await pool.query("SELECT to_regclass('public.lottery_tickets') AS t, to_regclass('public.users') AS u");
+  if (!have.rows[0]?.t || !have.rows[0]?.u) await pool.query(readFileSync(join(HERE, 'schema.pg.sql'), 'utf8'));
 
   let db = null, timer = null, flushing = null, lastError = null, flushed = 0;
 
