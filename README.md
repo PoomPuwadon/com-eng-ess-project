@@ -1,5 +1,7 @@
 # FINANCIAL FIRM
 
+**Live:** https://com-eng-ess-project.onrender.com (free hosting: the first load after a quiet period can take about a minute)
+
 A walkable 3D web experience of an absurdly luxurious (and entirely fake) financial firm, housed in two connected towers.
 It is **not a game**: there is no score and no ending. AI employees trade, research and place positions using **real-world data with
 fake money**, 24/7, while real players walk through the building, watch, take part, and (if they are staff) run everything.
@@ -56,6 +58,29 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill in what you want. Eve
 
 Secrets are read on the server only. They are never sent to the browser or logged. Never commit a real `.env` file.
 
+### Supabase setup (database)
+
+Supabase Postgres is the database of record when `DATABASE_URL` is set. At startup the server loads every table from Supabase into an
+in-memory SQLite working set, and replicates every row change back (about every 1.5 s, and on shutdown). Accounts, the append-only
+money ledger, orders, tickets and agent data therefore survive any restart or redeploy.
+
+1. Create a free project at <https://supabase.com>. In the creation form untick **Enable Data API** and
+   **Grant API access to new tables automatically**, and tick **Enable RLS on new tables automatically**
+   (only the server talks to the database; the public API needs no access).
+2. Click **Connect** (or *Project Settings → Database → Connection string*), choose **Session pooler**, and copy the URI.
+   **Do not use the direct `db.<ref>.supabase.co` string**: it is IPv6-only and fails on hosts such as Render.
+3. Replace `[YOUR-PASSWORD]` with your database password (no brackets). URL-encode symbols: `@` is `%40`, `#` is `%23`, `/` is `%2F`.
+4. Put it in `.env.local` (and in your host's environment settings):
+
+   ```
+   DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+   ```
+
+5. Start the server. The log should say `Supabase Postgres connected · loaded N rows`. On a fresh database the server creates every
+   table itself from [`server/schema.pg.sql`](server/schema.pg.sql) (row-level security on, no public access). `N` is 0 on the first boot.
+
+If it says `cannot reach Supabase Postgres`, check that you used the **session pooler** URI and that the password is URL-encoded.
+
 ### Signing in and roles
 
 - On first load you can continue as a guest, or sign up with a name and password (everyone starts as a **Visitor** with a starting balance).
@@ -89,12 +114,14 @@ The game server also serves the built client, so one process is enough:
 
 1. Build: `npm install && npm run build`
 2. Start: `npm run server`
-3. Set the environment variables from the table above on the host. The server listens on `GAME_PORT` (default `8787`), so on a host that
+3. Set the environment variables from the table above on the host (on Render, *Environment → Add from .env* takes a whole `.env.local`). The server listens on `GAME_PORT` (default `8787`), so on a host that
    assigns a port, set `GAME_PORT` to match it.
 4. Set `DATABASE_URL` for a database that survives restarts and redeploys. Without it, data lives in a local SQLite file, and on a host
    with an ephemeral disk it is lost on every deploy. With `DATABASE_URL` set, uploaded Arena highlight videos are kept in Supabase too.
 
-The live deployment runs this way on Render with Supabase Postgres.
+The live deployment runs this way on Render (free web service, branch `main`, build `npm install && npm run build`, start `node server/index.js`)
+with Supabase Postgres. On Render also set `NODE_VERSION=24` and `GAME_PORT=10000`. Never set `DB_FILE` there: it would point the working
+set at Render's temporary disk. A free Render instance sleeps when idle; a free uptime monitor pinging the URL every 5 minutes keeps it awake.
 
 ## How it is organised
 
@@ -122,3 +149,9 @@ Key rules, in short (the full version is in `CLAUDE.md` and the skills):
 - Football: football-data.org free tier, including club crests; keep their attribution if you redistribute.
 
 This is a satirical simulation for fun. Nothing in it is financial advice.
+
+## Team
+
+Buddharat Attipa (6830249921) · Puwadon Thammavimutti (6830275121) · Mathis Thayathorn Dubas (6830284821)
+
+Computer Engineering Essential, Final Project 2026/1 (Free Track). Released under the MIT licence, see [LICENSE](LICENSE).
