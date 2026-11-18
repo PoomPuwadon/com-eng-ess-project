@@ -8,6 +8,7 @@ import { Life } from './life.js';
 import { AiTraders } from './characters/aiTraders.js';
 import { LotteryAi } from './ai/ot02.js';
 import { ArenaAi } from './ai/vt02.js';
+import { LeisureAi } from './ai/vt01.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -138,6 +139,7 @@ const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
 const life = new Life(scene, elev);
 const lotteryAi = new LotteryAi(scene); // OT-02: the Lottery Quant + Head of Thai Markets, pipeline + decision boards, replay loop
+const leisureAi = new LeisureAi(scene); // VT-01: AI hosts walking the roulette promenade by the entrance (rule book, never stake)
 const arenaAi = new ArenaAi(scene); // VT-02: Fixture Scout + Sports Desk agents, scout / desk-book boards, labelled analytics pods
 const aiTraders = new AiTraders(scene); // the four live trading agents at their PCs by the OT-01 entrance
 floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
@@ -163,6 +165,7 @@ function tick(dt, movePlayer = true) {
   aiTraders.update(dt, floors.visibleIds());
   lotteryAi.update(dt, floors.visibleIds());
   arenaAi.update(dt, floors.visibleIds());
+  leisureAi.update(dt, floors.visibleIds());
   updateCards(player); // walk-up card for the AI agent (or analytics pod) within 4 m
   // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
   ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
