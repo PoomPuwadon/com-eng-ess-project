@@ -13,7 +13,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
 import { QUALITY, saveQuality, mountQualityButton } from './quality.js';
-import { openApp, appOpen, buildWallet } from './apps/shell.js';
+import { openApp, appOpen, closeApp, buildWallet } from './apps/shell.js';
 import './apps/markets.js';
 import './apps/research.js';
 import './apps/chartDesk.js';
@@ -30,6 +30,7 @@ import { savedAccount, signIn, setBalance, onMe } from './net/api.js';
 import { RemotePlayers } from './multiplayer/remotes.js';
 import { ExecConsole, showSignIn } from './multiplayer/console.js';
 import { ArenaHud } from './multiplayer/arenaHud.js';
+import { withVeil } from './multiplayer/teleportVeil.js';
 import { memberPose } from '../server/realtime/basket.js';
 
 
@@ -218,7 +219,7 @@ function requestLift(bank, stop, car = null) {
 }
 
 const hud = new HUD({
-  onTeleportFloor: (id) => teleport(id),
+  onTeleportFloor: (id) => withVeil(id, () => teleport(id)),
   onRole: setRole,
   onRide: (bank, stop, car) => requestLift(bank, stop, car),
 });
@@ -248,7 +249,7 @@ rt.on('balance', (m) => setBalance(m.balance));
 rt.on('error', (m) => hud.toast(m.text, 5));
 rt.on('kicked', (m) => {
   for (const r of remotes.list()) remotes.drop(r.id);
-  const o = document.createElement('div'); o.className = 'mp-modal';
+  const o = document.createElement('div'); o.className = 'mp-modal'; o.dataset.keep = '1';
   o.innerHTML = `<div class="card"><h2>Session ended</h2><div class="sub" style="font-size:15px;color:#fff">${m.text || 'You have been kicked by an admin'}</div><div class="row"><button class="mp-btn primary">Reload</button></div></div>`;
   o.querySelector('button').onclick = () => location.reload();
   document.body.append(o);
@@ -256,7 +257,9 @@ rt.on('kicked', (m) => {
 // carried in a CEO's basket: ride at our slot above the host's head (the host's interpolated pose)
 let basket = null;
 rt.on('basket', (m) => {
+  const joined = Boolean(m.host && (!basket || basket.host !== m.host)); // only when you are picked up, not on every roster change
   basket = m.host ? m : null;
+  if (joined) closeOpenThings();
   if (basket) { player.ride = () => { const hp = remotes.hostPose(basket.host); return hp ? new THREE.Vector3().copy(memberPose(hp, basket.slot, basket.n)) : null; }; player.rideYaw = null; hud.toast('You are in the Executive Basket. Enjoy the view.', 3); }
   else if (!arena.amRacer()) { player.ride = null; }
 });
@@ -276,12 +279,28 @@ function placeAt(floorId, x, y, z, yaw = player.yaw) {
   player.place(x, y, z, yaw);
   player.update(0, allColliders(), floors.shapes);
 }
-rt.on('teleport', (m) => {
+/** being moved by someone else (teleport, basket) ends whatever you had open: the roulette seat, any
+ * application, the lift panel, the console, any dialog (user, 2026-11-18) */
+function closeOpenThings() {
   if (rouletteSeat.active()) rouletteSeat.stand();
-  if (!arena.amRacer()) player.ride = null;
-  placeAt(m.floor, m.x, m.y, m.z, m.yaw ?? player.yaw);
-  if (m.objective === 'boxing') hud.toast('You are a competitor: walk down the walkout into the ring!', 5);
-  else if (m.by) hud.toast(`${m.by} has convened everyone here.`, 3);
+  closeApp();
+  if (hud.elevatorOpen) hud.closeElevator();
+  if (execConsole.open) execConsole.toggle(false);
+  execConsole.closeUnlock?.();
+  for (const m of document.querySelectorAll('.mp-modal:not([data-keep])')) m.remove();
+  document.getElementById('help')?.classList.add('hidden');
+  document.exitPointerLock?.();
+}
+rt.on('teleport', (m) => {
+  closeOpenThings();
+  const sub = m.objective === 'boxing' ? 'You are a competitor in the Combat Sports session' : m.by ? `Convened by ${m.by}` : '';
+  withVeil(m.floor, () => {
+    if (!arena.amRacer()) player.ride = null;
+    placeAt(m.floor, m.x, m.y, m.z, m.yaw ?? player.yaw);
+  }, { sub }).then(() => {
+    if (m.objective === 'boxing') hud.toast('You are a competitor: walk down the walkout into the ring!', 5);
+    else if (m.by) hud.toast(`${m.by} has convened everyone here.`, 3);
+  });
 });
 // 10 Hz on a timer (not the render loop), so a background tab still reports where it stands
 let poseT = performance.now();

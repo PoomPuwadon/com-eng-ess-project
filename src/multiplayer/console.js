@@ -114,6 +114,7 @@ export class ExecConsole {
     handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
   }
   get open() { return this.el.classList.contains('on'); }
+  closeUnlock() { if (this.unlock) { this.unlock.remove(); this.unlock = null; } }
   hotkey() {
     if (this.unlock) { this.unlock.remove(); this.unlock = null; return; }
     if (!this.ctx.rt.elevated) { this.showUnlock(); return; }
