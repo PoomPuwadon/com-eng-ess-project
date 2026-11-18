@@ -63,18 +63,19 @@ addEventListener('keydown', (e) => {
 }, true);
 
 // ---------------------------------------------------------------- wallet bar
+// Liquidity + your name only (user, 2026-11-18): no app buttons on the bar. The applications are reached
+// in the building (E at a roulette table, M markets, L research); signing in is on the welcome screen,
+// and clicking your name switches account / signs in.
 export function buildWallet({ onOpen }) {
   const w = document.createElement('div');
   w.id = 'wallet';
   w.innerHTML = `<span class="dot" title="Server connection"></span>
     <div class="who"><small>Liquidity</small><span class="bal">—</span></div>
-    <div class="who"><small>Associate</small><span class="nm">connecting…</span></div>
-    <button data-app="signin" title="Sign in with your name and password">Sign in</button>
-    <button data-app="roulette" title="Rotational Variance Instrument">Rotational</button>
-    <button data-app="markets" title="Markets terminal — firm book and your portfolio">Markets<kbd>M</kbd></button>
-    <button data-app="research" title="Probability Research Institute — lottery research">Research<kbd>L</kbd></button>`;
+    <div class="who acct" role="button" tabindex="0" data-app="signin" title="Sign in, sign up or switch account"><small>Associate <i>· switch</i></small><span class="nm">connecting…</span></div>`;
   document.body.appendChild(w);
-  w.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.app; if (a) { e.stopPropagation(); onOpen(a); } });
+  const act = (e) => { const a = e.target.closest('[data-app]')?.dataset.app; if (a) { e.stopPropagation(); onOpen(a); } };
+  w.addEventListener('click', act);
+  w.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(e); } });
   let last = null;
   onMe((me) => {
     const bal = w.querySelector('.bal');
@@ -83,10 +84,10 @@ export function buildWallet({ onOpen }) {
     last = me.balance;
     w.querySelector('.nm').textContent = me.name;
     w.querySelector('.dot').classList.add('on');
-    // guests see "Sign in / up"; account holders can switch accounts
-    const acct = savedAccount() === me.name, sb = w.querySelector('[data-app="signin"]');
-    sb.textContent = acct ? 'Switch' : 'Sign in / up';
-    sb.title = acct ? `Signed in as ${me.name}. Sign in to another account, or open a new one.` : 'Sign in, or sign up for an account';
+    // guests are invited to sign in / up; account holders can switch accounts
+    const acct = savedAccount() === me.name, el = w.querySelector('.acct');
+    el.querySelector('i').textContent = acct ? '· switch' : '· sign in';
+    el.title = acct ? `Signed in as ${me.name}. Click to sign in to another account, or open a new one.` : 'Guest session. Click to sign in, or sign up for an account.';
   });
   startSession().catch(() => { w.querySelector('.nm').textContent = 'server offline — retrying'; });
   void online;

@@ -72,6 +72,10 @@ export class ExecConsole {
     this.bal = new Map(); this.amt = {}; // Treasury tab: balances by connection id, typed amounts
     this.el = h(`<div id="mp-console"><header><b>Executive Console</b><span class="who"></span><button class="mp-btn sm" data-x>Close · Alt+F2</button></header><div class="tabs"></div><div class="body"></div></div>`);
     document.body.append(this.el);
+    // while elevated a small Console button stays on screen: closing the panel never locks it again (user, 2026-11-18)
+    this.btn = h('<button id="mp-console-btn" class="mp-btn" title="Executive Console (Alt+F2)">♛ Console <kbd>Alt+F2</kbd></button>');
+    document.body.append(this.btn);
+    this.btn.onclick = (ev) => { ev.stopPropagation(); this.toggle(); };
     this.el.querySelector('[data-x]').onclick = () => this.toggle(false);
     this.makeDraggable(this.el.querySelector('header'));
     this.el.addEventListener('keydown', (ev) => ev.stopPropagation());
@@ -81,7 +85,10 @@ export class ExecConsole {
       if (ev.altKey && ev.code === 'F2') { ev.preventDefault(); ev.stopPropagation(); this.hotkey(); }
     }, true);
     const { rt } = ctx;
-    rt.on('role', () => this.render());
+    const paintBtn = () => { this.btn.classList.toggle('on', Boolean(rt.elevated)); this.btn.classList.toggle('open', this.open); };
+    this.paintBtn = paintBtn;
+    rt.on('role', () => { paintBtn(); this.render(); });
+    rt.on('status', paintBtn);
     rt.on('meta', () => this.render());
     let acc = 0; rt.on('snap', () => { if (++acc % 5 === 0) this.render(); }); // 2 Hz refresh of the lists
   }
@@ -120,7 +127,7 @@ export class ExecConsole {
     if (!this.ctx.rt.elevated) { this.showUnlock(); return; }
     this.toggle();
   }
-  toggle(on = !this.open) { this.el.classList.toggle('on', on); if (on) { document.exitPointerLock?.(); this.render(); this.reclamp?.(); } }
+  toggle(on = !this.open) { this.el.classList.toggle('on', on); if (on) { document.exitPointerLock?.(); this.render(); this.reclamp?.(); } this.paintBtn?.(); }
 
   showUnlock() {
     let role = 'ceo';

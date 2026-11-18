@@ -21,7 +21,6 @@
 body.nohud #wallet { display: none; }
 @media (max-width: 1250px) { /* the floor list fills the top edge: move to the bottom, above the role bar */
   #wallet { top: auto; bottom: 88px; left: auto; right: 12px; transform: none; }
-  #wallet .who:nth-of-type(2) { display: none; }
 }
 body.app-open #wallet { z-index: 60; }
 
@@ -160,3 +159,6 @@ body.seated #help-btn, body.seated #loc, body.seated #perf, body.seated .perf-bt
 #rt.busy .rt-rail { opacity: .55; pointer-events: none; }
 #rt .rt-tip { position: fixed; pointer-events: none; background: rgba(10, 12, 18, .9); border: 1px solid rgba(201, 162, 58, .6); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--ink); white-space: nowrap; }
 @media (max-width: 1100px) { #rt .rt-rail { flex-wrap: wrap; justify-content: center; width: calc(100vw - 40px); } #rt .rt-side { width: 200px; } }
+#wallet .acct { cursor: pointer; padding: 2px 6px; margin: -2px -2px; border-radius: 6px; }
+#wallet .acct:hover, #wallet .acct:focus-visible { background: rgba(201, 162, 58, 0.14); outline: none; }
+#wallet .acct small i { font-style: normal; color: var(--gold2); text-transform: none; letter-spacing: 0; }

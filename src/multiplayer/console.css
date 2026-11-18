@@ -128,3 +128,11 @@
 #mp-board .rt small { display: block; font: 700 12px system-ui; color: #7ee0a0; }
 #mp-board .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #e3c27a, #ffd400); }
 #mp-board .ft { margin-top: 8px; font: 600 12px system-ui; color: rgba(255,255,255,.6); text-align: center; }
+
+/* Console button: always on screen while elevated (CEO / Admin), opens / closes the console without the credential */
+#mp-console-btn { position: fixed; right: 12px; bottom: 140px; z-index: 37; display: none; font: 800 12px system-ui; padding: 6px 12px; border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.45); }
+#mp-console-btn.on { display: inline-flex; align-items: center; gap: 6px; }
+#mp-console-btn.open { background: #d6b25e; color: #120c02; }
+#mp-console-btn kbd { font: 700 10px ui-monospace, monospace; opacity: .7; }
+body.nohud #mp-console-btn { display: none; }
