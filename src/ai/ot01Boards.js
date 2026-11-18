@@ -41,7 +41,9 @@ export function makeDeskBoard() {
     if (offline()) { drawHeader(g, W, 'AI DESK BOARD', 'AI FEED OFFLINE · the building server is not answering', 'NEXT DECISION', 0, COL.bad); return; }
     drawHeader(g, W, closed ? 'MARKET CLOSED · RESEARCH MODE' : 'AI DESK BOARD', closed ? 'Agents research markets and news; trading resumes at the open' : 'Live orders from four named agents · every row is a real decision',
       closed ? 'MARKET OPENS IN' : 'NEXT DECISION', closed ? st.nextOpenAt : st.nextAt, closed ? COL.gemini : COL.gold);
-    const rows = closed ? latest('OT-01', 7, ['research']).filter((e) => e.data?.kind !== 'market').map((e) => (e.data?.kind === 'headline' && !e.data.none ? { ...e, outcome: e.data.impact } : e)) : orderRows(latest('OT-01', 80, TRADING_STAGES));
+    const res = latest('OT-01', 12, ['research']).filter((e) => e.data?.kind !== 'market').map((e) => (e.data?.kind === 'headline' && !e.data.none ? { ...e, outcome: e.data.impact } : e));
+    // closed market: research rows AND the orders queued for the open, newest last
+    const rows = closed ? [...res, ...orderRows(latest('OT-01', 80, TRADING_STAGES), 5).filter((r) => r.stage !== 'signal')].sort((a, b) => a.at - b.at).slice(-5) : orderRows(latest('OT-01', 80, TRADING_STAGES));
     drawRows(g, 30, 190, W - 60, H - 190 - 150, rows, { names: NAMES, show: 5, rowH: 122, px: 38 });
     const b = book(), desks = b?.league?.desks || [], fam = b?.league?.families || [];
     const y0 = H - 138; g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(0, y0 - 8, W, 2);

@@ -42,7 +42,7 @@ export class Board {
     this.cv = document.createElement('canvas'); this.cv.width = Math.round(w * px); this.cv.height = Math.round(h * px);
     this.g = this.cv.getContext('2d');
     this.tex = new THREE.CanvasTexture(this.cv); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 4;
-    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.tex, toneMapped: false }));
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     this.mesh.name = name; this.mesh.frustumCulled = true;
     this.bg = bg; this.dirty = true; this.acc = 0; this.shakeT = 0; this.redraws = 0; this.base = null;
   }
@@ -84,9 +84,9 @@ export function drawRows(g, x, y, w, h, rows, { names = {}, rowH = 118, px = 36,
     const veto = ev.outcome === 'vetoed', rej = ev.outcome === 'rejected';
     rrect(g, x, yy, w, rowH - 8, 14, veto ? 'rgba(120,16,16,.55)' : rej ? 'rgba(110,80,10,.4)' : 'rgba(255,255,255,.05)', veto ? COL.bad : null, 3);
     font(g, px * 0.62, 700); g.fillStyle = '#7b8498'; g.textBaseline = 'top'; g.fillText(agoShort(ev.at), x + 14, yy + 12);
-    const cw = drawChip(g, ev, x + 14, yy + 12 + px * 0.9, px * 0.6);
-    font(g, px * 0.64, 800); g.fillStyle = '#e3c27a'; g.fillText(names[ev.agent] || ev.agent || '', x + 14, yy + 12 + px * 0.9 + px * 0.9);
-    const tx = x + Math.max(cw, 250) + 34, tw = w - (tx - x) - 20 - (ev.outcome ? px * 4.6 : 0);
+    const cw = drawChip(g, ev, x + 14, yy + 12 + px * 0.9, px * 0.7);
+    font(g, px * 0.66, 800); g.fillStyle = '#e3c27a'; g.fillText(names[ev.agent] || ev.agent || '', x + 14, yy + 12 + px * 0.9 + px * 1.05);
+    const tx = x + Math.max(cw, 360) + 24, tw = w - (tx - x) - 20 - (ev.outcome ? px * 4.6 : 0);
     font(g, px, ev.stage === 'veto' ? 900 : 700); g.fillStyle = veto ? '#ffd0d0' : '#f0f3fa'; g.textBaseline = 'top';
     wrap(g, ev.text, tw, 2).forEach((l, i) => g.fillText(l, tx, yy + 10 + i * px * 1.18));
     if (ev.outcome) {

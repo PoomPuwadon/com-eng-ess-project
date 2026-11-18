@@ -146,7 +146,9 @@ export function createResearch({ db, llm, market, gateway, feed = nullFeed, news
     const ms = marketStatus();
     if (ms.open) return null;
     if (latest && Date.now() - latest.at < everyMs) { feed.status(ROOM, { nextResearchAt: latest.at + everyMs, lastResearchAt: latest.at, nextOpenAt: ms.nextOpen || null }); return null; }
-    return run();
+    const r = await run();
+    if (!r) feed.status(ROOM, { nextResearchAt: Date.now() + 5 * 60_000 }); // data not ready yet: the countdown stays real
+    return r;
   }
 
   /** next-open score tilts (<= +/-0.25 each) while the research is fresh; the desk clamps the total to +/-0.5 */

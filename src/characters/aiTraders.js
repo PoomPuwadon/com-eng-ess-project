@@ -143,11 +143,11 @@ export class AiTraders {
       case 'review': this.job('risk_officer', '▶ REVIEW: ' + ev.text.slice(0, 60), 8); break;
       case 'veto': {
         board?.shake();
-        const slam = world(AI_BOARD.x + 0.9, AI_BOARD.y0 + AI_BOARD.h * 0.55, 0);
-        this.fx.stamp('VETO', slam, { scale: 2.1, hold: 6 });
+        const slam = world(AI_BOARD.x + 0.9, AI_BOARD.y0 + AI_BOARD.h * 0.5, -2.3); // right of the row, so the reason stays readable
+        this.fx.stamp('VETO', slam, { scale: 1.5, hold: 6 });
         const up = P(ro); up.y += 1.5; this.fx.stamp('VETO', up, { scale: 0.9, hold: 4 });
         ro.poseOv = 'shout'; ro.poseT = 5; ro.c.face = 'shout';
-        this.job('risk_officer', `✖ ${ev.text.slice(0, 70)}`, 9, true);
+        this.job('risk_officer', `✖ VETOED ${ev.data?.symbol || 'ORDER'}`, 9, true);
         this.react('shout', 4); this.sting('veto');
         break;
       }
@@ -233,8 +233,8 @@ export class AiTraders {
   ensureBoards() {
     if (this.boards) return;
     const front = makeDeskBoard(), back = makeResearchWall(), cy = ELEV() + AI_BOARD.y0 + AI_BOARD.h / 2;
-    front.mesh.position.set(AI_BOARD.x + 0.07, cy, 0); front.mesh.rotation.y = Math.PI / 2;
-    back.mesh.position.set(AI_BOARD.x - 0.07, cy, 0); back.mesh.rotation.y = -Math.PI / 2;
+    front.mesh.position.set(AI_BOARD.x + 0.09, cy, 0); front.mesh.rotation.y = Math.PI / 2;
+    back.mesh.position.set(AI_BOARD.x - 0.09, cy, 0); back.mesh.rotation.y = -Math.PI / 2;
     this.group.add(front.mesh, back.mesh); this.boards = [front, back];
   }
 
