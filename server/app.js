@@ -5,7 +5,7 @@ import { join, extname, normalize } from 'node:path';
 import { ROOT } from './env.js';
 import { openDb } from './db.js';
 import { createLedger, VAULT, DEPT, MINT, EXT_MARKET, EXT_LOTTERY } from './ledger.js';
-import { createTreasury } from './treasury.js';
+import { createTreasury, INITIAL_BUDGETS } from './treasury.js';
 import { createPlayers } from './players.js';
 import { createRoulette } from './roulette.js';
 import { createMarketData, SYMBOLS } from './market/data.js';
@@ -126,7 +126,24 @@ export function createApp(config, log = console, extra = {}) {
     };
   }
 
+  // Grand Lobby big screen: every department's real money result (minor units). Departments with no money
+  // source yet are listed as reporting:false so the screen says so instead of inventing numbers.
+  function firmDepartments() {
+    const book = trading.portfolio(DEPT.trading);
+    const lot = league.lottery(), thaiNet = Object.values(lot).reduce((s, o) => s + o.net, 0);
+    const fx = db.get("SELECT COALESCE(SUM(payout - stake), 0) AS net FROM fixture_positions WHERE owner = ? AND status IN ('gain','contributed')", DEPT.sports);
+    const open = (id, name, budget, value, pnl, note) => ({ id, name, budget, value, pnl, note, reporting: true });
+    const departments = [
+      open('trading_floor', 'Trading Floor', INITIAL_BUDGETS[DEPT.trading], book.nav, book.nav + treasury.inTransit(DEPT.trading) - INITIAL_BUDGETS[DEPT.trading], `${book.positions.length} positions`), // budget still on a cash robot is not a loss,
+      open('thai_markets', 'Thai Markets', INITIAL_BUDGETS[DEPT.thai], ledger.balance(DEPT.thai), thaiNet, 'lottery certificates'),
+      open('sports_desk', 'Sports Desk', INITIAL_BUDGETS[DEPT.sports], ledger.balance(DEPT.sports), fx.net, 'fixture positions'),
+      ...['Security HQ', 'Legal', 'IT', 'HR'].map((name) => ({ id: name.toLowerCase().replace(/\W+/g, '_'), name, reporting: false })),
+    ];
+    return { at: Date.now(), vault: ledger.balance(VAULT), departments, total: departments.filter((d) => d.reporting).reduce((s, d) => s + d.pnl, 0), navHistory: trading.navHistory(DEPT.trading) };
+  }
+
   const routes = {
+    'GET /api/firm/departments': () => firmDepartments(),
     'GET /api/health': () => ({ ok: true, at: Date.now() }),
     'POST /api/session': async (req) => {
       const body = await readBody(req);

@@ -43,6 +43,10 @@ registerApp('markets', {
           <div class="card"><h3>Invested</h3><div class="kpi">${((b.invested / Math.max(b.nav, 1)) * 100).toFixed(1)}%<small>${b.positions.length} positions · ${b.pending.length} working orders</small></div></div>
           <div class="card"><h3>Cash</h3><div class="kpi">${fmt(b.cash, { dp: 0 })}<small>reserved for orders ${fmt(b.reserved, { dp: 0 })}${firm.budget.inTransit ? ` · ${fmt(firm.budget.inTransit, { dp: 0 })} with the ALC` : ''}</small></div></div>
         </div>
+        <div class="card" style="margin-top:14px"><h3>Latest buys <span class="pill">${b.pending.filter((o) => o.side === 'buy').length} buy orders working</span></h3><table class="t">
+          ${b.pending.filter((o) => o.side === 'buy').map((o) => `<tr><td class="muted">${ago(o.created_at)}</td><td>${esc(AGENT_SHORT[o.agent] || '')}</td><td><span class="pill warn">WORKING</span> <b>${o.symbol}</b></td><td class="r">${o.qty}</td><td class="muted">${esc(o.rationale || '')}</td></tr>`).join('')}
+          ${firm.trades.filter((t) => t.side === 'buy').slice(0, 10).map((t) => `<tr><td class="muted">${tfmt(t.created_at)}</td><td>${esc(AGENT_SHORT[t.agent] || (t.agent ? 'Desk A' : '—'))} <span class="muted" style="font-size:11px">${esc(t.model && t.model !== 'rules' ? t.model : 'rule book')}</span></td><td><span class="pill ok">BOUGHT</span> <b>${t.symbol}</b></td><td class="r">${t.qty} @ ${px(t.price / 100)}</td><td class="muted">${esc(t.rationale || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No buys yet. Orders sent while the market is closed fill at the next open.</td></tr>'}
+        </table></div>
         <div class="grid g2" style="margin-top:14px">
           <div class="card"><h3>NAV history <span class="pill">5-min marks</span></h3><canvas class="chart" id="navc"></canvas></div>
           <div class="card"><h3>AI desk status <span class="pill ${firm.llm.enabled ? 'ok' : 'warn'}">${firm.llm.enabled ? `LLM · ${(firm.llm.providers || []).map((p) => esc(p.model)).join(' + ')}` : 'Rule book (no API key)'}</span></h3>

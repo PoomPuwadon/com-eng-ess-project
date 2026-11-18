@@ -5,6 +5,7 @@ import { api, on } from './net/api.js';
 import { setTradingData } from './world/tradingScreens.js';
 import { setLiveFeed } from './world/screens.js';
 import { setLottoRoom } from './world/lottoFeed.js';
+import { setLobbyFeed } from './world/lobbyScreens.js';
 
 let quotes = null, wall = null, firm = null;
 const push = () => {
@@ -15,6 +16,7 @@ const push = () => {
 async function loadQuotes() { try { quotes = await api('/api/market/quotes'); push(); } catch { /* server down */ } }
 async function loadWall() { try { wall = await api('/api/market/wall'); push(); } catch { /* server down */ } }
 async function loadFirm() { try { firm = await api('/api/firm/book'); push(); } catch { /* server down */ } }
+async function loadDepts() { try { setLobbyFeed({ depts: await api('/api/firm/departments') }); } catch { /* server down */ } }
 async function loadLotto() {
   try {
     const s = await api('/api/lottery/state');
@@ -28,7 +30,9 @@ let started = false;
 export function startLiveData() {
   if (started) return;
   started = true;
-  loadQuotes(); loadWall(); loadFirm(); loadLotto();
+  loadQuotes(); loadWall(); loadFirm(); loadLotto(); loadDepts();
+  on('trade', () => setTimeout(loadDepts, 1500));
+  setInterval(loadDepts, 60_000);
   let pend = 0;
   on('quotes', (s) => { quotes = s; clearTimeout(pend); pend = setTimeout(push, 500); });
   on('trade', () => { clearTimeout(pend); pend = setTimeout(loadFirm, 800); });

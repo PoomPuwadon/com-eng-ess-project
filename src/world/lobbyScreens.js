@@ -145,6 +145,12 @@ export function playBigScreenVideo(url) {
   return 'playing ' + url;
 }
 
+// Real department results from the server (GET /api/firm/departments, minor units). Until it arrives the
+// screen says so instead of showing invented numbers.
+const FEED = { depts: null };
+export function setLobbyFeed(d) { Object.assign(FEED, d); }
+const money = (minor) => `${minor < 0 ? '−' : ''}¤${fmt(Math.abs(minor) / 100, 0)}`;
+
 export function lobbyDashboard(ctx, x, y, z, yaw, w, h) {
   ctx.onUpdate(() => { if (!BIG.video) return; if (ctx.group.visible && BIG.video.paused) BIG.video.play().catch(() => {}); else if (!ctx.group.visible && !BIG.video.paused) BIG.video.pause(); });
   crawlStrip(ctx, x, y - h / 2 + h * 0.04 + (h * 0.09) / 2, z, yaw, w, h * 0.09, 0.025);
@@ -153,7 +159,8 @@ export function lobbyDashboard(ctx, x, y, z, yaw, w, h) {
     g.fillStyle = bg; g.fillRect(0, 0, W, Ht);
     g.textBaseline = 'middle';
     g.fillStyle = GOLD; g.font = `600 ${Ht * 0.055}px Georgia, serif`; g.fillText('FINANCIAL FIRM', W * 0.035, Ht * 0.075);
-    g.fillStyle = '#9aa3b5'; g.font = `${Ht * 0.026}px sans-serif`; g.fillText('Excellence. Discretion. Liquidity.  ·  Firm Performance (notional, demo)', W * 0.035, Ht * 0.13);
+    const D = FEED.depts;
+    g.fillStyle = '#9aa3b5'; g.font = `${Ht * 0.026}px sans-serif`; g.fillText(D ? 'Excellence. Discretion. Liquidity.  ·  Firm Performance by Department (notional)' : 'Excellence. Discretion. Liquidity.  ·  Awaiting department reports…', W * 0.035, Ht * 0.13);
     const t = new Date(); g.textAlign = 'right'; g.fillStyle = '#e8ecf3'; g.font = `500 ${Ht * 0.05}px monospace`;
     g.fillText(t.toTimeString().slice(0, 5), W * 0.965, Ht * 0.085); g.textAlign = 'left';
     // P&L chart
@@ -161,30 +168,41 @@ export function lobbyDashboard(ctx, x, y, z, yaw, w, h) {
     g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(cx, cy, cw, chh);
     g.strokeStyle = 'rgba(255,255,255,0.07)'; g.lineWidth = 1;
     for (let i = 1; i < 5; i++) { g.beginPath(); g.moveTo(cx, cy + (chh * i) / 5); g.lineTo(cx + cw, cy + (chh * i) / 5); g.stroke(); }
-    const lo = Math.min(...pnl.hist) * 0.98, hi = Math.max(...pnl.hist) * 1.01;
-    const P = (i, v) => [cx + (i / (pnl.hist.length - 1)) * cw, cy + chh - ((v - lo) / (hi - lo)) * chh];
-    const grd = g.createLinearGradient(0, cy, 0, cy + chh); grd.addColorStop(0, 'rgba(61,220,132,0.35)'); grd.addColorStop(1, 'rgba(61,220,132,0)');
-    g.beginPath(); pnl.hist.forEach((v, i) => { const [px, py] = P(i, v); i ? g.lineTo(px, py) : g.moveTo(px, py); });
-    g.lineTo(cx + cw, cy + chh); g.lineTo(cx, cy + chh); g.closePath(); g.fillStyle = grd; g.fill();
-    g.beginPath(); pnl.hist.forEach((v, i) => { const [px, py] = P(i, v); i ? g.lineTo(px, py) : g.moveTo(px, py); });
-    g.strokeStyle = UP; g.lineWidth = Ht * 0.005; g.stroke();
-    g.fillStyle = '#9aa3b5'; g.font = `${Ht * 0.03}px sans-serif`; g.fillText('FIRM P&L TODAY', cx + 14, cy + Ht * 0.035);
-    g.fillStyle = pnl.v >= 0 ? UP : DN; g.font = `700 ${Ht * 0.075}px sans-serif`; g.fillText(`${pnl.v >= 0 ? '+' : '−'}$${fmt(Math.abs(pnl.v), 0)}`, cx + 14, cy + Ht * 0.1);
-    // index tiles
-    const tx = W * 0.665, tw = W * 0.3, th = (chh - 3 * 12) / 4;
-    quotes.slice(0, 4).concat([quotes[5]]).slice(0, 4).forEach((q, i) => {
-      const ty = cy + i * (th + 12), ch = (q.p / q.open - 1) * 100, col = ch >= 0 ? UP : DN;
-      g.fillStyle = '#121828'; g.fillRect(tx, ty, tw, th);
-      g.fillStyle = col; g.fillRect(tx, ty, 6, th);
-      g.fillStyle = '#c8cfdc'; g.font = `600 ${th * 0.22}px sans-serif`; g.fillText(q.name.toUpperCase(), tx + 24, ty + th * 0.28);
-      g.fillStyle = '#ffffff'; g.font = `700 ${th * 0.34}px monospace`; g.fillText(fmt(q.p), tx + 24, ty + th * 0.68);
-      g.fillStyle = col; g.font = `600 ${th * 0.24}px monospace`; g.textAlign = 'right'; g.fillText(`${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%`, tx + tw - 18, ty + th * 0.68); g.textAlign = 'left';
-      spark(g, tx + tw * 0.55, ty + th * 0.12, tw * 0.4, th * 0.3, q.hist, col);
-    });
+    if (!D) { // nothing real yet: say so, draw nothing made-up
+      g.fillStyle = '#9aa3b5'; g.font = `600 ${Ht * 0.04}px sans-serif`; g.textAlign = 'center';
+      g.fillText('Department reports are on their way', W / 2, cy + chh / 2); g.textAlign = 'left';
+    } else {
+      // firm trading-book NAV history (real) behind the headline total
+      const nav = (D.navHistory || []).map((p) => p.nav);
+      const total = D.total, col = total >= 0 ? UP : DN;
+      if (nav.length > 1) {
+        const lo = Math.min(...nav), hi = Math.max(...nav), rg = hi - lo || 1;
+        const P = (i, v) => [cx + (i / (nav.length - 1)) * cw, cy + chh - 6 - ((v - lo) / rg) * (chh * 0.55)];
+        const rgb = total >= 0 ? '61,220,132' : '255,84,104';
+        const grd = g.createLinearGradient(0, cy, 0, cy + chh); grd.addColorStop(0, `rgba(${rgb},0.28)`); grd.addColorStop(1, `rgba(${rgb},0)`);
+        g.beginPath(); nav.forEach((v, i) => { const [px, py] = P(i, v); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+        g.lineTo(cx + cw, cy + chh); g.lineTo(cx, cy + chh); g.closePath(); g.fillStyle = grd; g.fill();
+        g.beginPath(); nav.forEach((v, i) => { const [px, py] = P(i, v); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+        g.strokeStyle = col; g.lineWidth = Ht * 0.005; g.stroke();
+      }
+      g.fillStyle = '#9aa3b5'; g.font = `${Ht * 0.03}px sans-serif`; g.fillText('FIRM RESULT · ALL REPORTING DEPARTMENTS', cx + 14, cy + Ht * 0.035);
+      g.fillStyle = col; g.font = `700 ${Ht * 0.09}px sans-serif`; g.fillText(`${total >= 0 ? '+' : ''}${money(total)}`, cx + 14, cy + Ht * 0.115);
+      g.fillStyle = '#9aa3b5'; g.font = `${Ht * 0.028}px sans-serif`; g.fillText(`Treasury Reserve ${money(D.vault)}  ·  chart: Trading Floor book value`, cx + 14, cy + Ht * 0.18);
+      // department tiles
+      const ds = D.departments, tx = W * 0.665, tw = W * 0.3, gap = 8, th = (chh - (ds.length - 1) * gap) / ds.length;
+      ds.forEach((d, i) => {
+        const ty = cy + i * (th + gap), c2 = !d.reporting ? '#4a5266' : d.pnl >= 0 ? UP : DN;
+        g.fillStyle = '#121828'; g.fillRect(tx, ty, tw, th);
+        g.fillStyle = c2; g.fillRect(tx, ty, 6, th);
+        g.fillStyle = d.reporting ? '#c8cfdc' : '#6b7385'; g.font = `600 ${th * 0.3}px sans-serif`; g.fillText(d.name.toUpperCase(), tx + 22, ty + th * 0.3);
+        g.font = `${th * 0.22}px sans-serif`; g.fillStyle = '#6b7385'; g.fillText(d.reporting ? d.note : 'no money reporting yet', tx + 22, ty + th * 0.74);
+        if (d.reporting) { g.fillStyle = c2; g.font = `700 ${th * 0.36}px monospace`; g.textAlign = 'right'; g.fillText(`${d.pnl >= 0 ? '+' : ''}${money(d.pnl)}`, tx + tw - 16, ty + th * 0.5); g.textAlign = 'left'; }
+      });
+    }
     // crawl
     const band = Ht * 0.09, by = Ht - band - Ht * 0.04;
     g.fillStyle = '#0a0d14'; g.fillRect(0, by, W, band); g.fillStyle = GOLD; g.fillRect(0, by, W, 3);
-    g.fillStyle = '#6b7385'; g.font = `${Ht * 0.022}px sans-serif`; g.fillText('All figures notional · simulated until live delayed prices are connected', W * 0.035, Ht - Ht * 0.02);
+    g.fillStyle = '#6b7385'; g.font = `${Ht * 0.022}px sans-serif`; g.fillText('All figures notional · fake money · live from the firm ledger', W * 0.035, Ht - Ht * 0.02);
   }, 0.25);
   BIG.mesh = dash; BIG.canvasMap = dash.material.map; BIG.video = null;
   if (BIG.url) playBigScreenVideo(BIG.url); // keep playing after the floor is rebuilt
