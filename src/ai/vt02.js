@@ -28,7 +28,7 @@ const E = () => FLOOR_BY_ID['VT-02'].elevation;
 const R_DESK = 56, DELTA = 0.22;
 const BOARD = { x: 52.7, y0: 3.6, w: 5.2, h: 3.1, zs: 2.8, zd: -2.8 }; // the two boards hang side by side over the landing, on the stair axis // arrivals landing: radius and angle off the stair axis
 const DESK_POS = (side) => ({ x: A.cx + R_DESK * Math.cos(Math.PI + side * DELTA), z: A.cz + R_DESK * Math.sin(Math.PI + side * DELTA) }); // side -1 = north (z<0)
-const LW = 1500;
+const LW = 1100;
 const money = (m) => `¤${(m / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 
 /** the boxes nearest the stair on one side, upper levels first: [{ k, mid }] */
@@ -143,14 +143,14 @@ export class ArenaAi {
     drawChip(g, prov, 30, 130, 22);
     const list = v.cands.length ? v.cands : (d0()?.fixtures || []).slice(0, 12).map((f) => ({ id: f.id, label: `${f.homeTeam.shortName || f.homeTeam.name} v ${f.awayTeam.shortName || f.awayTeam.name}` }));
     const sw = this.sweep, hit = sw.on ? Math.floor(sw.t * 4) % Math.max(1, list.length) : -1;
-    list.slice(0, 8).forEach((c, i) => {
+    list.slice(0, 6).forEach((c, i) => {
       const y = 176 + i * 54, picked = c.id === v.pickId && !sw.on, cur = i === hit;
       rrect(g, 30, y, W - 60, 48, 10, picked ? 'rgba(255,217,106,.22)' : cur ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.05)', picked ? COL.gold : cur ? '#fff' : null, 3);
       font(g, 30, picked ? 900 : 700); g.fillStyle = picked ? '#ffe9a8' : '#e8ecf5'; g.textBaseline = 'top'; g.fillText(c.label || '', 48, y + 8);
       if (picked) { font(g, 22, 900); g.fillStyle = COL.gold; g.textAlign = 'right'; g.fillText('MARQUEE LOCKED', W - 48, y + 12); g.textAlign = 'left'; }
     });
     if (!list.length) { font(g, 30, 700); g.fillStyle = '#7b8498'; g.textBaseline = 'top'; g.fillText('No upcoming fixtures on file. The countdown above is real.', 40, 200); }
-    font(g, 24, 600); g.fillStyle = '#c8d0e0'; g.textBaseline = 'top'; (v.points || []).slice(0, 3).forEach((p, i) => g.fillText(`• ${wrap(g, p, W - 100, 1)[0] || ''}`, 40, 616 + i * 30));
+    font(g, 24, 600); g.fillStyle = '#c8d0e0'; g.textBaseline = 'top'; (v.points || []).slice(0, 3).forEach((p, i) => g.fillText(`• ${wrap(g, p, W - 100, 1)[0] || ''}`, 40, 520 + i * 30));
     font(g, 22, 800); g.fillStyle = '#9aa3b2'; g.fillText(sw.on ? 'SCOUTING THE LIST…' : `PICKED BY ${v.by === 'llm' ? `FIXTURE SCOUT · ${String(v.model || '').toUpperCase()}` : 'THE RULE BOOK'}${v.ev ? ` · ${agoShort(v.ev.at)} AGO` : ''}`, 40, H - 38);
   }
   drawDesk(g, W, H) {
@@ -162,7 +162,7 @@ export class ArenaAi {
     let rows = [...stakes.values()].slice(-5).reverse();
     if (!rows.length) rows = (d?.desk?.positions || []).slice(0, 5).map((p) => ({ label: p.label, stake: p.stake, price: p.price, status: p.status === 'gain' ? 'won' : p.status === 'contributed' ? 'lost' : p.status, payout: p.payout, stored: true }));
     rows.forEach((r, i) => {
-      const y = 176 + i * 92, col = r.status === 'won' ? COL.good : r.status === 'lost' ? COL.bad : COL.gold;
+      const y = 176 + i * 84, col = r.status === 'won' ? COL.good : r.status === 'lost' ? COL.bad : COL.gold;
       rrect(g, 30, y, W - 60, 84, 12, 'rgba(255,255,255,.05)', r.status === 'open' ? COL.gold : null, 3);
       font(g, 28, 800); g.fillStyle = '#f0f3fa'; g.textBaseline = 'top'; wrap(g, r.label || '', W - 400, 1).forEach((l) => g.fillText(l, 48, y + 8));
       font(g, 24, 600); g.fillStyle = '#9aa3b2'; g.fillText(`STAKE ${money(r.stake || 0)} · HOUSE PRICE ${Number(r.price || 0).toFixed(2)}${r.score ? ` · FT ${r.score[0]}-${r.score[1]}` : ''}${r.status === 'won' ? ` · RETURNED ${money(r.payout || 0)}` : ''}`, 48, y + 46);
