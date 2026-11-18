@@ -52,4 +52,6 @@ export const CONFIG = {
   // OT-01 off-hours research (agents/research.js): one cycle every N minutes while the US market is closed, inside its own monthly sub-budget
   researchEveryMin: num('RESEARCH_EVERY_MIN', 150),
   researchBudgetUsd: num('RESEARCH_BUDGET_USD', 2),
+  rouletteAiBudgetUsd: num('ROULETTE_AI_BUDGET_USD', 2), // VT-01 roulette seats: plan calls only (~1 per 15 min per seat)
+  rouletteSpinMs: num('ROULETTE_SPIN_MS', 30000),
 };

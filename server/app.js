@@ -18,6 +18,7 @@ import { createLeague } from './agents/league.js';
 import { createFeed } from './agents/feed.js';
 import { createResearch } from './agents/research.js';
 import { createNews } from './market/news.js';
+import { createRoulettePlayers } from './agents/roulettePlayers.js';
 import { createFootball } from './football/service.js';
 import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
@@ -60,6 +61,7 @@ export function createApp(config, log = console, extra = {}) {
   const feed = createFeed({ db, bus, routeOf: llm.route }); // AI visuals: one attributed event stream for OT-01 / OT-02 / VT-02
   const news = createNews({ config, log });
   const research = createResearch({ db, llm, market, gateway, feed, news, config, log });
+  const rouletteAi = createRoulettePlayers({ db, llm, feed, config, log }); // VT-01: Claude + Gemini seats play with their OWN notional bankroll, never the firm's money
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, feed, research, log });
   const league = createLeague({ db, market, desk });
   const chartDesk = createChartAnalyst({ llm, log });
@@ -86,6 +88,7 @@ export function createApp(config, log = console, extra = {}) {
     timers.push(setInterval(() => { try { treasury.deliverDue(); trading.processPending(); } catch (e) { log.warn('[exec]', e.message); } }, 4000));
     timers.push(setInterval(() => { try { trading.snapshotNav([DEPT.trading, ...db.all("SELECT DISTINCT owner FROM positions WHERE owner LIKE 'PLAYER:%' AND qty > 0").map((r) => r.owner)]); } catch (e) { log.warn('[nav]', e.message); } }, 300_000));
     timers.push(setInterval(() => { reconcile = ledger.reconcile(); if (!reconcile.ok) log.error('[ledger] LEDGER_DRIFT', reconcile.problems); }, 600_000));
+    rouletteAi.start();
     market.start().catch((e) => log.warn('[market]', e.message));
     // trading desk: first tick once data and budget are in, then every 15 min (open) / 60 min (closed)
     const deskLoop = async () => {
@@ -122,7 +125,7 @@ export function createApp(config, log = console, extra = {}) {
       if (t.to === DEPT.sports) football.agentTick();
     });
   }
-  let stop = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
+  let stop = () => { rouletteAi.stop(); timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
 
   // ---------------------------------------------------------------- HTTP
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -206,11 +209,12 @@ export function createApp(config, log = console, extra = {}) {
     // AI visuals feed: backfill for the three rooms (SSE 'agent' events carry the live ones)
     'GET /api/ai/feed': (req, url) => {
       const room = url.searchParams.get('room') || undefined;
-      if (room && !['OT-01', 'OT-02', 'VT-02'].includes(room)) throw Object.assign(new Error('Unknown room'), { status: 400 });
+      if (room && !['OT-01', 'OT-02', 'VT-02', 'VT-01'].includes(room)) throw Object.assign(new Error('Unknown room'), { status: 400 });
       const st = llm.status();
       return { room: room || null, events: feed.list({ room, limit: url.searchParams.get('limit') || 40, agent: url.searchParams.get('agent') || undefined }).reverse(), status: feed.getStatus(room),
         research: room === 'OT-01' || !room ? research.latest() : undefined, now: Date.now(), llm: { enabled: st.enabled, routes: st.routes } };
     },
+    'GET /api/ai/roulette': () => ({ players: rouletteAi.view(), note: 'Notional bankrolls outside the ledger: the firm money is not affected.', now: Date.now() }),
     'GET /api/ai/league': () => ({ league: league.table(), llm: llm.status() }),
     'GET /api/football/state': (req) => { const p = authOf(req); return { ...football.snapshot(p ? p.account : null), league: league.table(), llm: llm.status() }; },
     'GET /api/arena-media': () => media.view(),
@@ -295,5 +299,5 @@ export function createApp(config, log = console, extra = {}) {
   const start0 = start, stop0 = stop;
   start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
   stop = () => { ws?.stop(); football.stop(); stop0(); };
-  return { store: extra.store, auth, hub, feed, research, news, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  return { store: extra.store, auth, hub, feed, rouletteAi, research, news, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

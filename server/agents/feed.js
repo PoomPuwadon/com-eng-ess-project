@@ -3,7 +3,7 @@
 // It is READ-ONLY plumbing: it records values the agents already computed. It never calls a model and never
 // touches money. `thinking` events are transient (bus only); everything else is kept in agent_events
 // (last ~500 rows) so a visitor who walks in can be backfilled from GET /api/ai/feed.
-export const ROOMS = ['OT-01', 'OT-02', 'VT-02'];
+export const ROOMS = ['OT-01', 'OT-02', 'VT-02', 'VT-01'];
 export const STAGES = ['thinking', 'signal', 'proposal', 'review', 'veto', 'execute', 'result', 'research', 'shortlist', 'decision', 'scout', 'stake', 'settle', 'idle'];
 const KEEP = 500;
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);

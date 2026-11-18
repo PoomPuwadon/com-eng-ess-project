@@ -5,7 +5,7 @@
 // from production builds (import.meta.env.DEV).
 import { api, on } from '../net/api.js';
 
-export const ROOMS = ['OT-01', 'OT-02', 'VT-02'];
+export const ROOMS = ['OT-01', 'OT-02', 'VT-02', 'VT-01'];
 export const COL = { claude: '#ff8a5c', gemini: '#5aa2ff', rules: '#9aa3b2', good: '#5dff9a', bad: '#ff5a5a', warn: '#ffc857', gold: '#e3c27a' };
 export const chip = (ev) => (ev?.provider === 'claude' ? { label: 'CLAUDE', hex: COL.claude } : ev?.provider === 'gemini' ? { label: 'GEMINI', hex: COL.gemini } : { label: 'RULE BOOK', hex: COL.rules });
 export const providerChip = (p) => chip({ provider: p });

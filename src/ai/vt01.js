@@ -1,49 +1,86 @@
-// VT-01 Executive Leisure Suite: AI hosts you can see walking the roulette promenade near the entrance (follow-up task).
-// DEFAULT CHOICES (owner can change): 3 rule-book hosts, they WALK and WATCH the tables, they never stake, so no money logic and no LLM
-// calls are involved (cost $0). Tags say so: "AI HOST · RULE BOOK · watches, never stakes". Real money-moving AI stays in the three feed rooms.
+// VT-01 Executive Leisure Suite: a Claude seat and a Gemini seat PLAY the roulette (server/agents/roulettePlayers.js).
+// They walk the promenade by the entrance and stand at the tables; every rotation is a real spin on the server's wheel engine with their OWN
+// notional bankroll (owner rule: the firm's money is not affected, nothing touches the ledger). Each win / loss pops up over their head and
+// their running NET stays on the tag. Labels say CLAUDE / GEMINI / RULE BOOK from the model that actually made the plan.
 import * as THREE from 'three';
-import { makeQuant, makeCoHeadTrader, makeRiskOfficer } from '../characters/roster.js';
+import { makeHeadTrader, makeCoHeadTrader } from '../characters/roster.js';
 import { makeTag } from '../characters/kit.js';
 import { FLOOR_BY_ID } from '../layout/building.js';
+import { api } from '../net/api.js';
 import { setPerson, setPersonPos } from './agentCard.js';
+import { startAiFeed, onAgent, COL, providerChip } from './feed.js';
 
 const E = () => FLOOR_BY_ID['VT-01'].elevation;
 const SPEED = 1.3;
-// tables sit at x 58 + 9n, rows z -14.6 / -21.5 / -28.4; the walkways run between the rows. Hosts work the first columns by the entrance.
-const HOSTS = [
-  { id: 'host_a', name: 'Concierge Bot Valentina', make: () => makeQuant(0xd9a47f), lane: -18.0, x0: 56, x1: 92, start: 0.0 },
-  { id: 'host_b', name: 'Concierge Bot Reggie', make: makeRiskOfficer, lane: -25.0, x0: 56, x1: 84, start: 0.5 },
-  { id: 'host_c', name: 'Concierge Bot Mei', make: makeCoHeadTrader, lane: -18.0, x0: 60, x1: 100, start: 0.8 },
+const LANE = -18.0; // walkway between the first two roulette rows (rows at z -14.6 and -21.5)
+const TABLES_X = [58, 67, 76, 85, 94];
+const SEATS = [
+  { id: 'roulette_claude', name: 'Claude, Roulette Desk', route: 'claude', make: makeHeadTrader, x: 60 },
+  { id: 'roulette_gemini', name: 'Gemini, Roulette Desk', route: 'gemini', make: makeCoHeadTrader, x: 80 },
 ];
+const money = (m) => `${m < 0 ? '−' : m > 0 ? '+' : ''}¤${Math.abs(m / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
 export class LeisureAi {
   constructor(scene) {
-    this.group = new THREE.Group(); this.group.visible = false; scene.add(this.group); this.t = 0;
-    this.hosts = HOSTS.map((d, i) => {
-      const c = d.make(); if (c.tag) c.root.remove(c.tag); c.pose = 'phone'; c.root.traverse?.((m) => { m.castShadow = false; });
-      const tag = makeTag([{ t: '◉ AI HOST · RULE BOOK', px: 26, c: '#9aa3b2', w: 900 }, { t: d.name, px: 40, w: 800 }, { t: 'watches the roulette, never stakes', px: 22, c: '#e3c27a', w: 600 }], { bg: 'rgba(6,8,12,.92)', border: '#9aa3b2', radius: 14, ps: 0.0046 });
-      tag.position.y = c.tagY + 0.3; tag.renderOrder = 998; c.root.add(tag); this.group.add(c.root);
-      const span = d.x1 - d.x0, h = { d, c, tag, base: tag.scale.clone(), pos: new THREE.Vector3(d.x0 + span * d.start, E(), d.lane), dir: 1, wait: 2 + i * 3, yaw: 0 };
-      setPerson({ id: d.id, name: d.name, role: 'AI Host · rule book · watches, never stakes', room: 'VT-01', floor: 'VT-01', agent: d.id, provider: 'rules', x: h.pos.x, y: E(), z: h.pos.z });
-      return h;
+    this.group = new THREE.Group(); this.group.visible = false; scene.add(this.group); this.t = 0; this.acc = 0;
+    startAiFeed();
+    this.seats = SEATS.map((d, i) => {
+      const c = d.make(); if (c.tag) c.root.remove(c.tag); c.pose = 'deal'; c.root.traverse?.((m) => { m.castShadow = false; });
+      const tag = makeTag([{ t: '', px: 10 }], { bg: 'rgba(6,8,12,.94)', border: d.route === 'claude' ? '#ff8a5c' : '#5aa2ff', radius: 14, ps: 0.0048 });
+      tag.position.y = c.tagY + 0.3; tag.renderOrder = 998; c.root.add(tag);
+      const pop = makeTag([{ t: '', px: 10 }], { bg: 'rgba(6,8,12,.0)', ps: 0.0075 }); pop.renderOrder = 999; pop.material.opacity = 0; pop.visible = false; c.root.add(pop);
+      this.group.add(c.root);
+      const s = { d, c, tag, pop, popT: 99, base: tag.scale.clone(), pos: new THREE.Vector3(d.x, E(), LANE), yaw: 0, tx: d.x, row: 1, wait: 6 + i * 20, info: null, text: '' };
+      setPerson({ id: d.id, name: d.name, role: 'Plays roulette · notional chips · firm money not affected', room: 'VT-01', floor: 'VT-01', agent: d.id, provider: d.route, x: s.pos.x, y: E(), z: LANE });
+      this.draw(s);
+      return s;
     });
+    onAgent((ev) => this.onFeed(ev));
+    this.load(); setInterval(() => this.load(), 20_000);
+  }
+  async load() { try { const j = await api('/api/ai/roulette'); for (const p of j.players) { const s = this.seats.find((x) => x.d.id === p.id); if (s) { s.info = p; this.draw(s); } } } catch { /* server down: tag keeps its last numbers */ } }
+  onFeed(ev) {
+    if (ev.room !== 'VT-01') return;
+    const s = this.seats.find((x) => x.d.id === ev.agent); if (!s) return;
+    if (ev.stage === 'result' && ev.data) {
+      s.info = { ...(s.info || {}), bank: ev.data.bank, net: ev.data.total, rounds: ev.data.rounds, provider: ev.provider, last: ev.data };
+      s.popT = 0; s.popNet = ev.data.net; this.setPop(s, ev.data.net, ev.data.pocket, ev.data.color); this.draw(s);
+    } else if (ev.stage === 'decision') { s.info = { ...(s.info || {}), note: ev.data?.note, provider: ev.provider }; this.draw(s); }
+  }
+  draw(s) {
+    const i = s.info, chip = providerChip(i?.provider || 'rules'), net = i?.net ?? 0;
+    s.tag.userData.set([
+      { t: `◉ ${s.d.route === 'claude' ? 'CLAUDE' : 'GEMINI'} · LIVE AI PLAYER${i && chip.label === 'RULE BOOK' ? ' · RULE BOOK PLAN' : ''}`, px: 26, c: s.d.route === 'claude' ? COL.claude : COL.gemini, w: 900 },
+      { t: s.d.name, px: 40, w: 800 },
+      { t: i ? `NET ${money(net)}   ·   BANK ¤${Math.round((i.bank || 0) / 100).toLocaleString('en-US')}` : 'taking a seat…', px: 30, c: net > 0 ? COL.good : net < 0 ? COL.bad : '#cfd6e4', w: 900 },
+      { t: 'notional chips · firm money not affected', px: 20, c: '#9aa3b2', w: 600 },
+    ]);
+    s.base = s.tag.scale.clone();
+  }
+  setPop(s, net, pocket, color) {
+    const col = net > 0 ? COL.good : net < 0 ? COL.bad : '#cfd6e4';
+    s.pop.userData.set([{ t: money(net) === '' || net === 0 ? 'PUSH' : money(net), px: 74, c: col, w: 900 }, { t: `${pocket} ${String(color).toUpperCase()}`, px: 30, c: '#e3c27a', w: 800 }]);
+    s.pop.visible = true;
   }
   update(dt, visibleIds, viewer = globalThis.__crowdViewer) {
     const vis = visibleIds.includes('VT-01'); this.group.visible = vis; this.t += dt;
-    for (const h of this.hosts) {
-      const d = h.d; let speed = 0;
-      if (h.wait > 0) { h.wait -= dt; h.c.pose = 'deal'; h.yaw = d.lane > -20 ? -Math.PI / 2 * 0 + 0 : Math.PI; } // stops to watch a table, facing it
+    for (const s of this.seats) {
+      let speed = 0;
+      if (s.wait > 0) { s.wait -= dt; s.c.pose = 'deal'; s.yaw = s.row > 0 ? 0 : Math.PI; } // at the table, facing it
       else {
-        h.c.pose = 'phone';
-        const tx = h.dir > 0 ? d.x1 : d.x0, dx = tx - h.pos.x, step = SPEED * dt;
-        if (Math.abs(dx) <= step) { h.pos.x = tx; h.dir *= -1; h.wait = 3; } else { h.pos.x += Math.sign(dx) * step; speed = SPEED; h.yaw = Math.sign(dx) * Math.PI / 2; }
-        if (Math.abs(((h.pos.x - 58) % 9 + 9) % 9 - 4.5) < 0.12 && Math.random() < 0.5) h.wait = 2 + Math.random() * 4; // pause by a table
+        s.c.pose = 'phone';
+        const dx = s.tx - s.pos.x, step = SPEED * dt;
+        if (Math.abs(dx) <= step) { s.pos.x = s.tx; s.wait = 50 + Math.random() * 50; s.row = Math.random() < 0.5 ? 1 : -1; const nx = TABLES_X[Math.floor(Math.random() * TABLES_X.length)] + 0.0; s.tx = nx; } else { s.pos.x += Math.sign(dx) * step; speed = SPEED; s.yaw = Math.sign(dx) * Math.PI / 2; }
       }
-      setPersonPos(d.id, 'VT-01', h.pos.x, h.pos.y, h.pos.z);
-      h.c.root.visible = vis; if (!vis) continue;
-      let dy = h.yaw - h.c.root.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); h.c.root.rotation.y += dy * Math.min(1, dt * 6);
-      h.c.root.position.copy(h.pos); h.c.update(dt, this.t, speed);
-      const k = viewer ? Math.min(2.2, Math.max(0.45, Math.hypot(viewer.x - h.pos.x, viewer.z - h.pos.z) / 9)) : 1; h.tag.scale.set(h.base.x * k, h.base.y * k, 1);
+      setPersonPos(s.d.id, 'VT-01', s.pos.x, s.pos.y, s.pos.z);
+      s.c.root.visible = vis; if (!vis) continue;
+      let dy = s.yaw - s.c.root.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); s.c.root.rotation.y += dy * Math.min(1, dt * 6);
+      s.c.root.position.copy(s.pos); s.c.update(dt, this.t, speed);
+      const k = viewer ? Math.min(2.2, Math.max(0.45, Math.hypot(viewer.x - s.pos.x, viewer.z - s.pos.z) / 9)) : 1; s.tag.scale.set(s.base.x * k, s.base.y * k, 1);
+      if (s.popT < 7) { // win / loss pops over the head, rises and fades
+        s.popT += dt; const u = s.popT / 7, sc = (1 + Math.min(1, s.popT * 4) * 0.0) * k;
+        s.pop.scale.set(s.pop.scale.x, s.pop.scale.y, 1); s.pop.position.y = s.c.tagY + 0.3 + s.base.y * k + 0.5 + u * 0.9 * k; s.pop.material.opacity = u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25; void sc;
+      } else if (s.pop.visible) { s.pop.visible = false; s.pop.material.opacity = 0; }
     }
   }
 }

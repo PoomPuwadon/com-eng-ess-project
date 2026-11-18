@@ -13,6 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export const ROUTES = {
   head_trader: 'claude', co_head_trader: 'gemini', quant: 'gemini', risk_officer: 'claude',
   thai_head: 'claude', lottery_quant: 'gemini', fixture_scout: 'gemini',
+  roulette_claude: 'claude', roulette_gemini: 'gemini', // VT-01 roulette seats (notional bankroll, no firm money)
 };
 
 /** "a=claude, b=gemini" -> { a: 'claude', b: 'gemini' } (unknown providers ignored) */
