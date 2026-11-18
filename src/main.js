@@ -235,6 +235,7 @@ const rt = new Realtime();
 bindArenaMedia(rt); // VT-02 Arena Media: head-to-head + highlights on the side screens, live from the hub
 const remotes = new RemotePlayers(scene, camera);
 const isMobile = () => rt.device === 'mobile';
+aiTraders.bind(rt); // agents the CEO calls up to Asset Protection (hub meta)
 if (isMobile()) startTouchControls({ player, canvas }); // phones: joystick, drag-to-look, Use/Run buttons
 let reviewTools = new URLSearchParams(location.search).has('review');
 const paintStaffTools = () => document.body.classList.toggle('staff-tools', reviewTools || rt.isStaff);

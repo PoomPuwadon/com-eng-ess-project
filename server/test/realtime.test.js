@@ -336,3 +336,24 @@ test('bring: a CEO can teleport one guest to their position; guests cannot, and 
   assert.ok(Math.hypot(tp.x - 100, tp.z - 10) < 2.5, 'lands beside the CEO');
   assert.equal(other.inbox.filter((m) => m.t === 'teleport').length, 0, 'only the chosen guest moves');
 });
+
+test('asset protection: staff call a key AI agent up to Security HQ; guests cannot; it is shared state, can be released, and expires on its own', () => {
+  const app = mkApp();
+  const ceo = client(app, 'Boss'), guest = client(app, 'Guest');
+  ceo.ask({ t: 'elevate', password: 'sesame', role: 'ceo' });
+  assert.equal(guest.ask({ t: 'summonAgent', agent: 'head_trader', kind: 'feedback' }).ok, false, 'guests cannot');
+  assert.equal(ceo.ask({ t: 'summonAgent', agent: 'nobody', kind: 'feedback' }).ok, false, 'unknown agent');
+  assert.equal(ceo.ask({ t: 'summonAgent', agent: 'head_trader', kind: 'nonsense' }).ok, false, 'unknown review');
+  assert.equal(ceo.ask({ t: 'summonAgent', agent: 'head_trader', kind: 'feedback' }).ok, true);
+  assert.equal(ceo.ask({ t: 'summonAgent', agent: 'risk_officer', kind: 'suite', seconds: 1 }).ok, true);
+  const m = app.hub.meta().custody;
+  assert.deepEqual(m.map((c) => [c.agent, c.kind, c.by]).sort(), [['head_trader', 'feedback', 'Boss'], ['risk_officer', 'suite', 'Boss']]);
+  assert.ok(m.find((c) => c.agent === 'risk_officer').until - m.find((c) => c.agent === 'risk_officer').since >= 15_000, 'durations are clamped to at least 15 s');
+  assert.ok(guest.inbox.some((x) => x.t === 'chat' || x.t === 'announce' || JSON.stringify(x).includes('Asset Protection')), 'everyone is told, in the firm\'s own words');
+  assert.equal(guest.ask({ t: 'releaseAgent', agent: 'head_trader' }).ok, false, 'guests cannot release');
+  assert.equal(ceo.ask({ t: 'releaseAgent', agent: 'head_trader' }).ok, true);
+  assert.equal(ceo.ask({ t: 'releaseAgent', agent: 'head_trader' }).ok, false, 'already released');
+  assert.deepEqual(app.hub.meta().custody.map((c) => c.agent), ['risk_officer']);
+  app.hub.advanceClock(5 * 60_000); app.hub.tick(); // the review runs its course
+  assert.deepEqual(app.hub.meta().custody, [], 'agents go back to their desk when the time is up');
+});

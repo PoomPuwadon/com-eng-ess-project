@@ -5,6 +5,9 @@ import './console.css';
 import { signIn, savedAccount, esc, fmt, api, getToken } from '../net/api.js';
 import { arenaMediaState, onArenaMedia, refreshArenaMedia } from '../world/arenaMedia.js';
 import { FLOOR_BY_ID, findRoom } from '../layout/building.js';
+import { AI_AGENTS } from '../characters/aiTraders.js';
+
+const REVIEW_LABEL = { alignment: 'Mandatory Alignment', feedback: 'Kinetic Performance Feedback', suite: 'Transition Suite' };
 
 const h = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
 const roomName = (id) => (id && findRoom(id)?.room?.short) || '—';
@@ -166,10 +169,12 @@ export class ExecConsole {
   click(ev) {
     const mb = ev.target.closest('[data-mop]:not([data-money])'); // Treasury's Add / Remove / Set also carry data-mop; they are not media ops
     if (mb) { this.mediaOp(mb.dataset.mop, mb.dataset); return; }
-    const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-bring],[data-money]');
+    const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-bring],[data-money],[data-summon],[data-release]');
     if (!b) return;
     if (b.dataset.money) { const inp = this.el.querySelector(`[data-amt="${b.dataset.money}"]`); if (inp) this.amt[b.dataset.money] = inp.value; this.money(b.dataset.money, b.dataset.mop); return; }
     if (b.dataset.tab) { this.tab = b.dataset.tab; this.render(true); return; }
+    if (b.dataset.summon) { const a = AI_AGENTS.find((x) => x.id === b.dataset.summon); if (a) this.act('summonAgent', { agent: a.id, kind: b.dataset.kind }, `${a.name} has been called up to Asset Protection.`); return; }
+    if (b.dataset.release) { const a = AI_AGENTS.find((x) => x.id === b.dataset.release); if (a) this.act('releaseAgent', { agent: a.id }, `${a.name} has been sent back to the desk.`); return; }
     if (b.dataset.bring) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.bring); if (p) this.act('bring', { target: p.id }, `${p.name} has been brought to you.`); return; }
     if (b.dataset.kick) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.kick); if (p && confirm(`Remove ${p.name} from the building?`)) this.act('kick', { target: p.id }, `${p.name} has been removed.`); return; }
     const rt = this.ctx.rt, op = b.dataset.op;
@@ -202,7 +207,7 @@ export class ExecConsole {
     const { rt } = this.ctx;
     if (!rt.elevated) { this.toggle(false); return; }
     this.el.querySelector('.who').textContent = `${ROLE_LABEL[rt.role]} · ${rt.connected ? 'online' : 'offline'}`;
-    const TABS = [['overview', 'Overview'], ['guests', 'Guests'], ['treasury', 'Treasury'], ['tour', 'Tour'], ['combat', 'Combat · VT-03'], ['equine', 'Equine · VT-04'], ['media', 'Arena Media · VT-02']];
+    const TABS = [['overview', 'Overview'], ['guests', 'Guests'], ['treasury', 'Treasury'], ['tour', 'Tour'], ['combat', 'Combat · VT-03'], ['equine', 'Equine · VT-04'], ['media', 'Arena Media · VT-02'], ['asset', 'Asset Protection · OT-04']];
     if (this.tab === 'treasury' && rt.role === 'ceo' && Date.now() - (this.balAt || 0) > 2000) this.loadBalances();
     this.el.querySelector('.tabs').innerHTML = TABS.map(([id, l]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${l}</button>`).join('');
     const body = this.el.querySelector('.body');
@@ -217,6 +222,19 @@ export class ExecConsole {
 
   badge(p) { return `<span class="badge ${p.device === 'mobile' ? 'm' : ''}">${p.device === 'mobile' ? 'MOBILE' : 'PC'}</span>`; }
   roleBadge(p) { return p.role === 'player' ? '' : `<span class="badge ${p.role}">${p.role === 'ceo' ? 'CEO' : 'ADMIN'}</span>`; }
+
+  // ---- Asset Protection: call a key AI agent up to Security HQ (OT-04) for a review
+  tab_asset() {
+    const { rt } = this.ctx, inReview = new Map((rt.meta?.custody || []).map((c) => [c.agent, c]));
+    const rows = AI_AGENTS.map((a) => {
+      const c = inReview.get(a.id);
+      const state = c ? `<span class="badge">AT ASSET PROTECTION</span> <b>${esc(REVIEW_LABEL[c.kind] || c.kind)}</b><div class="note">ordered by ${esc(c.by)} · back at the desk around ${new Date(c.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>` : '<span class="note">At the desk</span>';
+      const btns = Object.entries(REVIEW_LABEL).map(([k, l]) => `<button class="mp-btn sm${c?.kind === k ? ' primary' : ''}" data-summon="${a.id}" data-kind="${k}">${l}</button>`).join(' ');
+      return `<tr><td><b>${esc(a.name)}</b><div class="note">${esc(a.role)}</div></td><td>${state}</td><td>${btns}${c ? ` <button class="mp-btn sm danger" data-release="${a.id}">Send back</button>` : ''}</td></tr>`;
+    }).join('');
+    return `<div class="note">Call a key AI agent up to Security HQ (floor OT-04). They are shown there for about 90 seconds, then walk back to their desk. Agents keep no memory of it. Visible to everyone on OT-01 and OT-04.</div>
+      <table><tr><th>Agent</th><th>Status</th><th>Review</th></tr>${rows}</table>`;
+  }
 
   tab_overview() {
     const { rt } = this.ctx, ps = rt.players, m = rt.meta || {};

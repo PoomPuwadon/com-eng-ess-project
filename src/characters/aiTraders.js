@@ -32,6 +32,16 @@ export const AI_AGENTS = [
 
 const SPEED = 1.5;
 const ELEV = () => FLOOR_BY_ID['OT-01'].elevation;
+const SEC_ELEV = () => FLOOR_BY_ID['OT-04'].elevation; // Asset Protection HQ
+
+// Called up by the Chief Executive: where each agent is made to stand in Security HQ (coordinates from floors/securityHQ.js).
+//   alignment = a numbered yard spot facing the CFO podium; feedback = inside the Kinetic Performance Feedback area;
+//   suite = pacing inside the glass Transition Suite.
+const REVIEW = {
+  alignment: { label: 'MANDATORY ALIGNMENT · STAND ON YOUR NUMBER', pose: 'idle', spot: (i) => ({ x: -92, z: 6 + i * 2.5, yaw: -Math.PI / 2 }) },
+  feedback: { label: 'RECEIVING KINETIC PERFORMANCE FEEDBACK', pose: 'panic', spot: (i) => ({ x: [-74.5, -68.8, -78.5, -71.6][i % 4], z: [22.6, 24.2, 25.4, 25.9][i % 4], yaw: Math.PI / 2 + i }) },
+  suite: { label: 'TRANSITION SUITE · CHECKOUT IS FINAL', pose: 'cross', spot: (i) => ({ x: -96 + i * 7, z: 34.2, yaw: Math.PI }), pace: 3 },
+};
 const providerOf = (model) => (!model || model === 'rules' ? 'RULE BOOK' : /claude/i.test(model) ? 'CLAUDE' : /gemini/i.test(model) ? 'GEMINI' : String(model).toUpperCase());
 const fmtPx = (p) => (Number.isFinite(p) ? ` @ ${p.toFixed(2)}` : '');
 
@@ -78,9 +88,36 @@ export class AiTraders {
     return a;
   }
 
+  /** follow the server's list of agents called up to Asset Protection (hub meta `custody`) */
+  bind(rt) {
+    const apply = (m) => this.setCustody(m?.custody || []);
+    rt.on('meta', apply); apply(rt.meta);
+  }
+  setCustody(list) {
+    const by = new Map(list.map((c) => [c.agent, c]));
+    this.agents.forEach((a, i) => {
+      const c = by.get(a.def.id);
+      if (c && REVIEW[c.kind] && a.custody?.kind !== c.kind) this.summon(a, i, c);
+      else if (!c && a.custody) this.sendBack(a);
+    });
+  }
+  summon(a, i, c) {
+    const r = REVIEW[c.kind], s = r.spot(i);
+    a.custody = { kind: c.kind, x: s.x, z: s.z, pace: r.pace || 0, dir: 1, yaw: s.yaw };
+    a.job = null; a.state = 'custody';
+    a.pos.set(s.x, SEC_ELEV(), s.z); a.yaw = s.yaw; a.c.pose = r.pose;
+    this.say(a, r.label, true);
+  }
+  sendBack(a) {
+    a.custody = null; a.state = 'desk'; a.timer = 8;
+    a.pos.set(a.def.stand[0], ELEV(), a.def.stand[1]); a.yaw = a.def.faceYaw; a.c.pose = 'deal';
+    this.say(a, a.last || a.def.idle, true);
+  }
+
   /** an order / research / review for this agent: go to the PC and work it */
   job(id, text, hold, done = false) {
     const a = this.byId[id]; if (!a) return;
+    if (a.custody) { if (done) a.last = text; return; } // not at the desk right now
     a.job = { text, t: hold };
     if (done) a.last = text;
     a.pad.material.opacity = 1;
@@ -111,14 +148,24 @@ export class AiTraders {
   }
 
   update(dt, visibleIds, viewer = globalThis.__crowdViewer) {
-    const vis = visibleIds.includes('OT-01');
-    this.group.visible = vis;
+    const visDesk = visibleIds.includes('OT-01'), visSec = visibleIds.includes('OT-04');
+    this.group.visible = visDesk || visSec;
     this.t += dt;
     for (const a of this.agents) {
       const d = a.def;
       a.timer -= dt;
       let speed = 0;
-      if (a.state === 'desk') {
+      const vis = a.custody ? visSec : visDesk;
+      a.c.root.visible = vis; a.pad.visible = vis && !a.custody; // the desk pad stays dark while its agent is away
+      if (a.state === 'custody') {
+        const k = a.custody;
+        if (k.kind === 'feedback') { a.c.pose = 'panic'; a.pos.x = k.x + Math.sin(this.t * 3.1 + k.yaw) * 0.18; a.pos.z = k.z + Math.cos(this.t * 2.3 + k.yaw) * 0.18; a.yaw = k.yaw + Math.sin(this.t * 2) * 0.5; }
+        else if (k.pace) { // pace the glass suite
+          const tx = k.x + k.pace * k.dir;
+          if (this.moveToward(a, tx, k.z, 0.9 * dt)) k.dir = -k.dir; else speed = 0.9;
+          a.c.pose = 'cross';
+        } else { a.pos.set(k.x, SEC_ELEV(), k.z); a.yaw = k.yaw; }
+      } else if (a.state === 'desk') {
         a.pos.set(d.stand[0], ELEV(), d.stand[1]); a.yaw = d.faceYaw;
         a.c.pose = 'deal';
         if (a.job) { a.job.t -= dt; if (a.job.t <= 0) { a.job = null; this.say(a, a.last || d.idle); } }

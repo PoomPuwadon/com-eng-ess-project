@@ -26,6 +26,12 @@ export function createHub({ players, auth, ledger, config, log = console }) {
   let seq = 0;
   let tour = { on: false, host: null, hostName: null, floor: null, room: null, since: null };
   let dirtyMeta = true;
+  // Asset Protection reviews: key AI agents the CEO / an admin has called up to Security HQ (OT-04). Purely a scene: the agent
+  // is shown there for a while and goes back to its desk; it keeps no memory of it (CLAUDE.md: agents do not remember reprimands).
+  const REVIEW_AGENTS = { head_trader: 'Chad Whitmore III', co_head_trader: 'Priya Ramanathan-Cole', quant: 'Dr. Tobias Wren', risk_officer: 'Marcus Adeyemi-Park' };
+  const REVIEW_KINDS = { alignment: 'Mandatory Alignment', feedback: 'Kinetic Performance Feedback', suite: 'Transition Suite' };
+  const REVIEW_MS = { min: 15_000, def: 90_000, max: 10 * 60_000 };
+  const custody = new Map(); // agent id -> { agent, kind, by, role, since, until }
 
   const list = () => [...conns.values()].filter((c) => c.ready);
   const send = (c, msg) => { try { c.send(msg); } catch { /* socket gone */ } };
@@ -200,6 +206,27 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     return { brought: c.id };
   }
 
+  function summonAgent(by, { agent, kind, seconds } = {}) {
+    needStaff(by);
+    if (!REVIEW_AGENTS[agent]) throw err(404, 'Unknown agent.');
+    if (!REVIEW_KINDS[kind]) throw err(400, 'Choose a review: alignment, feedback or suite.');
+    const ms = Number.isFinite(Number(seconds)) && Number(seconds) > 0 ? Math.min(REVIEW_MS.max, Math.max(REVIEW_MS.min, Number(seconds) * 1000)) : REVIEW_MS.def;
+    const now = gameCtx.now();
+    custody.set(agent, { agent, kind, by: by.name, role: by.role, since: now, until: now + ms });
+    gameCtx.announce(`${REVIEW_AGENTS[agent]} has been invited to Asset Protection for ${REVIEW_KINDS[kind]}.`);
+    log.log?.(`[hub] ${by.name} (${by.role}) called ${agent} to Asset Protection: ${kind}, ${Math.round(ms / 1000)} s`);
+    dirtyMeta = true;
+    return { agent, kind, until: now + ms };
+  }
+  function releaseAgent(by, agent) {
+    needStaff(by);
+    if (!custody.has(agent)) throw err(404, 'That agent is not at Asset Protection.');
+    custody.delete(agent);
+    gameCtx.announce(`${REVIEW_AGENTS[agent]} has concluded the review and returned to the desk.`);
+    dirtyMeta = true;
+    return { released: agent };
+  }
+
   function kick(by, target) {
     needStaff(by);
     const c = conns.get(target);
@@ -252,6 +279,8 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     elevate: (c, m) => elevate(c, m.password, m.role),
     role: (c, m) => setRole(c, m.role),
     kick: (c, m) => kick(c, m.target),
+    summonAgent: (c, m) => summonAgent(c, m),
+    releaseAgent: (c, m) => releaseAgent(c, m.agent),
     bring: (c, m) => bring(c, m.target),
     balances: (c) => balances(c),
     money: (c, m) => adjustMoney(c, m),
@@ -298,7 +327,7 @@ export function createHub({ players, auth, ledger, config, log = console }) {
   // ---------------------------------------------------------------- outbound state
   function meta() {
     return {
-      tour, baskets: Object.fromEntries(baskets), boxing: boxing.view(), race: race.view(),
+      tour, baskets: Object.fromEntries(baskets), boxing: boxing.view(), race: race.view(), custody: [...custody.values()],
       boxed: [...new Set(list().filter((c) => boxing.hasBoxed(c.playerId)).map((c) => c.id))],
     };
   }
@@ -313,6 +342,7 @@ export function createHub({ players, auth, ledger, config, log = console }) {
   function tick() {
     const now = Date.now(), dt = Math.min(0.5, (now - last) / 1000); last = now;
     boxing.tick(dt); race.tick(dt);
+    for (const [id, e] of custody) if (gameCtx.now() >= e.until) { custody.delete(id); dirtyMeta = true; gameCtx.announce(`${REVIEW_AGENTS[id]} has concluded the review and returned to the desk.`); }
     const ps = list();
     if (!ps.length) return;
     const raceView = race.active() ? race.view() : null;
