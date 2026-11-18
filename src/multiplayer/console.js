@@ -1,7 +1,9 @@
 // Sign-in modal (Name + Password) and the secret executive console (Alt+F2): unlock as CEO or Admin
-// with the console password, then Overview · Guests (kick) · Tour · Combat (VT-03) · Equine (VT-04).
+// with the console password, then Overview · Guests (kick) · Tour · Combat (VT-03) · Equine (VT-04) ·
+// Arena Media (VT-02: head-to-head results and highlight videos on the Sports Analytics Arena's side screens).
 import './console.css';
-import { signIn, savedAccount, esc, fmt } from '../net/api.js';
+import { signIn, savedAccount, esc, fmt, api, getToken } from '../net/api.js';
+import { arenaMediaState, onArenaMedia, refreshArenaMedia } from '../world/arenaMedia.js';
 import { FLOOR_BY_ID, findRoom } from '../layout/building.js';
 
 const h = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
@@ -70,6 +72,7 @@ export class ExecConsole {
   constructor(ctx) {
     this.ctx = ctx; this.tab = 'overview'; this.sel = { box: new Set(), race: new Set() }; this.raceCount = 4;
     this.bal = new Map(); this.amt = {}; // Treasury tab: balances by connection id, typed amounts
+    this.md = { fx: null, draft: null, dirty: false, fixtures: [], at: 0, busy: '', yt: '', ytTitle: '', fileTitle: '' }; // Arena Media tab
     this.el = h(`<div id="mp-console"><header><b>Executive Console</b><span class="who"></span><button class="mp-btn sm" data-x>Close · Alt+F2</button></header><div class="tabs"></div><div class="body"></div></div>`);
     document.body.append(this.el);
     // while elevated a small Console button stays on screen: closing the panel never locks it again (user, 2026-11-18)
@@ -81,6 +84,11 @@ export class ExecConsole {
     this.el.addEventListener('keydown', (ev) => ev.stopPropagation());
     this.el.addEventListener('click', (ev) => this.click(ev));
     this.el.addEventListener('change', (ev) => this.change(ev));
+    this.el.addEventListener('input', (ev) => this.mediaInput(ev));
+    // live media updates (another admin's edit) never redraw the form under a field you are typing in
+    const editing = () => this.el.querySelector('.body').contains(document.activeElement) && document.activeElement.matches('input,select,textarea');
+    onArenaMedia(() => { if (this.tab !== 'media' || this.md.dirty) return; if (editing()) { this.md.pending = true; return; } this.md.draft = null; this.render(true); });
+    this.el.addEventListener('focusout', () => setTimeout(() => { if (this.md.pending && !editing() && !this.md.dirty) { this.md.pending = false; this.md.draft = null; this.render(true); } }, 0));
     addEventListener('keydown', (ev) => {
       if (ev.altKey && ev.code === 'F2') { ev.preventDefault(); ev.stopPropagation(); this.hotkey(); }
     }, true);
@@ -156,10 +164,12 @@ export class ExecConsole {
   }
 
   click(ev) {
+    const mb = ev.target.closest('[data-mop]');
+    if (mb) { this.mediaOp(mb.dataset.mop, mb.dataset); return; }
     const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-money]');
     if (!b) return;
     if (b.dataset.money) { const inp = this.el.querySelector(`[data-amt="${b.dataset.money}"]`); if (inp) this.amt[b.dataset.money] = inp.value; this.money(b.dataset.money, b.dataset.mop); return; }
-    if (b.dataset.tab) { this.tab = b.dataset.tab; this.render(); return; }
+    if (b.dataset.tab) { this.tab = b.dataset.tab; this.render(true); return; }
     if (b.dataset.kick) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.kick); if (p && confirm(`Remove ${p.name} from the building?`)) this.act('kick', { target: p.id }, `${p.name} has been removed.`); return; }
     const rt = this.ctx.rt, op = b.dataset.op;
     const ops = {
@@ -183,19 +193,23 @@ export class ExecConsole {
     if (t.dataset.pick) { const s = this.sel[t.dataset.pick]; t.checked ? s.add(t.value) : s.delete(t.value); }
     if (t.dataset.count) this.raceCount = Math.max(2, Math.min(6, Number(t.value) || 4));
     if (t.dataset.amt) this.amt[t.dataset.amt] = t.value;
+    if (t.dataset.mfx) { this.md.fx = Number(t.value) || null; this.md.draft = null; this.md.dirty = false; this.render(true); }
   }
 
-  render() {
+  render(force = false) {
     if (!this.open) return;
     const { rt } = this.ctx;
     if (!rt.elevated) { this.toggle(false); return; }
     this.el.querySelector('.who').textContent = `${ROLE_LABEL[rt.role]} · ${rt.connected ? 'online' : 'offline'}`;
-    const TABS = [['overview', 'Overview'], ['guests', 'Guests'], ['treasury', 'Treasury'], ['tour', 'Tour'], ['combat', 'Combat · VT-03'], ['equine', 'Equine · VT-04']];
+    const TABS = [['overview', 'Overview'], ['guests', 'Guests'], ['treasury', 'Treasury'], ['tour', 'Tour'], ['combat', 'Combat · VT-03'], ['equine', 'Equine · VT-04'], ['media', 'Arena Media · VT-02']];
     if (this.tab === 'treasury' && rt.role === 'ceo' && Date.now() - (this.balAt || 0) > 2000) this.loadBalances();
     this.el.querySelector('.tabs').innerHTML = TABS.map(([id, l]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${l}</button>`).join('');
     const body = this.el.querySelector('.body');
     const keep = body.scrollTop;
     if (body.contains(document.activeElement) && document.activeElement.matches('input[type=number]')) return; // don't wipe a field being edited
+    if (this.tab === 'media' && body.dataset.pane === 'media' && !force) return; // the media form only redraws on its own events
+    if (this.tab === 'media' && Date.now() - this.md.at > 60_000) this.loadMediaFixtures();
+    body.dataset.pane = this.tab; // not data-tab: click() treats [data-tab] ancestors as tab buttons
     body.innerHTML = this[`tab_${this.tab}`]();
     body.scrollTop = keep;
   }
@@ -283,6 +297,106 @@ export class ExecConsole {
       <h4>Select competitors (2 or more)</h4>${this.pickList('box')}
       <div class="btns"><button class="mp-btn primary" data-op="boxStart" ${ceo && !live ? '' : 'disabled'}>Start session</button><button class="mp-btn danger" data-op="boxEnd" ${live ? '' : 'disabled'}>Force End Round</button></div>
       <div class="note">Start sends competitors to the walkout ("walk into the ring") and everyone else to the stands. CEO highlights hide during the round. Ends on a knockout, Force End, or when the host leaves VT-03.</div>`;
+  }
+
+  // ---- Arena Media (VT-02): staff attach previous head-to-head results and highlights to a fixture;
+  // the Arena's side screens show them next to the pricing screens. Every write is checked on the server.
+  async loadMediaFixtures() {
+    this.md.at = Date.now();
+    try {
+      const s = await api('/api/football/state');
+      const seen = new Set();
+      this.md.fixtures = [s.marquee && { ...s.marquee, star: true }, ...(s.fixtures || [])].filter((m) => m && !seen.has(m.id) && seen.add(m.id));
+      if (!this.md.fx) this.md.fx = arenaMediaState()?.onScreens || s.marquee?.id || this.md.fixtures[0]?.id || null;
+      refreshArenaMedia();
+      if (this.tab === 'media') this.render(true);
+    } catch { /* server offline */ }
+  }
+  mediaEntry() { return arenaMediaState()?.fixtures?.[this.md.fx] || null; }
+  mediaInput(ev) {
+    const t = ev.target;
+    if (t.dataset.h2h) {
+      const [i, k] = t.dataset.h2h.split(':'); const row = this.md.draft?.[Number(i)];
+      if (row) { row[k] = t.value; row.src = 'manual'; this.md.dirty = true; for (const b of this.el.querySelectorAll('[data-mop="saveRows"],[data-mop="revert"]')) b.disabled = false; }
+    }
+    if (t.dataset.myt != null) this.md[t.dataset.myt] = t.value;
+  }
+  async mediaOp(op, ds) {
+    const md = this.md, fx = md.fx;
+    if (!fx && op !== 'off') { this.ctx.toast('Choose a fixture first.', 2); return; }
+    const run = async (label, fn) => { md.busy = label; this.render(true); try { return await fn(); } catch (e) { this.ctx.toast(e.message, 3.5); return null; } finally { md.busy = ''; this.render(true); } };
+    if (op === 'fetch') {
+      const out = await run('Consulting the data feed…', () => this.ctx.rt.ask('mediaFetchH2H', { matchId: fx }));
+      if (out) { md.draft = null; md.dirty = false; this.ctx.toast(out.fetched ? `${out.fetched} previous meeting(s) on file${out.cached ? ' (cached)' : ''}.` : 'The feed lists no previous meetings. Add them by hand.', 3); this.render(true); }
+    } else if (op === 'addRow') {
+      md.draft.unshift({ date: new Date().toISOString().slice(0, 10), competition: '', home: '', away: '', hs: 0, as: 0, src: 'manual' }); md.dirty = true; this.render(true);
+    } else if (op === 'delRow') {
+      md.draft.splice(Number(ds.i), 1); md.dirty = true; this.render(true);
+    } else if (op === 'saveRows') {
+      const rows = md.draft.map((r) => ({ ...r, hs: Number(r.hs), as: Number(r.as) }));
+      if (await run('Saving…', () => this.ctx.rt.ask('mediaSetH2H', { matchId: fx, rows }))) { md.draft = null; md.dirty = false; this.ctx.toast('Head-to-head saved and on the screens.', 2.5); this.render(true); }
+    } else if (op === 'revert') {
+      md.draft = null; md.dirty = false; this.render(true);
+    } else if (op === 'yt') {
+      if (await run('Attaching…', () => this.ctx.rt.ask('mediaAddYoutube', { matchId: fx, url: md.yt, title: md.ytTitle }))) { md.yt = ''; md.ytTitle = ''; this.ctx.toast('Highlights attached.', 2.5); this.render(true); }
+    } else if (op === 'upload') {
+      const file = this.el.querySelector('[data-mfile]')?.files?.[0];
+      if (!file) { this.ctx.toast('Choose an mp4 or webm file first.', 2.5); return; }
+      const lim = (arenaMediaState()?.limits?.uploadMb || 80) * 1024 * 1024;
+      if (!/\.(mp4|webm)$/i.test(file.name) && !/^video\/(mp4|webm)$/.test(file.type)) { this.ctx.toast('Only mp4 or webm video files are accepted.', 3); return; }
+      if (file.size > lim) { this.ctx.toast(`Uploads are limited to ${lim / 1024 / 1024} MB.`, 3); return; }
+      md.busy = 'Uploading 0%'; this.render(true);
+      try {
+        await new Promise((resolve, reject) => {
+          const x = new XMLHttpRequest();
+          x.open('POST', `/api/arena-media/upload?match=${fx}&title=${encodeURIComponent(md.fileTitle || file.name.replace(/\.[^.]+$/, ''))}`);
+          x.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+          x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          x.upload.onprogress = (e) => { if (e.lengthComputable) { md.busy = `Uploading ${Math.round((e.loaded / e.total) * 100)}%`; const b = this.el.querySelector('.md-busy'); if (b) b.textContent = md.busy; } };
+          x.onload = () => { let j = null; try { j = JSON.parse(x.responseText); } catch { /* empty */ } x.status === 200 ? resolve(j) : reject(new Error(j?.error || `Upload failed (${x.status})`)); };
+          x.onerror = () => reject(new Error('Upload interrupted.'));
+          x.send(file);
+        });
+        md.fileTitle = ''; this.ctx.toast('Highlights uploaded and rolling on the reel screens.', 3);
+      } catch (e) { this.ctx.toast(e.message, 3.5); }
+      md.busy = ''; this.render(true);
+    } else if (op === 'rmv') {
+      await run('Removing…', () => this.ctx.rt.ask('mediaRemoveVideo', { matchId: fx, videoId: ds.id }));
+    } else if (op === 'show') {
+      if (await run('…', () => this.ctx.rt.ask('mediaShow', { matchId: fx }))) this.ctx.toast('This fixture is now on the Arena media screens.', 2.5);
+    } else if (op === 'off') {
+      if (await run('…', () => this.ctx.rt.ask('mediaShow', { matchId: null }))) this.ctx.toast('Media screens handed back to the fixture cards.', 2.5);
+    } else if (op === 'clear') {
+      if (!confirm('Remove every head-to-head result and highlight for this fixture? Uploaded files are deleted.')) return;
+      if (await run('Clearing…', () => this.ctx.rt.ask('mediaClear', { matchId: fx }))) { md.draft = null; md.dirty = false; this.ctx.toast('Fixture media cleared.', 2.5); }
+    }
+  }
+  tab_media() {
+    const md = this.md, st = arenaMediaState(), e = this.mediaEntry();
+    if (!md.fixtures.length) return '<div class="note">Loading the fixture list…</div>';
+    if (!md.draft) md.draft = (e?.h2h || []).map((r) => ({ ...r }));
+    const name = (m) => `${m.homeTeam.shortName || m.homeTeam.name} v ${m.awayTeam.shortName || m.awayTeam.name}`;
+    const opts = md.fixtures.map((m) => `<option value="${m.id}" ${m.id === md.fx ? 'selected' : ''}>${m.star ? '★ MARQUEE · ' : ''}${esc(name(m))} · ${esc(m.competition?.code || '')} · ${new Date(m.utcDate).toUTCString().slice(5, 22)}${st?.fixtures?.[m.id] ? ' · media' : ''}</option>`).join('');
+    const onName = st?.onScreens ? esc(st.fixtures[st.onScreens]?.label || `fixture ${st.onScreens}`) : null;
+    const inp = (i, k, v, ph, type = 'text') => `<input type="${type}" data-h2h="${i}:${k}" value="${esc(v)}" placeholder="${ph}" aria-label="${ph}" ${type === 'number' ? 'min="0" max="30"' : ''}>`;
+    const rows = md.draft.map((r, i) => `<div class="md-row${r.src === 'auto' ? ' auto' : ''}"><div class="l1">${inp(i, 'date', r.date, 'Date', 'date')}${inp(i, 'competition', r.competition, 'Competition')}<button class="mp-btn sm danger" data-mop="delRow" data-i="${i}" title="Delete this result">✕</button></div>
+      <div class="l2">${inp(i, 'home', r.home, 'Home club')}${inp(i, 'hs', r.hs, 'Home goals', 'number')}${inp(i, 'as', r.as, 'Away goals', 'number')}${inp(i, 'away', r.away, 'Away club')}</div></div>`).join('');
+    const vids = (e?.videos || []).map((v) => `<tr><td>${v.kind === 'youtube' ? '<span class="badge">YOUTUBE</span>' : '<span class="badge m">UPLOAD</span>'}</td><td>${esc(v.title)}${v.size ? ` <span class="note">${(v.size / 1024 / 1024).toFixed(1)} MB</span>` : ''}</td><td class="note">${esc(String(v.by || '').replace(/^\w+:/, ''))}</td><td><button class="mp-btn sm danger" data-mop="rmv" data-id="${v.id}">Remove</button></td></tr>`).join('');
+    const busy = md.busy ? `<div class="note md-busy" style="color:#f0d18a">${esc(md.busy)}</div>` : '';
+    const lim = st?.limits || { uploadMb: 80, videos: 8 };
+    return `<h4>Fixture</h4><select data-mfx style="width:100%;background:#171b25;color:#fff;border:1px solid #3a4152;border-radius:6px;padding:6px">${opts}</select>
+      <div class="note">Media screens: ${onName ? `<span class="live">ON</span> · ${onName}` : '<span class="off">showing fixture cards</span>'}. The marquee stack and pricing screens are never replaced: media goes on the side screens beside the Sports Analytics signs (five head-to-head, five highlights) on the back faces of the big hanging screens and on the middle ring of the centre-hung stack (highlights); the stack's top and bottom rings and the hanging screens' front faces keep the pricing.</div>
+      <div class="btns"><button class="mp-btn primary" data-mop="show" ${e ? '' : 'disabled'}>Put this fixture on the screens</button><button class="mp-btn" data-mop="off" ${st?.onScreens ? '' : 'disabled'}>Hand screens back</button></div>${busy}
+      <h4>Head-to-head · previous meetings</h4>
+      <div class="btns"><button class="mp-btn" data-mop="fetch">Auto-fill from football-data.org</button><button class="mp-btn" data-mop="addRow">+ Add a result</button></div>
+      <div class="md-rows">${rows || '<div class="note">No results yet. Auto-fill (cached 12 h, paced to the free tier) or add them by hand.</div>'}</div>
+      <div class="btns"><button class="mp-btn primary" data-mop="saveRows" ${md.dirty ? '' : 'disabled'}>Save head-to-head</button><button class="mp-btn" data-mop="revert" ${md.dirty ? '' : 'disabled'}>Discard edits</button></div>
+      <h4>Highlights (${(e?.videos || []).length}/${lim.videos})</h4><table>${vids || '<tr><td class="note">No highlights attached.</td></tr>'}</table>
+      <div class="note">YouTube link</div><div class="btns"><input type="text" data-myt="yt" value="${esc(md.yt)}" placeholder="https://www.youtube.com/watch?v=…" style="flex:2 1 60%"><input type="text" data-myt="ytTitle" value="${esc(md.ytTitle)}" placeholder="Title (optional)" style="flex:1 1 30%"><button class="mp-btn sm" data-mop="yt">Attach</button></div>
+      <div class="note">Upload a video (mp4 or webm, up to ${lim.uploadMb} MB)</div><div class="btns"><input type="file" data-mfile accept="video/mp4,video/webm,.mp4,.webm" style="flex:2 1 55%;color:#cfd6e6"><input type="text" data-myt="fileTitle" value="${esc(md.fileTitle)}" placeholder="Title (optional)" style="flex:1 1 30%"><button class="mp-btn sm" data-mop="upload">Upload</button></div>
+      <div class="note">Uploads play muted on the five reel screens through one shared video. YouTube clips play muted in YouTube's own player laid over the reel screen nearest each guest (a browser cannot paint YouTube into a 3D texture); the other reel screens show the clip's card.</div>
+      <div class="btns"><button class="mp-btn danger" data-mop="clear" ${e ? '' : 'disabled'}>Clear all media for this fixture</button></div>
+      <h4>Recent changes</h4><table>${(st?.audit || []).slice(0, 8).map((a) => `<tr><td class="note">${new Date(a.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${esc(String(a.by).replace(/^\w+:/, ''))}</td><td>${esc(a.what)}</td></tr>`).join('') || '<tr><td class="note">Nothing yet.</td></tr>'}</table>`;
   }
 
   tab_equine() {

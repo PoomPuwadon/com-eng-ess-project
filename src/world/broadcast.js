@@ -387,24 +387,51 @@ const isBig = (s) => s.w * s.h >= 1.5;
 export function setFixtureCards(map) {
   if (map && FEATURE.fixtures.map !== map) { FEATURE.fixtures.map = map; FEATURE.fixtures.needsUpdate = true; }
   for (const m of FEATURE.fixtureMeshes) m.material = map ? FEATURE.fixtures : bcMaterial;
+  paintMedia();
+}
+// ---- the MEDIA screens (VT-02 Arena Media, arenaMedia.js): a few side screens (items flagged media:
+// 'h2h' | 'reel') show the head-to-head card and the highlights reel when staff attach them to a fixture.
+// Two shared textures (a CanvasTexture; a canvas-or-VideoTexture), so one video decode for every reel screen.
+// With nothing attached they fall back to the fixture cards like their neighbours.
+export const MEDIA = { h2h: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), reel: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), meshes: { h2h: new Set(), reel: new Set() }, items: { h2h: [], reel: [] }, on: { h2h: false, reel: false } };
+function paintMedia() {
+  // with nothing attached a media screen shows what it would have shown: the marquee (centre stack) or a fixture card
+  for (const k of ['h2h', 'reel']) for (const m of MEDIA.meshes[k]) m.material = MEDIA.on[k] ? MEDIA[k] : m.userData.marquee ? (FEATURE.on ? FEATURE.material : bcMaterial) : FEATURE.fixtures.map ? FEATURE.fixtures : bcMaterial;
+}
+/** kind 'h2h' | 'reel'; map = the texture to show, or null to hand those screens back to the fixture cards */
+export function setMediaScreens(kind, map) {
+  const mat = MEDIA[kind];
+  if (map && mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
+  MEDIA.on[kind] = Boolean(map);
+  paintMedia();
 }
 /** switch every big screen between the match atlas and the feature feed; map = the feature texture */
 export function setFeature(on, map) {
   if (map && FEATURE.material.map !== map) { FEATURE.material.map = map; FEATURE.material.needsUpdate = true; }
   FEATURE.on = Boolean(on && FEATURE.material.map);
   for (const m of FEATURE.meshes) m.material = FEATURE.on ? FEATURE.material : bcMaterial;
+  paintMedia();
 }
 
 // items: {x,y,z,yaw,w,h,cell}
 export function buildBroadcastScreens(items) {
   const big = items.filter(isBig), small = items.filter((s) => !isBig(s));
-  const marquee = big.filter((s) => s.marquee), others = big.filter((s) => !s.marquee);
+  const marquee = big.filter((s) => s.marquee && !s.media), others = big.filter((s) => !s.marquee && !s.media);
   // an arena without flagged screens keeps the old behaviour (the marquee on every big screen)
   const bigMeshes = buildInstanced(marquee.length ? marquee : big);
   for (const m of bigMeshes) { FEATURE.meshes.add(m); if (FEATURE.on) m.material = FEATURE.material; }
   const fixMeshes = marquee.length ? buildInstanced(others.map((s, i) => ({ ...s, feat: (s.feat ?? i) % FIX.CELLS }))) : [];
   for (const m of fixMeshes) { FEATURE.fixtureMeshes.add(m); if (FEATURE.fixtures.map) m.material = FEATURE.fixtures; }
-  return [...buildInstanced(small), ...bigMeshes, ...fixMeshes];
+  const mediaMeshes = [];
+  for (const kind of ['h2h', 'reel']) {
+    const list = big.filter((s) => s.media === kind);
+    MEDIA.items[kind] = list; // where they are (the YouTube layer aligns to a reel screen)
+    for (const group of [list.filter((s) => s.marquee), list.filter((s) => !s.marquee)]) {
+      for (const m of group.length ? buildInstanced(group.map((s, i) => ({ ...s, feat: (s.feat ?? i + 2) % FIX.CELLS }))) : []) { m.userData.marquee = Boolean(group[0].marquee); MEDIA.meshes[kind].add(m); mediaMeshes.push(m); }
+    }
+  }
+  paintMedia();
+  return [...buildInstanced(small), ...bigMeshes, ...fixMeshes, ...mediaMeshes];
 }
 function buildInstanced(items) {
   return chunked(items, 40, (list) => {

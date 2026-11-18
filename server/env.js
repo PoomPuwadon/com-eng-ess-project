@@ -32,6 +32,7 @@ export const CONFIG = {
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   footballKey: process.env.FOOTBALL_DATA_API_KEY || '',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
+  mediaDir: process.env.MEDIA_DIR || join(ROOT, 'data', 'arena-media'), // VT-02 uploaded highlights (gitignored)
   usersFile: process.env.USERS_FILE || join(ROOT, 'data', 'users.json'),
   maxPlayers: num('MAX_PLAYERS', 50),
   // models per job (agent-cost-control skill §1: Haiku for ticks; configurable)

@@ -267,13 +267,16 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     if (!c.ready) return;
     const fn = OPS[m.t];
     if (!fn) return;
-    try {
-      const out = fn(c, m);
-      if (m.rid) send(c, { t: 'ack', rid: m.rid, ok: true, data: out ?? null });
-    } catch (e) {
+    const fail = (e) => {
       if (!e.status) log.warn?.('[hub]', m.t, e.message);
       if (m.rid) send(c, { t: 'ack', rid: m.rid, ok: false, error: e.status ? e.message : 'Internal error' });
-    }
+    };
+    const ok = (out) => { if (m.rid) send(c, { t: 'ack', rid: m.rid, ok: true, data: out ?? null }); };
+    try {
+      const out = fn(c, m);
+      if (out && typeof out.then === 'function') out.then(ok, fail); // async ops (e.g. a data-feed fetch)
+      else ok(out);
+    } catch (e) { fail(e); }
   }
 
   // ---------------------------------------------------------------- outbound state
@@ -303,7 +306,11 @@ export function createHub({ players, auth, ledger, config, log = console }) {
   }
 
   return {
-    connect, message, disconnect, tick, meta, snapshot, poseOf, kick,
+    connect, message, disconnect, tick, meta, snapshot, poseOf, kick, broadcast, needStaff,
+    /** feature modules add their own ops (each checks roles itself) */
+    extend: (ops) => { for (const [k, fn] of Object.entries(ops)) { if (OPS[k]) throw new Error('hub op ' + k + ' exists'); OPS[k] = fn; } },
+    /** HTTP routes: is this player elevated to Admin or Chief Executive right now? */
+    isStaffPlayer: (playerId) => STAFF.has(elevated.get(playerId)),
     conns: list, get tour() { return tour; }, baskets, boxing, race,
     advanceClock: (ms) => { skew += ms; }, // tests only
   };

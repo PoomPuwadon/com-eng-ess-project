@@ -273,5 +273,5 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
   }
   const stop = () => timers.forEach(clearInterval);
 
-  return { start, stop, cycle, scout, open, settle, agentTick, snapshot, crest, refreshFixtures, state, _setMatches: (ms) => { matches = ms; }, matches: () => matches, playerAccount: player };
+  return { request: get, start, stop, cycle, scout, open, settle, agentTick, snapshot, crest, refreshFixtures, state, _setMatches: (ms) => { matches = ms; }, matches: () => matches, playerAccount: player };
 }

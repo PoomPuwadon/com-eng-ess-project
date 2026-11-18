@@ -331,7 +331,7 @@ export function sportsArena(ctx) {
     for (const sd of [-1, 1]) { // screens either side of the sign
       const [sx, , sz] = P(RW - 0.5, a + (sd * 8.3) / A.RWALL), sy = yawIn(a + (sd * 8.3) / A.RWALL);
       obox(L, sx + 0.06 * Math.cos(a), 4.7, sz + 0.06 * Math.sin(a), 5.2, 3.0, 0.1, sy, 'arTruss');
-      bc.push({ x: sx - 0.02 * Math.cos(a), y: e + 4.7, z: sz - 0.02 * Math.sin(a), yaw: sy, w: 4.9, h: 2.76, cell: sd > 0 ? BC.SCORES : BC.DASH + (SIGNS.indexOf(a) % BC.DASHES) });
+      bc.push({ x: sx - 0.02 * Math.cos(a), y: e + 4.7, z: sz - 0.02 * Math.sin(a), yaw: sy, w: 4.9, h: 2.76, cell: sd > 0 ? BC.SCORES : BC.DASH + (SIGNS.indexOf(a) % BC.DASHES), media: sd > 0 ? 'h2h' : 'reel' }); // Arena Media side screens (staff attach head-to-head + highlights)
     }
   }
   for (let a = A0 + 0.3; a < A1 - 0.3; a += 8 / A.RWALL) { // warm sconces low on the wall (not behind the signs)
@@ -395,7 +395,7 @@ export function sportsArena(ctx) {
     cyl8(rad - 0.2, t.y0 - 0.1, t.y0 + t.h + 0.4, 'blackMetal');
     for (let i = 0; i < SIDES; i++) {
       const a = Math.PI / 2 - ((i + 0.5) / SIDES) * TAU;
-      bc.push({ x: A.cx + t.ap * Math.cos(a), y: e + t.y0 + t.h / 2 + 0.15, z: A.cz + t.ap * Math.sin(a), yaw: Math.atan2(Math.cos(a), Math.sin(a)), w: tw(t.ap) - 0.12, h: t.h, cell: t.cell(i), marquee: true }); // the centre-hung stack carries the marquee
+      bc.push({ x: A.cx + t.ap * Math.cos(a), y: e + t.y0 + t.h / 2 + 0.15, z: A.cz + t.ap * Math.sin(a), yaw: Math.atan2(Math.cos(a), Math.sin(a)), w: tw(t.ap) - 0.12, h: t.h, cell: t.cell(i), marquee: true, ...(TIERS.indexOf(t) === 1 ? { media: 'reel' } : {}) }); // the centre-hung stack carries the marquee; its middle ring also rolls the highlights reel
     }
     for (const yy of [t.y0 - 0.05, t.y0 + t.h + 0.35]) L.geo(new THREE.TorusGeometry(rad + 0.1, 0.17, 4, SIDES).rotateX(Math.PI / 2).rotateY(Math.PI / SIDES).translate(A.cx, yy, A.cz), 'arGold');
     L.geo(new THREE.TorusGeometry(rad + 0.05, 0.12, 4, SIDES).rotateX(Math.PI / 2).rotateY(Math.PI / SIDES).translate(A.cx, t.y0 - 0.3, A.cz), 'arLedBlue'); // blue underglow
@@ -424,7 +424,7 @@ export function sportsArena(ctx) {
       const [x, , z] = P(rr, a), [xb, , zb] = P(rr - 0.16, a), [xm, , zm] = P(rr - 0.08, a);
       obox(L, xm, yc, zm, w + 0.24, h + 0.24, 0.1, yw, 'blackMetal');
       bc.push({ x, y: e + yc, z, yaw: yw, w, h, cell: (b.idx * 3 + k) % BC.MATCHES });
-      bc.push({ x: xb, y: e + yc, z: zb, yaw: yw + Math.PI, w, h, cell: i % 4 === 1 ? BC.SCORES : (b.idx * 5 + k) % BC.MATCHES });
+      bc.push({ x: xb, y: e + yc, z: zb, yaw: yw + Math.PI, w, h, cell: i % 4 === 1 ? BC.SCORES : (b.idx * 5 + k) % BC.MATCHES, media: 'reel' }); // back face: the highlights reel (front keeps the pricing)
       for (const o of [-w / 2.6, w / 2.6]) { const [cx, , cz] = P(rr - 0.08, a + o / rr); L.cyl(cx, cz, 0.03, yc + h / 2 + 0.12, H - 2.7, 'steel', { seg: 4 }); }
     });
   }

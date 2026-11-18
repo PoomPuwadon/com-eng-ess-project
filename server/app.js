@@ -15,6 +15,7 @@ import { createGateway, AGENTS } from './agents/gateway.js';
 import { createTradingDesk } from './agents/tradingDesk.js';
 import { createChartAnalyst } from './agents/chartAnalyst.js';
 import { createFootball } from './football/service.js';
+import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
 import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
@@ -52,6 +53,9 @@ export function createApp(config, log = console) {
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log });
   const chartDesk = createChartAnalyst({ llm, log });
   const football = createFootball({ db, ledger, treasury, llm, config, log });
+  const media = createArenaMedia({ db, football, dir: config.mediaDir || join(ROOT, 'data', 'arena-media'), offline: Boolean(config.offline), log });
+  hub.extend(media.hubOps(hub));
+  media.onChange((v) => hub.broadcast({ t: 'arenaMedia', media: v })); // live to every connected client
   const lotto = createLotteryData(db, bus, config, log);
   const institute = createInstitute({ db, ledger, data: lotto, gateway, llm, bus, players, log });
   let reconcile = ledger.reconcile();
@@ -154,6 +158,7 @@ export function createApp(config, log = console) {
     'GET /api/market/leaderboard': () => ({ leaders: trading.leaderboard(players, config.startingBalance), firm: { nav: trading.portfolio(DEPT.trading).nav, start: 100_000_000 } }),
     'GET /api/firm/book': () => firmBook(),
     'GET /api/football/state': (req) => { const p = authOf(req); return football.snapshot(p ? p.account : null); },
+    'GET /api/arena-media': () => media.view(),
     'POST /api/football/position': async (req) => { const p = need(req); limit(p.id); const b = await readBody(req); const out = football.open({ owner: p.account, matchId: b.matchId, market: b.market, pick: b.pick, stake: Math.round(Number(b.amount)), actor: `player:${p.id}` }); return { position: out, balance: ledger.balance(p.account) }; },
     // OT-01 Chart Desk: image -> UP/DOWN (AI when a key is set, labelled demo otherwise)
     'POST /api/vision/chart': async (req) => { const p = need(req); limit(`chart:${p.id}`, 1); const b = await readBody(req, 6_000_000); return chartDesk.analyse({ image: b.image, hint: b.hint }); },
@@ -182,6 +187,23 @@ export function createApp(config, log = console) {
     if (url.pathname === '/api/football/crest') { // club crests, proxied same-origin (3D canvases) and cached
       try { const c = await football.crest(url.searchParams.get('u')); res.writeHead(200, { 'Content-Type': c.type, 'Cache-Control': 'public, max-age=86400' }); res.end(c.body); }
       catch (e) { json(res, e.status || 502, { error: e.status ? e.message : 'Crest unavailable' }); }
+      return;
+    }
+    // VT-02 Arena Media: staff upload a highlight video (raw mp4/webm body), stored under data/arena-media/
+    if (req.method === 'POST' && url.pathname === '/api/arena-media/upload') {
+      try {
+        const p = need(req);
+        if (!hub.isStaffPlayer(p.id)) throw Object.assign(new Error('Executive clearance required.'), { status: 403 });
+        limit('upload:' + p.id, 1);
+        const v = await media.upload(url.searchParams.get('match'), req, { title: url.searchParams.get('title'), length: Number(req.headers['content-length']) || 0, by: 'staff:' + p.name });
+        json(res, 200, { video: v });
+      } catch (e) { if (!res.headersSent) { req.resume(); json(res, e.status || 500, { error: e.status ? e.message : 'Upload failed' }); } if (!e.status) log.error('[upload]', e); }
+      return;
+    }
+    if (req.method === 'GET' && url.pathname.startsWith('/api/arena-media/file/')) { media.serveFile(req, res, url.pathname.slice('/api/arena-media/file/'.length)); return; }
+    if (req.method === 'GET' && url.pathname.startsWith('/api/arena-media/thumb/')) {
+      try { const t = await media.thumb(url.pathname.slice('/api/arena-media/thumb/'.length)); res.writeHead(200, { 'Content-Type': t.type, 'Cache-Control': 'public, max-age=86400' }); res.end(t.body); }
+      catch (e) { json(res, e.status || 502, { error: e.status ? e.message : 'Thumbnail unavailable' }); }
       return;
     }
     if (url.pathname === '/api/stream') {
@@ -218,5 +240,5 @@ export function createApp(config, log = console) {
   const start0 = start, stop0 = stop;
   start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
   stop = () => { ws?.stop(); football.stop(); stop0(); };
-  return { auth, hub, football, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  return { auth, hub, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

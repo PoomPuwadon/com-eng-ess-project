@@ -61,6 +61,7 @@ export class Player {
     this.avatar = char;
     if (!char) return;
     char.root.traverse((o) => { o.castShadow = false; }); // the shadow map is static: no ghost shadows
+    char.root.userData.selfAvatar = true; // e.g. the Arena's on-screen YouTube layer ignores your own body
     scene.add(char.root); // the name plate stays on, above your own head too
   }
 

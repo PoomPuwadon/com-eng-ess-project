@@ -136,3 +136,14 @@
 #mp-console-btn.open { background: #d6b25e; color: #120c02; }
 #mp-console-btn kbd { font: 700 10px ui-monospace, monospace; opacity: .7; }
 body.nohud #mp-console-btn { display: none; }
+#mp-console input[type=text], #mp-console input[type=date] { background: #171b25; color: #fff; border: 1px solid #3a4152; border-radius: 6px; padding: 4px 6px; font: 12px system-ui; box-sizing: border-box; min-width: 0; }
+#mp-console td input { padding: 3px 4px; }
+/* Arena Media tab: head-to-head rows as two-line cards (the console is narrow) */
+#mp-console .md-rows { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; max-height: 300px; overflow-y: auto; }
+#mp-console .md-row { border: 1px solid #2c3242; border-radius: 8px; padding: 5px; background: #121621; }
+#mp-console .md-row.auto { border-left: 3px solid #3a6fd8; }
+#mp-console .md-row .l1, #mp-console .md-row .l2 { display: grid; gap: 4px; }
+#mp-console .md-row .l1 { grid-template-columns: 128px 1fr auto; margin-bottom: 4px; }
+#mp-console .md-row .l2 { grid-template-columns: 1fr 44px 44px 1fr; }
+#mp-console .md-row input { width: 100%; }
+#mp-console .btns input[type=text] { min-width: 0; }
