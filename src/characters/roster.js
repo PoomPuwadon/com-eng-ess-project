@@ -204,6 +204,22 @@ export function makeCFO() {
   });
   return withTag(c, agentTag('Margaux Sterling-Wu', 'Chief Financial Officer · OT-05'));
 }
+// Desk B's Co-Head Trader and the Risk Officer: untagged bodies (the walking AI desk, src/characters/aiTraders.js, adds the live tags)
+export function makeCoHeadTrader() {
+  return new Character({
+    build: 'avg', skin: 0xc68a62, hair: 'pony', hairColor: 0x141414, face: 'focus', pose: 'phone',
+    top: M(0x2b3a67, { rough: 0.55 }), sleeves: M(0xe8eef7, { rough: 0.7 }), pants: M(0x2b3a67, { rough: 0.55 }), shoes: M(0xf2f2f2, { rough: 0.5 }),
+    extras: [(c) => A.collar(c, 0xe8eef7), (c) => A.tie(c, 0x4285f4, 0.2), (c) => A.phone(c, 'armR'), (c) => A.watch(c, 'armL'), (c) => A.glasses(c, 0x4285f4)],
+  });
+}
+export function makeRiskOfficer() {
+  const suit = M(0x1b1d24, { rough: 0.55 });
+  return new Character({
+    build: 'broad', skin: 0xa8694a, hair: 'bald', face: 'neutral', pose: 'clipboard',
+    top: suit, pants: suit, shoes: M(0x0e0e10, { rough: 0.35 }),
+    extras: [(c) => A.shirtV(c, 0xf4f0e8, 0.34, 0.2), (c) => A.lapels(c, 0x101218), (c) => A.tie(c, 0xb3262d, 0.24), (c) => A.glasses(c, 0x111111), (c) => A.watch(c, 'armR', gold())],
+  });
+}
 export function makeSecurityChief() {
   const under = M(0x1b1d22, { rough: 0.95 });
   const c = new Character({ build: 'broad', helmet: true, top: under, pants: under, pose: 'cross', armor: { trim: true, chief: true, visor: 0xffcf5a } });

@@ -4,6 +4,7 @@ import { Lux, LM, plaque, graniteTex } from '../world/lux.js';
 import { marketBoard } from '../world/lobbyScreens.js';
 import { buildTradingScreens, tcell } from '../world/tradingScreens.js';
 import { luxLiftHall, ceiling } from './luxHall.js';
+import { DESK_X, DESK_Z } from '../characters/aiTraders.js';
 
 // ================================================================= PHASE 1 — OT-01 TRADING FLOOR
 // Stylised exchange floor in the tone of the user's reference: warm tan oak floor, cream walls and a
@@ -66,6 +67,8 @@ function initMaterials() {
     ceilPanel: std({ color: 0xffe7a8, emissive: 0xffcf70, emissiveIntensity: 0.62, roughness: 0.6 }),
     windowBlue: std({ map: win, emissive: 0xffffff, emissiveMap: win, emissiveIntensity: 0.85, roughness: 0.1, metalness: 0.2 }),
     pendantShell: std({ color: 0xf0bb2a, roughness: 0.35, metalness: 0.45 }),
+    claudeGlow: std({ color: 0xff8a5c, emissive: 0xff8a5c, emissiveIntensity: 1.6 }),
+    geminiGlow: std({ color: 0x5aa2ff, emissive: 0x5aa2ff, emissiveIntensity: 1.6 }),
     pendantGlow: std({ color: 0xfff3d0, emissive: 0xffd77a, emissiveIntensity: 2.0 }),
     postPaint: std({ vertexColors: true, roughness: 0.55, metalness: 0.25, side: THREE.DoubleSide }),
   });
@@ -315,7 +318,7 @@ function pods(L, scr, ctx, r, n = 26) {
   const ok = (x, z) => Math.abs(z) > 5.8 && x > -104.5 && x < -54.5 && z > -37.4 && z < 34.8
     && POSTS.every(([px, pz, R]) => Math.hypot(x - px, z - pz) > R + 2.6)
     && G.every((gx) => [-20.75, 20.75].every((gz) => Math.hypot(x - gx, z - gz) > 1.6))
-    && !(x > -69 && x < -53 && z > 17.5 && z < 32) && spots.every(([sx, sz]) => Math.hypot(x - sx, z - sz) > 3.2);
+    && !(x > -69 && x < -53 && z > 17.5 && z < 32) && !(x > -60 && x < -51 && Math.abs(z) < 12.5) && spots.every(([sx, sz]) => Math.hypot(x - sx, z - sz) > 3.2);
   for (let t = 0; t < 4000 && spots.length < n; t++) { const x = -104.5 + r() * 50, z = -37.4 + r() * 72.2; if (ok(x, z)) spots.push([x, z]); }
   for (const [x, z] of spots) {
     const yaw = r() * Math.PI;
@@ -370,6 +373,38 @@ function walkers(L, r) {
   for (let k = 0; k < 10; k++) { // the lift hall: arrivals, departures, the Link
     const z = (r() - 0.5) * 66, z2 = z + (r() - 0.5) * 8, pts = [[-44, z], [z2 > -27 && z2 < -19.5 ? -40.2 : -36.6, z2], [-44.5, (r() - 0.5) * 3], [-52, (r() - 0.5) * 3], [-44.5, (r() - 0.5) * 3]];
     person(L, r, pts[0][0], pts[0][1], { suit: pick([0x1f2a44, 0x3a3f47, 0x2f62b8, 0x111418], k), walk: pts, speed: 1.1 + r() * 0.5 });
+  }
+}
+
+
+// the AI trading desk: four PCs just inside the entrance, one per live agent (src/characters/aiTraders.js
+// walks the agents to them). North row = Desk A/B (Head + Co-Head Trader), south row = Quant + Risk Officer.
+// Orange glow = Claude, blue glow = Gemini. Monitors face the agent, who stands on the aisle side.
+function aiDesks(L, scr, ctx) {
+  const rows = [[-1, ['claudeGlow', 'geminiGlow']], [1, ['geminiGlow', 'claudeGlow']]]; // [side, glow per desk]
+  for (const [s, glows] of rows) {
+    DESK_X.forEach((x, i) => {
+      const zc = s * DESK_Z, glow = glows[i];
+      L.box(x - 0.8, x + 0.8, 0, 0.95, zc - 0.45, zc + 0.45, 'gunmetal', { collide: true }); // console body
+      L.box(x - 0.84, x + 0.84, 0.95, 1.0, zc - 0.49, zc + 0.49, 'cream'); // top
+      L.box(x - 0.8, x + 0.8, 0.1, 0.16, zc - s * 0.455, zc - s * 0.46, glow); // glow strip on the back (outer) face
+      L.box(x - 0.8, x + 0.8, 0.1, 0.16, zc + s * 0.455, zc + s * 0.46, glow); // glow strip on the front face
+      L.box(x - 0.35, x + 0.35, 1.0, 1.03, zc - s * 0.25, zc - s * 0.45, 'gunDark'); // keyboard (agent side)
+      L.box(x - 0.04, x + 0.04, 1.0, 1.28, zc - s * 0.18, zc - s * 0.1, 'gunDark'); // monitor stand
+      L.box(x - 0.44, x + 0.44, 1.26, 1.8, zc - s * 0.2, zc - s * 0.15, 'gunDark'); // monitor back
+      scr.push({ x, y: ctx.e + 1.53, z: zc - s * 0.145, yaw: s < 0 ? 0 : Math.PI, w: 0.84, h: 0.5, tilt: 0.08, cell: tcell(i ? 'BOOK' : 'CANDLES', i + (s + 1)) }); // faces the agent
+    });
+    L.box(DESK_X[0] - 0.9, DESK_X[1] + 0.9, 0.02, 0.05, s * (DESK_Z - 1.25) - 0.7, s * (DESK_Z - 1.25) + 0.7, 'navy'); // carpet under the standing spots
+  }
+  // hanging banner over each bank, readable from the aisle and the lift hall
+  const mx = (DESK_X[0] + DESK_X[1]) / 2;
+  for (const s of [-1, 1]) {
+    const zc = s * DESK_Z;
+    L.box(mx - 2.3, mx + 2.3, 5.2, 6.4, zc - 0.07, zc + 0.07, 'navy');
+    L.box(mx - 2.33, mx + 2.33, 5.14, 5.22, zc - 0.09, zc + 0.09, 'gold'); L.box(mx - 2.33, mx + 2.33, 6.38, 6.46, zc - 0.09, zc + 0.09, 'gold');
+    L.box(mx - 2.3, mx, 5.2, 5.28, zc - 0.08, zc + 0.08, 'claudeGlow'); L.box(mx, mx + 2.3, 5.2, 5.28, zc - 0.08, zc + 0.08, 'geminiGlow');
+    for (const dx of [-2.0, 2.0]) L.box(mx + dx - 0.03, mx + dx + 0.03, 6.46, 9.5, zc - 0.03, zc + 0.03, 'gunDark'); // hangers to the truss
+    for (const yaw of [0, Math.PI]) plaque(ctx, 'AI TRADING DESK', mx, 5.95, zc + (yaw ? -0.09 : 0.09), yaw, { h: 0.5, color: '#f3e7cc', sub: 'CLAUDE v GEMINI · live model orders' });
   }
 }
 
@@ -501,6 +536,7 @@ export function trading(ctx) {
   boothRow(L, scr, ctx, r, { along: 'z', a0: -37.5, a1: -10, wall: -50.4, dir: -1 }); // portal wall
   boothRow(L, scr, ctx, r, { along: 'z', a0: 10, a1: 37.5, wall: -50.4, dir: -1 });
   boothRow(L, scr, ctx, r, { along: 'x', a0: -107.5, a1: -52.5, wall: 38.9, dir: -1 }); // south wall
+  aiDesks(L, scr, ctx);
   const nPods = pods(L, scr, ctx, r);
   for (const m of buildTradingScreens(scr)) ctx.add(m, m.geometry);
   paper(ctx, r);

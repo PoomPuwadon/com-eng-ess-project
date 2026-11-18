@@ -5,6 +5,7 @@ import { updateScreens, updateTicker } from './world/screens.js';
 import { Player } from './player.js';
 import { ElevatorSystem, zoneAt, rideCheck, canUseLifts, LIFT_REFUSAL } from './elevators.js';
 import { Life } from './life.js';
+import { AiTraders } from './characters/aiTraders.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -132,6 +133,7 @@ const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
 const life = new Life(scene, elev);
+const aiTraders = new AiTraders(scene); // the four live trading agents at their PCs by the OT-01 entrance
 floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
 player.blockInput = () => appOpen();
 const ceoPresence = new CeoPresence(scene, camera); // the one CEO + the green through-walls marker
@@ -152,6 +154,7 @@ function tick(dt, movePlayer = true) {
   floors.update(dt, performance.now() / 1000, player.pos);
   elev.update(dt, floors.landingSets());
   life.update(dt, floors.visibleIds());
+  aiTraders.update(dt, floors.visibleIds());
   // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
   ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
   ceoPresence.update(dt, player, floors.visibleIds());
@@ -474,6 +477,7 @@ window.__debug = {
   look: (yaw, pitch = 0) => { player.yaw = yaw; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   place: (x, z, yaw, pitch = 0, y = 0) => { placeOn(player.floor.id, x, z, yaw); player.pos.y += y; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   robots: () => life.status(),
+  aiTraders: () => aiTraders.status(),
   floors: () => ALL_FLOOR_IDS,
   buildTimes: () => Object.fromEntries([...floors.loaded].map(([id, c]) => [id, Math.round(c.buildMs)])),
   seatCounts: () => Object.fromEntries([...floors.loaded].filter(([, c]) => c.seatCount).map(([id, c]) => [id, c.seatCount])),

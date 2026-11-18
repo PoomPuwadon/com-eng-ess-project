@@ -286,6 +286,16 @@ The desk's stake is still the rule book.
 **Chart Desk** (`server/agents/chartAnalyst.js`): visitor-uploaded chart → UP/DOWN verdict (default
 provider), labelled demo without a key.
 
+### The walking AI desk (client only) — `src/characters/aiTraders.js`
+- Four live agents stand at PCs just inside the OT-01 entrance and stroll the aisle: Head Trader (Claude),
+  Co-Head Trader (Gemini), Quant (Gemini), Risk Officer (Claude). Desks are built in
+  `floors/tradingFloor.js` (`aiDesks`, orange glow = Claude, blue = Gemini) at `DESK_X` / `DESK_Z`.
+- Big provider-coloured tags (name, role, live status), a floor ring and a spinning marker; tags are rescaled
+  per frame to stay the same size on screen from 3 m to 20 m.
+- It only SHOWS what the server decides: `order` / `trade` events send the matching agent (`o.agent`) to its
+  PC with the order text; a `firm` tick sends the Quant and Risk Officer. Without a server they keep a timer routine.
+- Routes mirror `ROUTES` in `llm.js`; change both together. A new trading agent needs an entry in `AI_AGENTS`.
+
 ### Model League (Claude v Gemini v rule book) — `server/agents/league.js`
 - Every order, fill and certificate records the model that decided it (`orders.model`,
   `trades.model`, `lottery_tickets.model`; `'rules'` = rule book). Agent reports store it as
