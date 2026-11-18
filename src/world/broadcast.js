@@ -371,8 +371,23 @@ const _e = new THREE.Euler(), _m = new THREE.Matrix4(), _q = new THREE.Quaternio
 // ---- the FEATURE feed: one shared texture (a VideoTexture when a preview stream plays, else the
 // animated marquee preview card from arenaFeed.js) shown on every BIG screen in VT-02 — the centre-hung
 // stack, the ring boards, the pylons, the overhead screens. One decode, many screens (threejs-performance §4).
-export const FEATURE = { on: false, material: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), meshes: new Set() };
+// Not every big screen shows the marquee (user, 2026-11-18): only the centre-hung stack (items flagged
+// `marquee`) does; every other big screen shows one of the other upcoming real fixtures, from a second
+// shared atlas of FIX_CELLS fixture cards (arenaFeed.js draws it; FIX_COLS x FIX_ROWS cards).
+export const FIX = { COLS: 3, ROWS: 2 }; FIX.CELLS = FIX.COLS * FIX.ROWS;
+export const FEATURE = { on: false, material: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), meshes: new Set(),
+  fixtures: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), fixtureMeshes: new Set() };
+FEATURE.fixtures.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute vec2 featOffset;')
+    .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vMapUv * vec2(${1 / FIX.COLS}, ${1 / FIX.ROWS}) + featOffset;\n#endif`);
+};
 const isBig = (s) => s.w * s.h >= 1.5;
+/** the fixtures atlas (null = keep the simulated match atlas on those screens) */
+export function setFixtureCards(map) {
+  if (map && FEATURE.fixtures.map !== map) { FEATURE.fixtures.map = map; FEATURE.fixtures.needsUpdate = true; }
+  for (const m of FEATURE.fixtureMeshes) m.material = map ? FEATURE.fixtures : bcMaterial;
+}
 /** switch every big screen between the match atlas and the feature feed; map = the feature texture */
 export function setFeature(on, map) {
   if (map && FEATURE.material.map !== map) { FEATURE.material.map = map; FEATURE.material.needsUpdate = true; }
@@ -383,9 +398,13 @@ export function setFeature(on, map) {
 // items: {x,y,z,yaw,w,h,cell}
 export function buildBroadcastScreens(items) {
   const big = items.filter(isBig), small = items.filter((s) => !isBig(s));
-  const bigMeshes = buildInstanced(big);
+  const marquee = big.filter((s) => s.marquee), others = big.filter((s) => !s.marquee);
+  // an arena without flagged screens keeps the old behaviour (the marquee on every big screen)
+  const bigMeshes = buildInstanced(marquee.length ? marquee : big);
   for (const m of bigMeshes) { FEATURE.meshes.add(m); if (FEATURE.on) m.material = FEATURE.material; }
-  return [...buildInstanced(small), ...bigMeshes];
+  const fixMeshes = marquee.length ? buildInstanced(others.map((s, i) => ({ ...s, feat: (s.feat ?? i) % FIX.CELLS }))) : [];
+  for (const m of fixMeshes) { FEATURE.fixtureMeshes.add(m); if (FEATURE.fixtures.map) m.material = FEATURE.fixtures; }
+  return [...buildInstanced(small), ...bigMeshes, ...fixMeshes];
 }
 function buildInstanced(items) {
   return chunked(items, 40, (list) => {
@@ -393,6 +412,11 @@ function buildInstanced(items) {
     const offs = new Float32Array(list.length * 2);
     list.forEach((s, i) => { offs[i * 2] = (s.cell % COLS) / COLS; offs[i * 2 + 1] = 1 - (Math.floor(s.cell / COLS) + 1) / ROWS; });
     geo.setAttribute('cellOffset', new THREE.InstancedBufferAttribute(offs, 2));
+    if (list.some((s) => s.feat != null)) { // which fixture card (FIX atlas) this screen shows
+      const fo = new Float32Array(list.length * 2);
+      list.forEach((s, i) => { const k = s.feat ?? 0; fo[i * 2] = (k % FIX.COLS) / FIX.COLS; fo[i * 2 + 1] = 1 - (Math.floor(k / FIX.COLS) + 1) / FIX.ROWS; });
+      geo.setAttribute('featOffset', new THREE.InstancedBufferAttribute(fo, 2));
+    }
     const mesh = new THREE.InstancedMesh(geo, bcMaterial, list.length);
     list.forEach((s, i) => { _q.setFromEuler(_e.set(s.tilt || 0, s.yaw, 0, 'YXZ')); _m.compose(_p.set(s.x, s.y, s.z), _q, _s.set(s.w, s.h, 1)); mesh.setMatrixAt(i, _m); });
     mesh.instanceMatrix.needsUpdate = true;

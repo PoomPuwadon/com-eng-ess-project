@@ -9,6 +9,13 @@
 import { VAULT, player } from '../ledger.js';
 import { expectedGoals, priceFixture, pickWins, MARKETS } from './pricing.js';
 import { payoutFor } from '../realtime/pricing.js';
+import { readFileSync } from 'node:fs';
+import { createFollowing, statureOf } from './following.js';
+
+// The scout's briefing on what makes a marquee match (club stature, rivalry, prestige, stakes, timing).
+// General judgement only: it names no club and no fixture.
+const BRIEFING = (() => { try { return readFileSync(new URL('./SCOUT.md', import.meta.url), 'utf8'); } catch { return ''; } })();
+export const MARQUEE_V = 2; // bump to re-scout a stored marquee picked by an older rule book
 
 export const ATTRIBUTION = 'Football data provided by the Football-Data.org API';
 export const COMPETITIONS = ['CL', 'PL', 'PD', 'BL1', 'SA', 'FL1']; // top-5 leagues + UEFA Champions League (free tier)
@@ -32,15 +39,36 @@ function simulated(now = Date.now()) {
   }));
 }
 
-/** rule-based scout: big competition, top-of-table teams, kicking off soon */
-export function scoreFixture(m, standings, now = Date.now()) {
+// ---------------------------------------------------------------- the rule book (no LLM, or as a pre-ranking)
+// SCOUT.md in numbers: stature of BOTH clubs (readership following), a derby, competition prestige and
+// stage, table stakes, kick-off timing. No club or fixture is named anywhere.
+const GENERIC = new Set(['fc', 'afc', 'cf', 'ac', 'sc', 'ssc', 'as', 'us', 'ss', 'club', 'de', 'del', 'la', 'le', 'the', 'and', 'real', 'sporting', 'united', 'city', 'town',
+  'athletic', 'atletico', 'borussia', 'olympique', 'racing', 'stade', 'rc', 'ogc', 'sv', 'vfb', 'vfl', 'tsg', 'fsv', 'bsc', 'calcio', 'football', 'futbol',
+  'hotspur', 'albion', 'wanderers', 'rovers', 'county', 'deportivo', 'cd', 'ud', 'sd', 'rcd', 'ca', 'balompie', 'hellas', 'stadium', 'u']);
+const cityTokens = (t) => new Set(String(t?.name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/)
+  .filter((w) => w.length >= 4 && !GENERIC.has(w) && !/^\d+$/.test(w)).map((w) => w.slice(0, 5)));
+/** two clubs sharing a place name (e.g. "<City> Rovers" v "<City> Athletic") */
+export function isDerby(m) { const a = cityTokens(m.homeTeam), b = cityTokens(m.awayTeam); for (const w of a) if (b.has(w)) return true; return false; }
+
+/**
+ * rule-based scout score. standings: { [comp]: { rows } }; following: (teamId) => monthly views | null.
+ * Without readership data every club counts as mid-sized, so prestige + table + timing still decide.
+ */
+export function scoreFixture(m, standings, now = Date.now(), following = () => null) {
   const comp = m.competition?.code;
   const table = standings[comp];
   const pos = (id) => table?.rows?.find((r) => r.team.id === id)?.position ?? 12;
   const top = Math.max(0, 8 - pos(m.homeTeam.id)) + Math.max(0, 8 - pos(m.awayTeam.id));
   const hrs = (Date.parse(m.utcDate) - now) / 3600_000;
-  const soon = hrs < 0 ? -5 : hrs < 48 ? 2 : hrs < 96 ? 1 : 0;
-  return (WEIGHT[comp] || 1) * 2 + top * 0.35 + soon;
+  const soon = hrs < 0 ? -50 : hrs < 48 ? 1.2 : hrs < 96 ? 0.7 : hrs < 168 ? 0.3 : 0;
+  const ko = new Date(m.utcDate), dow = ko.getUTCDay(), h = ko.getUTCHours();
+  const prime = (dow === 0 || dow === 6) && h >= 11 && h <= 20 ? 0.4 : h >= 18 && h <= 21 ? 0.25 : 0; // weekend / evening audiences
+  const knockout = comp === 'CL' && m.stage && !/LEAGUE|GROUP|REGULAR/.test(m.stage) ? 1.5 : 0;
+  const sv = (t) => { const v = following(t.id); return v == null ? 1 : statureOf(v); };
+  const sa = sv(m.homeTeam), sb = sv(m.awayTeam);
+  const stature = 2.6 * Math.min(sa, sb) + 1.2 * Math.max(sa, sb); // both clubs being big matters most
+  const derby = isDerby(m) ? 2 : 0;
+  return (WEIGHT[comp] || 1) * 1.2 + knockout + stature + derby + top * 0.2 + soon + prime;
 }
 
 export function createFootball({ db, ledger, treasury, llm, config, log = console }) {
@@ -49,6 +77,7 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
   let matches = db.kvGet('football:matches', []);
   const standings = db.kvGet('football:standings', {});
   let marquee = db.kvGet('football:marquee', null);
+  const follow = createFollowing({ db, offline: Boolean(config.offline) || state.source === 'simulated', log });
   const crestCache = new Map();
 
   // ---------------------------------------------------------------- provider (budgeted)
@@ -102,22 +131,27 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
   }
 
   // ---------------------------------------------------------------- the Fixture Scout (agent)
-  const SCOUT_SYSTEM = 'You are the Fixture Scout of the Sports Analytics Arena in a satirical luxury financial firm (a game; notional capital only). From the candidate football fixtures, pick the single most compelling marquee match to put on every big screen: prestige of the competition, quality and table position of both teams, rivalry, stakes, and kick-off soon. Write a punchy, straight-faced corporate preview line (max 28 words) and 3 short talking points. Never use the words casino, gambling, gamble, bet, jackpot.';
+  const SCOUT_SYSTEM = `You are the Fixture Scout of the Sports Analytics Arena in a satirical luxury financial firm (a game; notional capital only). Follow your briefing below.\n\n${BRIEFING}`;
   const SCOUT_SCHEMA = { type: 'object', additionalProperties: false, properties: { id: { type: 'integer' }, preview: { type: 'string' }, points: { type: 'array', items: { type: 'string' } } }, required: ['id', 'preview', 'points'] };
   async function scout(reason = 'scheduled') {
     const list = upcoming().filter((m) => Date.parse(m.utcDate) - Date.now() < 7 * 86400_000);
     if (!list.length) { marquee = null; return null; }
-    const ranked = list.map((m) => ({ m, s: scoreFixture(m, standings) })).sort((a, b) => b.s - a.s);
+    const ranked = list.map((m) => ({ m, s: scoreFixture(m, standings, Date.now(), follow.views) })).sort((a, b) => b.s - a.s);
     let pick = ranked[0].m, preview = null, points = null, by = 'rules';
-    const cands = ranked.slice(0, 6).map(({ m }) => ({ id: m.id, competition: m.competition.name, home: m.homeTeam.name, away: m.awayTeam.name, kickoff: m.utcDate, homePos: rowOf(m, m.homeTeam)?.position ?? null, awayPos: rowOf(m, m.awayTeam)?.position ?? null }));
-    const out = await llm.json({ job: 'fixture_scout', agent: 'fixture_scout', system: SCOUT_SYSTEM, user: JSON.stringify({ now: new Date().toISOString(), candidates: cands }), schema: SCOUT_SCHEMA, maxTokens: 600, minBreaker: 1 });
+    // the agent sees a wide field (not just the rule book's favourites), in kick-off order, with neutral facts
+    const cands = ranked.slice(0, 20).map(({ m }) => m).sort((a, b) => Date.parse(a.utcDate) - Date.parse(b.utcDate)).map((m) => ({
+      id: m.id, competition: m.competition.name, stage: m.stage || null, kickoff: m.utcDate, derby: isDerby(m),
+      home: { name: m.homeTeam.name, position: rowOf(m, m.homeTeam)?.position ?? null, points: rowOf(m, m.homeTeam)?.points ?? null, following: follow.views(m.homeTeam.id) },
+      away: { name: m.awayTeam.name, position: rowOf(m, m.awayTeam)?.position ?? null, points: rowOf(m, m.awayTeam)?.points ?? null, following: follow.views(m.awayTeam.id) },
+    }));
+    const out = await llm.json({ job: 'fixture_scout', agent: 'fixture_scout', system: SCOUT_SYSTEM, user: JSON.stringify({ now: new Date().toISOString(), note: 'following = last month of encyclopedia readership for the club (null = unknown)', candidates: cands }), schema: SCOUT_SCHEMA, maxTokens: 700, minBreaker: 1 });
     if (out && list.some((m) => m.id === out.id)) { pick = list.find((m) => m.id === out.id); preview = out.preview; points = (out.points || []).slice(0, 3); by = 'llm'; }
     if (!preview) {
       const hp = rowOf(pick, pick.homeTeam)?.position, ap = rowOf(pick, pick.awayTeam)?.position;
       preview = `${pick.competition.name}: ${pick.homeTeam.shortName || pick.homeTeam.name} host ${pick.awayTeam.shortName || pick.awayTeam.name}. Liquidity is positioning accordingly.`;
-      points = [hp && ap ? `Table: ${hp}${['st', 'nd', 'rd'][hp - 1] || 'th'} v ${ap}${['st', 'nd', 'rd'][ap - 1] || 'th'}` : 'Form under review by the quant desk', `Kick-off ${new Date(pick.utcDate).toUTCString().slice(0, 22)} UTC`, 'House pricing from the Analytics Desk goals model'];
+      points = [isDerby(pick) ? 'A local derby: the whole city is watching' : hp && ap ? `Table: ${hp}${['st', 'nd', 'rd'][hp - 1] || 'th'} v ${ap}${['st', 'nd', 'rd'][ap - 1] || 'th'}` : 'Form under review by the quant desk', `Kick-off ${new Date(pick.utcDate).toUTCString().slice(0, 22)} UTC`, 'House pricing from the Analytics Desk goals model'];
     }
-    marquee = { id: pick.id, by, preview, points, at: Date.now(), reason };
+    marquee = { id: pick.id, by, preview, points, at: Date.now(), reason, v: MARQUEE_V };
     db.kvSet('football:marquee', marquee);
     log.log?.(`[football] marquee (${by}): ${pick.homeTeam.name} v ${pick.awayTeam.name}`);
     return marquee;
@@ -224,8 +258,11 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
   async function cycle(reason) {
     try { await refreshFixtures(); } catch (e) { state.lastError = e.message; log.warn?.('[football]', e.message); }
     try { await refreshStandings(); } catch (e) { state.lastError = e.message; }
+    // club following for the scouting window (Wikimedia, free, cached a week)
+    let fresh = 0;
+    try { fresh = await follow.refresh(upcoming().filter((m) => Date.parse(m.utcDate) - Date.now() < 7 * 86400_000).flatMap((m) => [m.homeTeam, m.awayTeam])); } catch (e) { log.warn?.('[football] following', e.message); }
     settle();
-    if (!marquee || !upcoming().some((m) => m.id === marquee.id) || Date.now() - marquee.at > 3 * 3600_000) await scout(reason);
+    if (!marquee || marquee.v !== MARQUEE_V || fresh > 0 || !upcoming().some((m) => m.id === marquee.id) || Date.now() - marquee.at > 3 * 3600_000) await scout(reason);
     agentTick();
   }
   function start() {

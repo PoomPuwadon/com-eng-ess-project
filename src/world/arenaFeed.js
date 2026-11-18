@@ -3,7 +3,7 @@
 // live fixture data (real crests via the same-origin proxy). A preview video/stream can replace it:
 // one <video>, one VideoTexture, every big screen (threejs-performance §4 — one decode, many screens).
 import * as THREE from 'three';
-import { setFeature } from './broadcast.js';
+import { setFeature, setFixtureCards, FIX } from './broadcast.js';
 import { api } from '../net/api.js';
 
 const W = 1024, H = 576;
@@ -90,6 +90,47 @@ function draw() {
   cardTex.needsUpdate = true;
 }
 
+// ---------------------------------------------------------------- the other fixtures (every other big screen)
+// One atlas of FIX.CELLS cards (512 x 288 each), redrawn once a second: the next real fixtures after the
+// marquee, one per card, so neighbouring screens show different matches.
+const FW = 512, FH = 288;
+const fixCanvas = document.createElement('canvas'); fixCanvas.width = FW * FIX.COLS; fixCanvas.height = FH * FIX.ROWS;
+const fg = fixCanvas.getContext('2d');
+const fixTex = new THREE.CanvasTexture(fixCanvas); fixTex.colorSpace = THREE.SRGBColorSpace; fixTex.minFilter = THREE.LinearFilter; fixTex.generateMipmaps = false;
+let fixAcc = 1;
+function fitF(text, maxW, px, weight = 800) { do { fg.font = `${weight} ${px}px "Segoe UI", system-ui, sans-serif`; px -= 2; } while (fg.measureText(text).width > maxW && px > 9); }
+function drawFixtureCard(f, k, x0, y0) {
+  const grd = fg.createLinearGradient(x0, y0, x0 + FW, y0 + FH); grd.addColorStop(0, k % 2 ? '#0b1a3a' : '#0a1530'); grd.addColorStop(1, '#1c0d36');
+  fg.fillStyle = grd; fg.fillRect(x0, y0, FW, FH);
+  fg.fillStyle = '#d6b25e'; fg.fillRect(x0, y0, FW, 40);
+  fg.textBaseline = 'middle'; fg.textAlign = 'left'; fg.fillStyle = '#120c02';
+  const head = f ? `UPCOMING · ${f.competition.name.toUpperCase()}` : 'UPCOMING FIXTURES';
+  fitF(head, FW - 130, 20, 900); fg.fillText(head, x0 + 14, y0 + 21);
+  fg.textAlign = 'right'; fg.font = '800 14px system-ui'; fg.fillText(data?.simulated ? 'SIMULATED' : `SCREEN ${k + 1}`, x0 + FW - 12, y0 + 21);
+  if (!f) { fg.fillStyle = '#fff'; fg.textAlign = 'center'; fg.font = '700 22px system-ui'; fg.fillText('Fixture list loading…', x0 + FW / 2, y0 + FH / 2); return; }
+  for (const [team, x, col] of [[f.homeTeam, x0 + 110, '#1d4ed8'], [f.awayTeam, x0 + FW - 110, '#b91c1c']]) {
+    const img = crest(team.crest), cs = 96;
+    if (img) { const r = Math.min(cs / img.naturalWidth, cs / img.naturalHeight) || 1; fg.drawImage(img, x - (img.naturalWidth * r) / 2, y0 + 110 - (img.naturalHeight * r) / 2, img.naturalWidth * r, img.naturalHeight * r); }
+    else { fg.fillStyle = col; fg.beginPath(); fg.arc(x, y0 + 110, 44, 0, Math.PI * 2); fg.fill(); fg.fillStyle = '#fff'; fg.textAlign = 'center'; fg.font = '900 26px system-ui'; fg.fillText(team.tla || '?', x, y0 + 111); }
+    fg.fillStyle = '#fff'; fg.textAlign = 'center'; const nm = (team.shortName || team.name).toUpperCase(); fitF(nm, 200, 24, 900); fg.fillText(nm, x, y0 + 182);
+  }
+  fg.fillStyle = '#f0d18a'; fg.textAlign = 'center'; fg.font = '900 40px system-ui'; fg.fillText('V', x0 + FW / 2, y0 + 108);
+  const ko = new Date(f.utcDate);
+  fg.fillStyle = '#b9c3e6'; fg.font = '700 16px system-ui'; fg.fillText(`${ko.toUTCString().slice(0, 11)} · ${ko.toUTCString().slice(17, 22)} UTC`, x0 + FW / 2, y0 + 146);
+  const pr = f.pricing?.prices?.['1X2'];
+  if (pr) [['H', pr.H], ['D', pr.D], ['A', pr.A]].forEach(([l, v], i) => {
+    const x = x0 + FW / 2 + (i - 1) * 140, y = y0 + 236;
+    fg.fillStyle = 'rgba(255,255,255,.08)'; fg.fillRect(x - 60, y - 24, 120, 48); fg.strokeStyle = '#d6b25e'; fg.lineWidth = 2; fg.strokeRect(x - 60, y - 24, 120, 48);
+    fg.fillStyle = '#b9c3e6'; fg.font = '700 12px system-ui'; fg.fillText(l === 'H' ? 'HOME' : l === 'D' ? 'DRAW' : 'AWAY', x, y - 11);
+    fg.fillStyle = '#3ddc84'; fg.font = '900 20px ui-monospace, monospace'; fg.fillText(`${v.toFixed(2)}x`, x, y + 10);
+  });
+}
+function drawFixtures() {
+  const list = (data?.fixtures || []).filter((f) => f.id !== data?.marquee?.id);
+  for (let k = 0; k < FIX.CELLS; k++) drawFixtureCard(list.length ? list[k % list.length] : null, k, (k % FIX.COLS) * FW, Math.floor(k / FIX.COLS) * FH);
+  fixTex.needsUpdate = true;
+}
+
 async function poll() {
   try { data = await api('/api/football/state'); } catch { /* server offline: keep the last card */ }
 }
@@ -111,7 +152,9 @@ export function updateArenaFeed(dt, visible) {
   t += dt; acc += dt; polled -= dt;
   if (polled <= 0) { polled = 60; poll(); }
   if (!video && acc >= 0.25) { acc = 0; draw(); }
+  fixAcc += dt; if (fixAcc >= 1) { fixAcc = 0; drawFixtures(); } // 1 Hz: the cards only change with the data
 }
 export const arenaFeedData = () => data;
 setFeature(true, cardTex);
-draw();
+setFixtureCards(fixTex);
+draw(); drawFixtures();

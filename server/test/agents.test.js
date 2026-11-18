@@ -60,7 +60,8 @@ test('chart desk: image validation, demo verdict without a key', async () => {
 // ---------------------------------------------------------------- football (VT-02)
 import { createApp } from '../app.js';
 import { probabilities, expectedGoals, pickWins } from '../football/pricing.js';
-import { scoreFixture, DEPT_SPORTS } from '../football/service.js';
+import { scoreFixture, isDerby, DEPT_SPORTS } from '../football/service.js';
+import { statureOf, parseViews } from '../football/following.js';
 import { VAULT } from '../ledger.js';
 
 test('football pricing: probabilities sum to 1, home advantage, settlement rules', () => {
@@ -75,6 +76,31 @@ test('football pricing: probabilities sum to 1, home advantage, settlement rules
   const cl = { competition: { code: 'CL' }, homeTeam: { id: 1 }, awayTeam: { id: 2 }, utcDate: new Date(Date.now() + 86400_000).toISOString() };
   const fl1 = { ...cl, competition: { code: 'FL1' } };
   assert.ok(scoreFixture(cl, {}) > scoreFixture(fl1, {}), 'the scout prefers the Champions League');
+});
+
+test('fixture scout: club following and derbies outweigh table position; no club is special-cased', () => {
+  const at = (h) => new Date(Date.now() + h * 3600_000).toISOString();
+  const fx = (id, comp, home, away, h = 30) => ({ id, competition: { code: comp }, utcDate: at(h), homeTeam: home, awayTeam: away });
+  const T = (id, name) => ({ id, name });
+  // fictional clubs: two globally followed giants (mid-table this season) v two little-known clubs at the top
+  const giantA = T(1, 'Northbridge Albion FC'), giantB = T(2, 'Kingsmere Wanderers FC'), smallA = T(3, 'Ostervik SC'), smallB = T(4, 'Valmira CF');
+  const standings = { PL: { rows: [{ team: { id: 3 }, position: 1 }, { team: { id: 4 }, position: 2 }, { team: { id: 1 }, position: 9 }, { team: { id: 2 }, position: 11 }] } };
+  const views = { 1: 2_400_000, 2: 1_900_000, 3: 45_000, 4: 38_000 };
+  const following = (id) => views[id] ?? null;
+  const giants = fx(10, 'PL', giantA, giantB), leaders = fx(11, 'PL', smallA, smallB);
+  assert.ok(scoreFixture(giants, standings, Date.now(), following) > scoreFixture(leaders, standings, Date.now(), following), 'two giants beat a little-known top-of-table clash');
+  assert.ok(scoreFixture(giants, standings, Date.now(), following) > scoreFixture(fx(12, 'PL', giantA, smallA), standings, Date.now(), following), 'both clubs must be big');
+  assert.ok(scoreFixture(leaders, standings) > scoreFixture(giants, standings), 'without readership data, prestige + table still decide');
+  assert.ok(isDerby(fx(13, 'SA', T(5, 'AC Portoria'), T(6, 'FC Portoria Calcio'))), 'clubs sharing a place name');
+  assert.ok(!isDerby(fx(14, 'PL', T(7, 'Harrowgate United FC'), T(8, 'Belcastro United FC'))), 'generic words do not make a derby');
+  assert.ok(!isDerby(fx(15, 'PL', T(9, 'Luxmont City FC'), T(16, 'Strandmoor City FC'))));
+  assert.ok(scoreFixture(fx(17, 'CL', giantA, giantB, -1), standings, Date.now(), following) < 0, 'kicked-off fixtures are never picked');
+  assert.equal(statureOf(10_000), 0); assert.equal(statureOf(1e9), 2.5);
+  // readership parsing: redirects followed, missing articles count as unknown (0)
+  const got = parseViews(['Northbridge Albion FC', 'Nowhere FC'], { query: { redirects: [{ from: 'Northbridge Albion FC', to: 'Northbridge Albion F.C.' }],
+    pages: [{ title: 'Northbridge Albion F.C.', pageviews: { '2026-10-01': 1000, '2026-10-02': 2500, '2026-10-03': null } }, { title: 'Nowhere FC', missing: true }] } });
+  assert.deepEqual(got.get('Northbridge Albion FC'), { title: 'Northbridge Albion F.C.', views: 3500 });
+  assert.deepEqual(got.get('Nowhere FC'), { title: null, views: 0 });
 });
 
 test('football positions: players and the Sports Desk agent stake through the ledger and settle on the real score', async () => {

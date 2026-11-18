@@ -71,6 +71,7 @@ market hours: one refresh per symbol at close, then nothing; the ticker keeps sc
 | Fallback | **TheSportsDB** free key (fixtures/results/badges, limited) ; API-Football free (~100 req/day) only if its free plan still covers the current season — verify |
 | Crests/logos | `crest` URLs from football-data.org team objects. Cache the image files server-side (or proxy with long cache headers); do not hot-link at scale. Fall back to a neutral shield with the club's short name |
 | Attribution | Credit "Football data provided by football-data.org" in the arena credits screen and about page (check their terms for exact wording). Club crests are the clubs' trademarks — display only, unmodified, no implied endorsement |
+| Club following (Fixture Scout) | **English Wikipedia MediaWiki API**, free, no key: `action=query&prop=pageviews&pvipdays=30&redirects=1`, 40 club names per request (title lookup + 30 days of page views in one call). Only clubs in the 7-day scouting window (~2 requests), 2 s apart, a 429 stops the run, cached 7 days (`server/football/following.js`). A neutral measure of global following for `SCOUT.md`; never a hand-made club list |
 
 Schedule: fixtures per competition every 6 h (6 calls / 6 h). On match days, one `/matches` call
 per minute from 15 min before the first kickoff until 30 min after the last final whistle (covers

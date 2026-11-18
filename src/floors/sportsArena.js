@@ -395,7 +395,7 @@ export function sportsArena(ctx) {
     cyl8(rad - 0.2, t.y0 - 0.1, t.y0 + t.h + 0.4, 'blackMetal');
     for (let i = 0; i < SIDES; i++) {
       const a = Math.PI / 2 - ((i + 0.5) / SIDES) * TAU;
-      bc.push({ x: A.cx + t.ap * Math.cos(a), y: e + t.y0 + t.h / 2 + 0.15, z: A.cz + t.ap * Math.sin(a), yaw: Math.atan2(Math.cos(a), Math.sin(a)), w: tw(t.ap) - 0.12, h: t.h, cell: t.cell(i) });
+      bc.push({ x: A.cx + t.ap * Math.cos(a), y: e + t.y0 + t.h / 2 + 0.15, z: A.cz + t.ap * Math.sin(a), yaw: Math.atan2(Math.cos(a), Math.sin(a)), w: tw(t.ap) - 0.12, h: t.h, cell: t.cell(i), marquee: true }); // the centre-hung stack carries the marquee
     }
     for (const yy of [t.y0 - 0.05, t.y0 + t.h + 0.35]) L.geo(new THREE.TorusGeometry(rad + 0.1, 0.17, 4, SIDES).rotateX(Math.PI / 2).rotateY(Math.PI / SIDES).translate(A.cx, yy, A.cz), 'arGold');
     L.geo(new THREE.TorusGeometry(rad + 0.05, 0.12, 4, SIDES).rotateX(Math.PI / 2).rotateY(Math.PI / SIDES).translate(A.cx, t.y0 - 0.3, A.cz), 'arLedBlue'); // blue underglow
