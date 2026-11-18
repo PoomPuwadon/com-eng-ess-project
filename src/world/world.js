@@ -36,8 +36,8 @@ function massing(x0, x1, y0, y1, z0, z1, colorHex, hole = null, { skipSouth = fa
       else quad(pos, nor, col, idx, [x, b0, a0], [x, b0, a1], [x, b1, a1], [x, b1, a0], n, shade(0.85));
     }
   };
-  faceX(x1, 1, hole && hole.side === 'e' ? hole : null);
-  faceX(x0, -1, hole && hole.side === 'w' ? hole : null);
+  faceX(x1, 1, hole && (hole.side === 'e' || hole.both) ? hole : null);
+  faceX(x0, -1, hole && (hole.side === 'w' || hole.both) ? hole : null);
   quad(pos, nor, col, idx, [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], shade(1));
   if (!skipSouth) quad(pos, nor, col, idx, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], shade(0.75));
   quad(pos, nor, col, idx, [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], shade(0.75));
@@ -89,7 +89,7 @@ export function buildExterior(scene, renderer) {
   const A = ATRIUM;
   const lux = new Lux({ e: 0, colliders: [], add: (m, ...d) => scene.add(m), onUpdate: () => {} });
   // atrium: its south face is the Phase 1 entrance facade (built with the plaza), so no massing face there
-  scene.add(massing(A.x0 - o, A.x1 + o, 0, A.height, A.z0 - o, A.z1 + o, 0xe6dccb, null, { skipSouth: true }));
+  scene.add(massing(A.x0 - o, A.x1 + o, 0, A.height, A.z0 - o, A.z1 + o, 0xe6dccb, { both: true, y0: BRIDGE_Y, y1: BRIDGE_Y + 4.4, z0: -3.5, z1: 3.5 }, { skipSouth: true })); // the Link passes through the atrium: a mouth on both the west and the east face
   const ot = massing(-110 - o, -30 + o, 15, 114, -40 - o, 40 + o, 0xffffff, { side: 'e', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
   const vt = massing(30 - o, 210 + o, 15, 112, -60 - o, 60 + o, 0xffffff, { side: 'w', y0: BRIDGE_Y, y1: BRIDGE_Y + 4, z0: -3, z1: 3 }, { material: LM.facade || null });
   scene.add(ot, vt); // Office Tower, Wellness Tower (curtain-wall facades)

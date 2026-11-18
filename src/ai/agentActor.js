@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { makeTag } from '../characters/kit.js';
 import { forAgent, chip, outcomeColor, thinking, thinkingInfo } from './feed.js';
 import { setPerson, setPersonPos } from './agentCard.js';
+import { away } from './ot04.js';
 
 const HEX = { claude: 0xff8a5c, gemini: 0x5aa2ff, rules: 0x9aa3b2 };
 const HEXS = { claude: '#ff8a5c', gemini: '#5aa2ff', rules: '#9aa3b2' };
@@ -57,6 +58,7 @@ export class AgentActor {
   up(vec = this.pos, h = 1.25) { return new THREE.Vector3(vec.x, vec.y + h, vec.z); }
 
   update(dt, t, visible, viewer = globalThis.__crowdViewer) {
+    visible = visible && !away(this.def.id); // called up to Asset Protection: this character is the one being punished there
     this.c.root.visible = visible; this.pad.visible = visible;
     if (!visible) return;
     if (this.thinking && !thinking(this.def.id)) this.setThinking(false);

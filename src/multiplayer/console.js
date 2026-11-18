@@ -5,7 +5,9 @@ import './console.css';
 import { signIn, savedAccount, esc, fmt, api, getToken } from '../net/api.js';
 import { arenaMediaState, onArenaMedia, refreshArenaMedia } from '../world/arenaMedia.js';
 import { FLOOR_BY_ID, findRoom } from '../layout/building.js';
-import { AI_AGENTS } from '../characters/aiTraders.js';
+import { AI_AGENTS as TRADERS } from '../characters/aiTraders.js';
+import { EXTRA_AGENTS } from '../ai/ot04.js';
+const AI_AGENTS = [...TRADERS, ...EXTRA_AGENTS]; // every key AI agent the CEO can call up to Security HQ
 
 const REVIEW_LABEL = { alignment: 'Mandatory Alignment', feedback: 'Kinetic Performance Feedback', suite: 'Transition Suite' };
 

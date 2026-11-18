@@ -409,13 +409,14 @@ export function leisure(ctx) {
   // ---- walkway-edge showcase terminals (as in the reference: machines right at the walkway)
 
   // ---- south front: twenty-one, private banking, kinetic pit
-  for (let i = 0; i < 5; i++) for (const z of [14.4, 21.0, 27.6]) blackjack(L, ctx, r, 58 + i * 9, z, -1);
+  ctx.games = { slots, blackjack: [], baccarat: [], craps: [] }; // positions for the E-to-play hotspots (src/interact.js)
+  for (let i = 0; i < 5; i++) for (const z of [14.4, 21.0, 27.6]) { blackjack(L, ctx, r, 58 + i * 9, z, -1); ctx.games.blackjack.push({ x: 58 + i * 9, z }); }
   for (const bxx of [106.5, 121.5]) for (const z of [16.5, 24.6]) { // private banking: ovals inside velvet ropes
-    ovalTable(L, ctx, r, bxx, z, 2.1, 1.05, 7);
+    ovalTable(L, ctx, r, bxx, z, 2.1, 1.05, 7); ctx.games.baccarat.push({ x: bxx, z });
     for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, px = bxx + Math.cos(a) * 3.6, pz = z + Math.sin(a) * 2.4; L.cyl(px, pz, 0.06, 0, 1.0, 'lsGold', { seg: 6 }); L.cyl(px, pz, 0.12, 1.0, 1.12, 'lsGold', { seg: 8 }); }
     const rope = new THREE.TorusGeometry(1, 0.035, 4, 32).rotateX(Math.PI / 2).scale(3.6, 1, 2.4).translate(bxx, 0.9, z); L.geo(rope, 'lsVelvet');
   }
-  for (const cxx of [133, 145]) for (const z of [16.6, 25.0]) craps(L, ctx, r, cxx, z);
+  for (const cxx of [133, 145]) for (const z of [16.6, 25.0]) { craps(L, ctx, r, cxx, z); ctx.games.craps.push({ x: cxx, z }); }
 
   // ---- south back: terminals + a third progressive carousel
   for (const z of [35, 45, 55]) for (const [a, b] of [[54, 90], [110, 148]]) bank(a, b, z);

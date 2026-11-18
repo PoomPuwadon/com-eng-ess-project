@@ -9,6 +9,7 @@ import { AiTraders } from './characters/aiTraders.js';
 import { LotteryAi } from './ai/ot02.js';
 import { ArenaAi } from './ai/vt02.js';
 import { LeisureAi } from './ai/vt01.js';
+import { Ot04Ai } from './ai/ot04.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -25,6 +26,7 @@ import './apps/sportsDesk.js';
 import { updateArenaFeed, playArenaVideo } from './world/arenaFeed.js';
 import { updateArenaMedia, bindArenaMedia, arenaMediaDebug } from './world/arenaMedia.js';
 import { hotspotAt, nearestTable } from './interact.js';
+import { openGame, closeGame, gameWatch } from './apps/leisureGame.js';
 import { updateCards, nearest as nearestAgent, openHistory, historyOpen } from './ai/agentCard.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
@@ -141,6 +143,7 @@ const life = new Life(scene, elev);
 const lotteryAi = new LotteryAi(scene); // OT-02: the Lottery Quant + Head of Thai Markets, pipeline + decision boards, replay loop
 const leisureAi = new LeisureAi(scene); // VT-01: AI hosts walking the roulette promenade by the entrance (rule book, never stake)
 const arenaAi = new ArenaAi(scene); // VT-02: Fixture Scout + Sports Desk agents, scout / desk-book boards, labelled analytics pods
+const ot04Ai = new Ot04Ai(scene); // OT-04: underperformance board + the agents called up for review
 const aiTraders = new AiTraders(scene); // the four live trading agents at their PCs by the OT-01 entrance
 floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
 player.blockInput = () => appOpen();
@@ -166,6 +169,8 @@ function tick(dt, movePlayer = true) {
   lotteryAi.update(dt, floors.visibleIds());
   arenaAi.update(dt, floors.visibleIds());
   leisureAi.update(dt, floors.visibleIds());
+  ot04Ai.update(dt, floors.visibleIds());
+  gameWatch(player); // walking away from a machine closes its panel
   updateCards(player); // walk-up card for the AI agent (or analytics pod) within 4 m
   // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
   ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
@@ -246,7 +251,7 @@ const rt = new Realtime();
 bindArenaMedia(rt); // VT-02 Arena Media: head-to-head + highlights on the side screens, live from the hub
 const remotes = new RemotePlayers(scene, camera);
 const isMobile = () => rt.device === 'mobile';
-aiTraders.bind(rt); // agents the CEO calls up to Asset Protection (hub meta)
+aiTraders.bind(rt); ot04Ai.bind(rt); // agents the CEO calls up to Asset Protection (hub meta)
 if (isMobile()) startTouchControls({ player, canvas }); // phones: joystick, drag-to-look, Use/Run buttons
 let reviewTools = new URLSearchParams(location.search).has('review');
 const paintStaffTools = () => document.body.classList.toggle('staff-tools', reviewTools || rt.isStaff);
@@ -302,6 +307,7 @@ function placeAt(floorId, x, y, z, yaw = player.yaw) {
 /** being moved by someone else (teleport, basket) ends whatever you had open: the roulette seat, any
  * application, the lift panel, the console, any dialog (user, 2026-11-18) */
 function closeOpenThings() {
+  closeGame(); // slots / blackjack / baccarat / craps panel: being moved (CEO teleport, basket) ends it
   if (rouletteSeat.active()) rouletteSeat.stand();
   closeApp();
   if (hud.elevatorOpen) hud.closeElevator();
@@ -492,13 +498,13 @@ window.__debug = {
   place: (x, z, yaw, pitch = 0, y = 0) => { placeOn(player.floor.id, x, z, yaw); player.pos.y += y; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   robots: () => life.status(),
   aiTraders: () => aiTraders.status(),
-  ai: { inject: (ev) => globalThis.__aiFeed?.inject(ev), feed: () => globalThis.__aiFeed?.state, fx: () => ({ ot01: aiTraders.fx.active, ot02: lotteryAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), ot02replay: lotteryAi.rp, vt02: arenaAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), pods: arenaAi.pods.map((p) => ({ key: p.key, n: p.pts.length, text: p.text })), boards: aiTraders.boards?.map((b) => ({ name: b.name, redraws: b.redraws })) }) },
+  ai: { punish: (list) => ot04Ai.set(list), inject: (ev) => globalThis.__aiFeed?.inject(ev), feed: () => globalThis.__aiFeed?.state, fx: () => ({ ot01: aiTraders.fx.active, ot02: lotteryAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), ot02replay: lotteryAi.rp, vt02: arenaAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), pods: arenaAi.pods.map((p) => ({ key: p.key, n: p.pts.length, text: p.text })), boards: aiTraders.boards?.map((b) => ({ name: b.name, redraws: b.redraws })) }) },
   floors: () => ALL_FLOOR_IDS,
   buildTimes: () => Object.fromEntries([...floors.loaded].map(([id, c]) => [id, Math.round(c.buildMs)])),
   seatCounts: () => Object.fromEntries([...floors.loaded].filter(([, c]) => c.seatCount).map(([id, c]) => [id, c.seatCount])),
   setHud: (v) => document.body.classList.toggle('nohud', !v),
   // advance the world N steps of 1/60 s without rendering (player stays put), then render one frame
-  _three: { scene, renderer, floors, elev, composer }, // dev-only profiling access
+  _three: { scene, renderer, floors, elev, composer, THREE }, // dev-only profiling access
   bigScreenVideo: (url) => playBigScreenVideo(url),
   arenaMedia: () => arenaMediaDebug(),
   arenaVideo: (url) => playArenaVideo(url), // dev: play a preview clip/stream on every VT-02 big screen (null = preview card) // dev: play a video on the lobby's big screen (null = dashboard)
@@ -609,7 +615,7 @@ addEventListener('keydown', (e) => {
     if ((car || zone) && !canUseLifts(player.role, (car || zone).bank)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel
     if (car) { document.exitPointerLock?.(); hud.openElevator(car.bank, car.at || player.floor.id, player.role, { car }); }
     else if (zone) { document.exitPointerLock?.(); hud.openElevator(zone.bank, player.floor.id, player.role); }
-    else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : openApp(h.app); }
+    else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : h.app === 'game' ? openGame(h.kind, h.at) : openApp(h.app); }
   }
   if (e.code === 'F3') { e.preventDefault(); document.getElementById('perf').classList.toggle('hidden'); }
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');

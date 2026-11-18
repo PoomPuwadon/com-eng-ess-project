@@ -19,6 +19,7 @@ import { createFeed } from './agents/feed.js';
 import { createResearch } from './agents/research.js';
 import { createNews } from './market/news.js';
 import { createRoulettePlayers } from './agents/roulettePlayers.js';
+import { createLeisureGames } from './games/leisure.js';
 import { createFootball } from './football/service.js';
 import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
@@ -54,6 +55,7 @@ export function createApp(config, log = console, extra = {}) {
   const auth = createAuth({ store: config.dbFile === ':memory:' && !extra.store ? memoryStore() : dbStore(db, config.usersFile), players, adminPassword: config.adminPassword || 'admin123' });
   const hub = createHub({ players, auth, ledger, config, log });
   const roulette = createRoulette(db, ledger, bus, players);
+  const leisure = createLeisureGames(db, ledger, bus, players); // VT-01 slots / blackjack / baccarat / craps (real engines, ledger-settled like roulette)
   const market = createMarketData(db, bus, config, log);
   const trading = createTrading(db, ledger, market, bus, config);
   const llm = createLLM(db, config, log);
@@ -89,6 +91,7 @@ export function createApp(config, log = console, extra = {}) {
     timers.push(setInterval(() => { try { trading.snapshotNav([DEPT.trading, ...db.all("SELECT DISTINCT owner FROM positions WHERE owner LIKE 'PLAYER:%' AND qty > 0").map((r) => r.owner)]); } catch (e) { log.warn('[nav]', e.message); } }, 300_000));
     timers.push(setInterval(() => { reconcile = ledger.reconcile(); if (!reconcile.ok) log.error('[ledger] LEDGER_DRIFT', reconcile.problems); }, 600_000));
     rouletteAi.start();
+    timers.push(setInterval(() => leisure.sweep(), 60_000));
     market.start().catch((e) => log.warn('[market]', e.message));
     // trading desk: first tick once data and budget are in, then every 15 min (open) / 60 min (closed)
     const deskLoop = async () => {
@@ -187,6 +190,12 @@ export function createApp(config, log = console, extra = {}) {
     'GET /api/presence': () => ({ players: hub.snapshot().length, meta: hub.meta() }),
     'POST /api/me/name': async (req) => ({ player: players.rename(need(req).id, (await readBody(req)).name) }),
 
+    'POST /api/leisure/slots': async (req) => { const p = need(req); limit(p.id, 2); return leisure.slots(p.id, (await readBody(req)).stake); },
+    'POST /api/leisure/baccarat': async (req) => { const p = need(req); limit(p.id, 2); const b = await readBody(req); return leisure.baccarat(p.id, b.side, b.stake); },
+    'POST /api/leisure/craps': async (req) => { const p = need(req); limit(p.id, 2); const b = await readBody(req); return leisure.craps(p.id, b.side, b.stake); },
+    'POST /api/leisure/blackjack/deal': async (req) => { const p = need(req); limit(p.id, 2); return leisure.bjDeal(p.id, (await readBody(req)).stake); },
+    'POST /api/leisure/blackjack/act': async (req) => { const p = need(req); limit(p.id, 4); return leisure.bjAct(p.id, (await readBody(req)).action); },
+    'GET /api/leisure/blackjack': (req) => ({ hand: leisure.bjState(need(req).id), limits: leisure.LIMITS }),
     'GET /api/roulette/state': (req) => { const p = authOf(req); return { recent: roulette.recent(), limits: roulette.LIMITS, stats: roulette.stats(), commitment: p ? roulette.commitment(p.id) : null }; },
     'POST /api/roulette/spin': async (req) => { const p = need(req); limit(p.id, 2); return roulette.spin(p.id, (await readBody(req)).bets); },
 
@@ -215,6 +224,21 @@ export function createApp(config, log = console, extra = {}) {
         research: room === 'OT-01' || !room ? research.latest() : undefined, now: Date.now(), llm: { enabled: st.enabled, routes: st.routes } };
     },
     'GET /api/ai/roulette': () => ({ players: rouletteAi.view(), note: 'Notional bankrolls outside the ledger: the firm money is not affected.', now: Date.now() }),
+    // Security HQ underperformance board: every money-making AI ranked by its result (worst first). Visuals only; the CEO decides who is called up.
+    'GET /api/ai/performance': () => {
+      const sl = Object.fromEntries(desk.sleeves().map((d) => [d.agent, d])), lot = league.lottery(), thai = Object.values(lot).reduce((s, o) => s + o.net, 0);
+      const fx = db.get("SELECT COALESCE(SUM(payout - stake), 0) AS net FROM fixture_positions WHERE owner = ? AND status IN ('gain','contributed')", DEPT.sports).net;
+      const rr = Object.fromEntries(rouletteAi.view().map((p) => [p.id, p]));
+      const rows = [
+        { agent: 'head_trader', name: 'Chad Whitmore III', unit: 'Desk A sleeve P&L', net: sl.head_trader?.pnl ?? 0 },
+        { agent: 'co_head_trader', name: 'Priya Ramanathan-Cole', unit: 'Desk B sleeve P&L', net: sl.co_head_trader?.pnl ?? 0 },
+        { agent: 'thai_head', name: 'Khun Anan Prasertsak', unit: 'certificates net', net: thai },
+        { agent: 'sports_desk', name: 'Tomás Beaumont-Reyes', unit: 'fixture positions net', net: fx },
+        { agent: 'roulette_claude', name: 'Claude, Roulette Desk', unit: 'notional roulette net', net: rr.roulette_claude?.net ?? 0 },
+        { agent: 'roulette_gemini', name: 'Gemini, Roulette Desk', unit: 'notional roulette net', net: rr.roulette_gemini?.net ?? 0 },
+      ].sort((a, b) => a.net - b.net);
+      return { rows, at: Date.now() };
+    },
     'GET /api/ai/league': () => ({ league: league.table(), llm: llm.status() }),
     'GET /api/football/state': (req) => { const p = authOf(req); return { ...football.snapshot(p ? p.account : null), league: league.table(), llm: llm.status() }; },
     'GET /api/arena-media': () => media.view(),
@@ -299,5 +323,5 @@ export function createApp(config, log = console, extra = {}) {
   const start0 = start, stop0 = stop;
   start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
   stop = () => { ws?.stop(); football.stop(); stop0(); };
-  return { store: extra.store, auth, hub, feed, rouletteAi, research, news, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  return { store: extra.store, auth, hub, feed, rouletteAi, leisure, research, news, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

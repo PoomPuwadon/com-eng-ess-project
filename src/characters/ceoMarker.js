@@ -7,7 +7,7 @@ import { makeCEO } from './roster.js';
 import { FLOOR_BY_ID } from '../layout/building.js';
 
 const CSS = `
-.ceo-mk { position: fixed; left: 0; top: 0; z-index: 40; pointer-events: none; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; font-family: "Segoe UI", Inter, Arial, sans-serif; will-change: transform; }
+.ceo-mk { position: fixed; left: 0; top: 0; z-index: 40; pointer-events: none; user-select: none; -webkit-user-select: none; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; font-family: "Segoe UI", Inter, Arial, sans-serif; will-change: transform; }
 .ceo-mk .pill { background: #12ff6a; color: #02240f; font-weight: 900; font-size: 19px; letter-spacing: .06em; padding: 6px 14px 6px 12px; border-radius: 999px; border: 3px solid #e9fff1;
   box-shadow: 0 0 0 3px rgba(18,255,106,.35), 0 0 22px 6px rgba(18,255,106,.75), 0 0 60px 14px rgba(18,255,106,.35); white-space: nowrap; animation: ceoPulse 1.1s ease-in-out infinite; }
 .ceo-mk .pill b { font-size: 22px; margin-right: 4px; }
@@ -77,6 +77,11 @@ export class CeoPresence {
   }
   setPlayerRole(role) { this.self = role === 'ceo'; }
   update(dt, player, visibleIds) {
+    // owner rule (2026-11-19): no player is CEO => there is no CEO. No stand-in NPC paces the Command Deck and no marker points at one.
+    // (A real CEO player is shown by the presence system, not here.)
+    this.ceo.root.visible = false; this.marker.visible = false;
+    return;
+    // eslint-disable-next-line no-unreachable
     this.t += dt;
     const c = this.ceo, e = this.floor.elevation;
     // pace the deck, stopping at each end for a puff

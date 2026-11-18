@@ -28,7 +28,8 @@ export function createHub({ players, auth, ledger, config, log = console }) {
   let dirtyMeta = true;
   // Asset Protection reviews: key AI agents the CEO / an admin has called up to Security HQ (OT-04). Purely a scene: the agent
   // is shown there for a while and goes back to its desk; it keeps no memory of it (CLAUDE.md: agents do not remember reprimands).
-  const REVIEW_AGENTS = { head_trader: 'Chad Whitmore III', co_head_trader: 'Priya Ramanathan-Cole', quant: 'Dr. Tobias Wren', risk_officer: 'Marcus Adeyemi-Park' };
+  const REVIEW_AGENTS = { head_trader: 'Chad Whitmore III', co_head_trader: 'Priya Ramanathan-Cole', quant: 'Dr. Tobias Wren', risk_officer: 'Marcus Adeyemi-Park',
+    thai_head: 'Khun Anan Prasertsak', lottery_quant: 'Dr. Mei-Ling Sutthichai', fixture_scout: 'Dr. Lucia Ferrante-Okoye', sports_desk: 'Tomás Beaumont-Reyes', roulette_claude: 'Claude, Roulette Desk', roulette_gemini: 'Gemini, Roulette Desk' };
   const REVIEW_KINDS = { alignment: 'Mandatory Alignment', feedback: 'Kinetic Performance Feedback', suite: 'Transition Suite' };
   const REVIEW_MS = { min: 15_000, def: 90_000, max: 10 * 60_000 };
   const custody = new Map(); // agent id -> { agent, kind, by, role, since, until }

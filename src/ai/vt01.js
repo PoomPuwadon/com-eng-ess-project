@@ -9,6 +9,7 @@ import { FLOOR_BY_ID } from '../layout/building.js';
 import { api } from '../net/api.js';
 import { setPerson, setPersonPos } from './agentCard.js';
 import { startAiFeed, onAgent, COL, providerChip } from './feed.js';
+import { away } from './ot04.js';
 
 const E = () => FLOOR_BY_ID['VT-01'].elevation;
 const SPEED = 1.3;
@@ -73,7 +74,7 @@ export class LeisureAi {
         if (Math.abs(dx) <= step) { s.pos.x = s.tx; s.wait = 50 + Math.random() * 50; s.row = Math.random() < 0.5 ? 1 : -1; const nx = TABLES_X[Math.floor(Math.random() * TABLES_X.length)] + 0.0; s.tx = nx; } else { s.pos.x += Math.sign(dx) * step; speed = SPEED; s.yaw = Math.sign(dx) * Math.PI / 2; }
       }
       setPersonPos(s.d.id, 'VT-01', s.pos.x, s.pos.y, s.pos.z);
-      s.c.root.visible = vis; if (!vis) continue;
+      s.c.root.visible = vis && !away(s.d.id); if (!vis || away(s.d.id)) continue; // at Asset Protection: this character is being punished there
       let dy = s.yaw - s.c.root.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); s.c.root.rotation.y += dy * Math.min(1, dt * 6);
       s.c.root.position.copy(s.pos); s.c.update(dt, this.t, speed);
       const k = viewer ? Math.min(2.2, Math.max(0.45, Math.hypot(viewer.x - s.pos.x, viewer.z - s.pos.z) / 9)) : 1; s.tag.scale.set(s.base.x * k, s.base.y * k, 1);
