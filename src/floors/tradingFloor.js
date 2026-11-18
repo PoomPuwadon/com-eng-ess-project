@@ -4,7 +4,7 @@ import { Lux, LM, plaque, graniteTex } from '../world/lux.js';
 import { marketBoard } from '../world/lobbyScreens.js';
 import { buildTradingScreens, tcell } from '../world/tradingScreens.js';
 import { luxLiftHall, ceiling } from './luxHall.js';
-import { DESK_X, DESK_Z } from '../characters/aiTraders.js';
+import { DESK_X, DESK_Z, AI_BOARD } from '../characters/aiTraders.js';
 
 // ================================================================= PHASE 1 — OT-01 TRADING FLOOR
 // Stylised exchange floor in the tone of the user's reference: warm tan oak floor, cream walls and a
@@ -396,6 +396,12 @@ function aiDesks(L, scr, ctx) {
     });
     L.box(DESK_X[0] - 0.9, DESK_X[1] + 0.9, 0.02, 0.05, s * (DESK_Z - 1.25) - 0.7, s * (DESK_Z - 1.25) + 0.7, 'navy'); // carpet under the standing spots
   }
+  // AI DESK BOARD (front, faces the portal) / RESEARCH WALL (back, faces the pit): the live screens are drawn by
+  // src/characters/aiTraders.js (src/ai/*); this is only the hanging steel frame. Hangs clear of the walkway (bottom edge 5 m).
+  { const bx = AI_BOARD.x, hw = AI_BOARD.w / 2 + 0.08, y0 = AI_BOARD.y0 - 0.07, y1 = AI_BOARD.y0 + AI_BOARD.h + 0.07;
+    L.box(bx - 0.06, bx + 0.06, y0, y1, -hw, hw, 'gunmetal');
+    L.box(bx - 0.09, bx + 0.09, y1 - 0.03, y1 + 0.03, -hw, hw, 'gold'); L.box(bx - 0.09, bx + 0.09, y0 - 0.03, y0 + 0.03, -hw, hw, 'gold');
+    for (const z of [-hw + 0.3, hw - 0.3]) L.box(bx - 0.03, bx + 0.03, y1, H - 0.1, z - 0.03, z + 0.03, 'gunDark'); }
   // hanging banner over each bank, readable from the aisle and the lift hall
   const mx = (DESK_X[0] + DESK_X[1]) / 2;
   for (const s of [-1, 1]) {

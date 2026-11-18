@@ -22,6 +22,7 @@ import './apps/sportsDesk.js';
 import { updateArenaFeed, playArenaVideo } from './world/arenaFeed.js';
 import { updateArenaMedia, bindArenaMedia, arenaMediaDebug } from './world/arenaMedia.js';
 import { hotspotAt, nearestTable } from './interact.js';
+import { updateCards, nearest as nearestAgent, openHistory, historyOpen } from './ai/agentCard.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
 import { avatarFor } from './characters/roster.js';
@@ -156,6 +157,7 @@ function tick(dt, movePlayer = true) {
   elev.update(dt, floors.landingSets());
   life.update(dt, floors.visibleIds());
   aiTraders.update(dt, floors.visibleIds());
+  updateCards(player); // walk-up card for the AI agent (or analytics pod) within 4 m
   // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
   ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
   ceoPresence.update(dt, player, floors.visibleIds());
@@ -481,6 +483,7 @@ window.__debug = {
   place: (x, z, yaw, pitch = 0, y = 0) => { placeOn(player.floor.id, x, z, yaw); player.pos.y += y; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   robots: () => life.status(),
   aiTraders: () => aiTraders.status(),
+  ai: { inject: (ev) => globalThis.__aiFeed?.inject(ev), feed: () => globalThis.__aiFeed?.state, fx: () => ({ ot01: aiTraders.fx.active, boards: aiTraders.boards?.map((b) => ({ name: b.name, redraws: b.redraws })) }) },
   floors: () => ALL_FLOOR_IDS,
   buildTimes: () => Object.fromEntries([...floors.loaded].map(([id, c]) => [id, Math.round(c.buildMs)])),
   seatCounts: () => Object.fromEntries([...floors.loaded].filter(([, c]) => c.seatCount).map(([id, c]) => [id, c.seatCount])),
@@ -591,6 +594,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
+  if (e.code === 'KeyE' && !hud.elevatorOpen && nearestAgent() && !historyOpen()) { openHistory(); return; } // read-only decision history of the agent in front of you
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
     if ((car || zone) && !canUseLifts(player.role, (car || zone).bank)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel

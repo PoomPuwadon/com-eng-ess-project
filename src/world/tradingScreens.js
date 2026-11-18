@@ -155,6 +155,11 @@ function drawLiveCell(g, k, x, y) {
     if (!rows.length) { g.fillStyle = '#fff'; fitText(g, 'ORDERS QUEUED FOR THE OPEN', ix, iy + ih / 2, iw, 18, '700'); }
     rows.forEach((p, i) => {
       const yy = iy + 4 + i * (ih / 5);
+      { // stripe by owning desk / model: Desk A (Claude) orange, Desk B (Gemini) blue, both split, none = rule-book grey
+        const own = p.owners || [], hh = ih / 5 - 4, a = own.includes('head_trader'), b = own.includes('co_head_trader');
+        if (a && b) { g.fillStyle = '#ff8a5c'; g.fillRect(x + 3, yy - 14, 6, hh / 2); g.fillStyle = '#5aa2ff'; g.fillRect(x + 3, yy - 14 + hh / 2, 6, hh / 2); }
+        else { g.fillStyle = a ? '#ff8a5c' : b ? '#5aa2ff' : '#9aa3b2'; g.fillRect(x + 3, yy - 14, 6, hh); }
+      }
       g.fillStyle = '#fff'; fitText(g, `${p.symbol} ${p.qty}`, ix, yy, iw * 0.5, 18, '700', 'monospace');
       g.textAlign = 'right'; g.fillStyle = p.unrealized >= 0 ? '#8ff5bd' : '#ff9aa6'; fitText(g, `${p.unrealized >= 0 ? '+' : '−'}${Math.abs(Math.round(p.unrealized / 100)).toLocaleString()}`, x + CW - pad, yy, iw * 0.48, 18, '700', 'monospace'); g.textAlign = 'left';
     });

@@ -75,3 +75,20 @@ export function playPosition() {
   tone('triangle', 1568, 1568, t, 0.12, 0.16);
   tone('triangle', 2093, 2093, t + 0.07, 0.22, 0.14);
 }
+
+// ---------------------------------------------------------------- AI room stings (OT-01 veto / fill). Short, quiet, mutable.
+// Muted state is remembered per browser (localStorage 'firm.aiSting' = '0'); callers only fire these while the player is on that floor.
+let stingMuted = false;
+try { stingMuted = localStorage.getItem('firm.aiSting') === '0'; } catch { /* private mode */ }
+export const stingIsMuted = () => stingMuted;
+export function setStingMuted(m) { stingMuted = !!m; try { localStorage.setItem('firm.aiSting', m ? '0' : '1'); } catch { /* private mode */ } }
+export function playSting(kind) {
+  sfxStats[`sting_${kind}`] = (sfxStats[`sting_${kind}`] || 0) + 1;
+  if (stingMuted || !ready()) return;
+  const t = ac.currentTime;
+  if (kind === 'veto') { // alarm bell: three hard strikes + a falling buzz
+    for (let i = 0; i < 3; i++) { tone('square', 880, 880, t + i * 0.16, 0.12, 0.07); tone('sine', 1760, 1760, t + i * 0.16, 0.18, 0.05); }
+    tone('sawtooth', 220, 90, t + 0.5, 0.45, 0.06);
+  } else if (kind === 'fill') { tone('triangle', 1568, 1568, t, 0.1, 0.08); tone('triangle', 2093, 2093, t + 0.06, 0.18, 0.07); }
+  else if (kind === 'stamp') { tone('triangle', 330, 150, t, 0.2, 0.09); crowd(t, 0.25, 900, 0.05, 0.02); }
+}

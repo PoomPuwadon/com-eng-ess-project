@@ -6,11 +6,12 @@ import { setTradingData } from './world/tradingScreens.js';
 import { setLiveFeed } from './world/screens.js';
 import { setLottoRoom } from './world/lottoFeed.js';
 import { setLobbyFeed } from './world/lobbyScreens.js';
+import { setBook } from './ai/feed.js';
 
 let quotes = null, wall = null, firm = null;
 const push = () => {
   if (quotes) setLiveFeed({ quotes: quotes.quotes, source: quotes.source });
-  if (firm) setLiveFeed({ firm: firm.book, nav: firm.navHistory.map((p) => p.nav) });
+  if (firm) { setLiveFeed({ firm: firm.book, nav: firm.navHistory.map((p) => p.nav) }); setBook(firm); }
   if (quotes) setTradingData({ quotes: quotes.quotes, wall: wall?.symbols, book: firm?.book });
 };
 async function loadQuotes() { try { quotes = await api('/api/market/quotes'); push(); } catch { /* server down */ } }
