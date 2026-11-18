@@ -7,6 +7,7 @@ import { ElevatorSystem, zoneAt, rideCheck, canUseLifts, LIFT_REFUSAL } from './
 import { Life } from './life.js';
 import { AiTraders } from './characters/aiTraders.js';
 import { LotteryAi } from './ai/ot02.js';
+import { ArenaAi } from './ai/vt02.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -137,6 +138,7 @@ const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
 const life = new Life(scene, elev);
 const lotteryAi = new LotteryAi(scene); // OT-02: the Lottery Quant + Head of Thai Markets, pipeline + decision boards, replay loop
+const arenaAi = new ArenaAi(scene); // VT-02: Fixture Scout + Sports Desk agents, scout / desk-book boards, labelled analytics pods
 const aiTraders = new AiTraders(scene); // the four live trading agents at their PCs by the OT-01 entrance
 floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
 player.blockInput = () => appOpen();
@@ -160,6 +162,7 @@ function tick(dt, movePlayer = true) {
   life.update(dt, floors.visibleIds());
   aiTraders.update(dt, floors.visibleIds());
   lotteryAi.update(dt, floors.visibleIds());
+  arenaAi.update(dt, floors.visibleIds());
   updateCards(player); // walk-up card for the AI agent (or analytics pod) within 4 m
   // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
   ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
@@ -486,7 +489,7 @@ window.__debug = {
   place: (x, z, yaw, pitch = 0, y = 0) => { placeOn(player.floor.id, x, z, yaw); player.pos.y += y; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   robots: () => life.status(),
   aiTraders: () => aiTraders.status(),
-  ai: { inject: (ev) => globalThis.__aiFeed?.inject(ev), feed: () => globalThis.__aiFeed?.state, fx: () => ({ ot01: aiTraders.fx.active, ot02: lotteryAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), ot02replay: lotteryAi.rp, boards: aiTraders.boards?.map((b) => ({ name: b.name, redraws: b.redraws })) }) },
+  ai: { inject: (ev) => globalThis.__aiFeed?.inject(ev), feed: () => globalThis.__aiFeed?.state, fx: () => ({ ot01: aiTraders.fx.active, ot02: lotteryAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), ot02replay: lotteryAi.rp, vt02: arenaAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), pods: arenaAi.pods.map((p) => ({ key: p.key, n: p.pts.length, text: p.text })), boards: aiTraders.boards?.map((b) => ({ name: b.name, redraws: b.redraws })) }) },
   floors: () => ALL_FLOOR_IDS,
   buildTimes: () => Object.fromEntries([...floors.loaded].map(([id, c]) => [id, Math.round(c.buildMs)])),
   seatCounts: () => Object.fromEntries([...floors.loaded].filter(([, c]) => c.seatCount).map(([id, c]) => [id, c.seatCount])),

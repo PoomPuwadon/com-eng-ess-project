@@ -7,7 +7,7 @@ import * as THREE from 'three';
 const KINDS = {
   VETO: { c: '#ff3b3b', size: 1.0, rot: -0.12 }, REJECTED: { c: '#ffb020', size: 0.8, rot: 0.1 }, FILLED: { c: '#4dff9a', size: 0.6, rot: -0.06 },
   CLEARED: { c: '#7dffb8', size: 0.6, rot: 0.06 }, BOUGHT: { c: '#4dff9a', size: 0.7, rot: -0.08 }, WON: { c: '#4dff9a', size: 0.8, rot: -0.08 },
-  LOST: { c: '#ff6a6a', size: 0.8, rot: 0.08 }, LOCKED: { c: '#ffd96a', size: 0.9, rot: -0.05 },
+  LOST: { c: '#ff6a6a', size: 0.8, rot: 0.08 }, LOCKED: { c: '#ffd96a', size: 0.9, rot: -0.05 }, STAKED: { c: '#ffd96a', size: 0.7, rot: 0.07 },
 };
 const texCache = new Map();
 function stampTex(kind) {

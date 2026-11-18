@@ -316,3 +316,19 @@ provider), labelled demo without a key.
 5. Record `model` on whatever it creates and report with `gateway.report(agent, text, data, model || false)`.
 6. Add it to the league if it makes or loses money, update this section, and recompute the
    `agent-cost-control` cost estimate.
+
+### AI visuals: the agent feed and the three rooms that show AI at work (docs/ai-visuals-plan.md)
+- **Feed** (`server/agents/feed.js`): one attributed event stream, table `agent_events` (last ~500 rows), SSE event `agent`,
+  backfill `GET /api/ai/feed?room=OT-01|OT-02|VT-02`. Event: `{ id, at, room, agent, provider: claude|gemini|rules, model, stage, text<=140, outcome, ref, data }`.
+  It records values agents already computed and NEVER calls a model or touches money. `thinking` events wrap each `llm.ask` (transient, only when a model is routed).
+  Emit points: `tradingDesk.js` (signal, proposal, review, veto, execute, result, filled via the `trade` bus event), `lottery/institute.js` (7 stages, shortlist, per-ticket decision, settle),
+  `football/service.js` (scout, stake, settle). `/api/firm/book` positions carry `owners` (desk) for the pit-board stripe. Every new AI decision must emit with its `model`.
+- **Off-hours research** (`server/agents/research.js`, `server/market/news.js`): the ONLY added LLM calls. While the US market is closed, one cycle per `RESEARCH_EVERY_MIN` (150):
+  jobs `news_research` + `market_research` (Quant, Gemini first) and `open_plan` (Risk Officer), `maxTokens` <= 700, sub-budget `RESEARCH_BUDGET_USD` ($2/month) inside `LLM_MONTHLY_CAP_USD`,
+  none once the breaker is at "slow". Free Finnhub news (key present) else Yahoo RSS; headlines are untrusted data (banned words stripped). It never places orders: it can only nudge
+  next-open scores through the desk's clamped tilt (+/-0.25 each, +/-0.5 total). No key / budget spent: rule-book research labelled RULE BOOK. Added cost with no keys: $0; with keys well under $2/month.
+- **Client** (`src/ai/*`): `feed.js` (SSE + backfill, "AI FEED OFFLINE" when down, never fake data), `thoughtBoard.js` (canvas boards redrawn on events / every 2 s only), `flowFx.js` (stamps, pulses, no lights),
+  `agentCard.js` (walk-up card within 4 m + press E history, read-only), `agentActor.js` (stationary live agent), `ot01Boards.js`, `ot02.js`, `vt02.js`. Dev only: `__debug.ai.inject(event)` pushes a labelled fake event for screenshots.
+- **OT-01**: AI DESK BOARD (front) and RESEARCH WALL (back) hang at x -58; agents show THINKING, thought lines, pulses; VETO = stamp slam + board shake + bell sting (`sfx.playSting`, mutable via `setStingMuted`) + pit traders react.
+- **OT-02** (built into the live floor `drawTheatre.js` area via `ot02.js`): Lottery Quant + Head of Thai Markets at the concourse, pipeline + decision boards, 7 station pads, held-certificates rack, REPLAY of the latest stored run every 10 min labelled `REPLAY · run #N`, LIVE pre-empts.
+- **VT-02**: Fixture Scout + Sports Desk agent at the arrivals landing, two boards over the stair axis, scout sweep + MARQUEE LOCKED on the centre stack (`arenaFeed.js` `SCOUT_FX`), 14-analyst ANALYTICS PODS per agent (instanced, labelled NOT A SEPARATE AI, they only mirror the real agent's state).

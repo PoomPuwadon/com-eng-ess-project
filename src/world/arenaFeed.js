@@ -12,6 +12,9 @@ const g = canvas.getContext('2d');
 const cardTex = new THREE.CanvasTexture(canvas); cardTex.colorSpace = THREE.SRGBColorSpace; cardTex.minFilter = THREE.LinearFilter; cardTex.generateMipmaps = false;
 const crests = new Map(); // url -> HTMLImageElement | 'loading' | 'failed'
 let data = null, t = 0, acc = 0, video = null, videoTex = null, polled = 0;
+/** VT-02 AI visuals (src/ai/vt02.js): a REAL scout event sets these; they only add an attribution line, a MARQUEE LOCKED banner and a card sweep */
+export const SCOUT_FX = { sweepUntil: 0, lockedAt: 0 };
+export const refreshArenaFeed = () => poll(); // a new marquee / stake just happened: do not wait for the 60 s poll
 
 function crest(url) {
   if (!url) return null;
@@ -77,7 +80,16 @@ function draw() {
       });
       g.fillStyle = '#8a93b8'; g.font = '600 14px system-ui'; g.fillText('HOUSE PRICING · ANALYTICS DESK GOALS MODEL · OPEN A POSITION AT ANY TERMINAL', W / 2, 446);
     }
-    g.fillStyle = '#fff'; g.textAlign = 'center'; fitText(m.preview || '', W - 80, 24, 600); g.fillText(m.preview || '', W / 2, 482);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; fitText(m.preview || '', W - 80, 24, 600); g.fillText(m.preview || '', W / 2, 478);
+    // who picked it (real server fields: by / model)
+    g.font = '800 17px system-ui'; g.fillStyle = data.marquee?.by === 'llm' ? '#8fd3ff' : '#9aa3b2';
+    g.fillText(data.marquee?.by === 'llm' ? `PICKED BY FIXTURE SCOUT · ${String(data.marquee.model || '').toUpperCase()}` : 'PICKED BY THE RULE BOOK · NO MODEL KEY', W / 2, 508);
+    const lk = Date.now() - SCOUT_FX.lockedAt;
+    if (lk >= 0 && lk < 9000) { // MARQUEE LOCKED: a gold frame and band for nine seconds after a real scout
+      const on = Math.floor(lk / 300) % 2 === 0;
+      g.strokeStyle = on ? '#ffd96a' : '#b8922f'; g.lineWidth = 14; g.strokeRect(7, 7, W - 14, H - 14);
+      g.fillStyle = 'rgba(8,8,12,.78)'; g.fillRect(0, 96, W, 70); g.fillStyle = '#ffd96a'; g.font = '900 54px system-ui'; g.fillText('MARQUEE LOCKED', W / 2, 132);
+    }
   }
   // ticker of the other fixtures
   g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, H - 50, W, 50);
@@ -128,6 +140,11 @@ function drawFixtureCard(f, k, x0, y0) {
 function drawFixtures() {
   const list = (data?.fixtures || []).filter((f) => f.id !== data?.marquee?.id);
   for (let k = 0; k < FIX.CELLS; k++) drawFixtureCard(list.length ? list[k % list.length] : null, k, (k % FIX.COLS) * FW, Math.floor(k / FIX.COLS) * FH);
+  if (Date.now() < SCOUT_FX.sweepUntil) { // the Fixture Scout's light sweeps the cards while it scouts (a real scout event started it)
+    const k = Math.floor(Date.now() / 220) % FIX.CELLS, x0 = (k % FIX.COLS) * FW, y0 = Math.floor(k / FIX.COLS) * FH;
+    fg.strokeStyle = '#ffd96a'; fg.lineWidth = 10; fg.strokeRect(x0 + 5, y0 + 5, FW - 10, FH - 10); fg.fillStyle = 'rgba(255,217,106,.16)'; fg.fillRect(x0, y0, FW, FH);
+    fg.fillStyle = '#ffd96a'; fg.font = '900 22px system-ui'; fg.textAlign = 'center'; fg.textBaseline = 'middle'; fg.fillText('SCOUTING…', x0 + FW / 2, y0 + FH - 26);
+  }
   fixTex.needsUpdate = true;
 }
 
@@ -152,7 +169,7 @@ export function updateArenaFeed(dt, visible) {
   t += dt; acc += dt; polled -= dt;
   if (polled <= 0) { polled = 60; poll(); }
   if (!video && acc >= 0.25) { acc = 0; draw(); }
-  fixAcc += dt; if (fixAcc >= 1) { fixAcc = 0; drawFixtures(); } // 1 Hz: the cards only change with the data
+  fixAcc += dt; if (fixAcc >= (Date.now() < SCOUT_FX.sweepUntil ? 0.22 : 1)) { fixAcc = 0; drawFixtures(); } // 1 Hz: the cards only change with the data (4 Hz while the scout's sweep runs)
 }
 export const arenaFeedData = () => data;
 setFeature(true, cardTex);
