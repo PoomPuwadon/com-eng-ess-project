@@ -184,7 +184,7 @@ let ledTex = null, ledCount = 0;
 function ledTexture() {
   if (ledTex) return ledTex;
   // every message gets a slot sized to its own measured width (+ padding), so nothing overlaps
-  const segs = [['#0b1e5b', '#ffc65a', '{FIRM_NAME} · SPORTS ANALYTICS'], ['#111827', '#3dff7a', 'LIVE PRICING · 1X2 · O/U 2.5 · BTTS'],
+  const segs = [['#0b1e5b', '#ffc65a', 'FINANCIAL FIRM · SPORTS ANALYTICS'], ['#111827', '#3dff7a', 'LIVE PRICING · 1X2 · O/U 2.5 · BTTS'],
     ['#4b0f2e', '#ffffff', 'CHAMPIONS LEAGUE · LIVE'], ['#2a0606', '#ffffff', 'F1 GRAND PRIX · LIVE TIMING'], ['#1f2937', '#93c5fd', 'POSITIONS OPEN · 24/7'],
     ['#0b1e5b', '#ffffff', 'RESPONSIBLE RECREATION'], ['#3b0d0d', '#ffc65a', 'PREMIER LEAGUE · IN-PLAY'], ['#111827', '#ffffff', 'LIQUIDITY IS A LIFESTYLE']];
   const c = document.createElement('canvas'), g = c.getContext('2d'), H = 128, FONT = 'bold 64px sans-serif', PAD = 90;

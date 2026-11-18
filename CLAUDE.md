@@ -1,4 +1,4 @@
-# PROJECT: [FIRM NAME] — A Walkable 3D Mock Financial Firm
+# PROJECT: FINANCIAL FIRM — A Walkable 3D Mock Financial Firm
 
 ## What this is
 Build a multiplayer, walkable 3D web experience of an absurdly luxurious financial

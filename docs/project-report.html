@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Project Report</title>
+<style>
+@page{size:A4;margin:16mm 16mm}
+*{box-sizing:border-box}
+body{font:10.5pt/1.45 "Segoe UI",Arial,sans-serif;color:#1b1b1f;margin:0}
+h1{font-size:20pt;margin:0;color:#14213d}
+.sub{color:#555;margin-bottom:10px}
+h2{font-size:12.5pt;margin:16px 0 4px;padding-bottom:2px;border-bottom:1.5px solid #c9a227;color:#14213d}
+h3{font-size:10.5pt;margin:8px 0 2px}
+table{width:100%;border-collapse:collapse;font-size:9.8pt;margin:4px 0}
+td,th{border:1px solid #ccc;padding:3px 7px;vertical-align:top;text-align:left}
+th{background:#f1ece0}
+ul{margin:3px 0 3px 18px;padding:0}
+p{margin:4px 0}
+code{font-size:9.3pt;background:#f4f4f6;padding:0 2px}
+</style></head><body>
+
+<h1>FINANCIAL FIRM — Project Report</h1>
+<div class="sub">Computer Engineering Essential · Final Project, Semester 1/2026 · Free Track</div>
+
+<h2>1. Problem and idea</h2>
+<p>Instead of a club problem from the Problem Bank, our team proposed a Free Track project: a multiplayer, walkable 3D web world of an absurdly luxurious mock financial firm, played as satire. It is not a game with a score or an ending. It is a living simulation that runs 24/7: AI employees trade, research and bet using real-world free data with <b>fake money only</b>, while real players walk through the building, chat and play.</p>
+<p>The aim was to show how far one team can get with AI-assisted development (vibe coding) on a project that combines real-time 3D, a server-side simulation, real external APIs and several AI models, while keeping cost at or near zero.</p>
+
+<h2>2. What the system does</h2>
+<ul>
+<li><b>Building:</b> a grand lobby splitting into a staff Office Tower and a public Visitors' Tower, joined by a glass bridge, with a basement vault, working elevators and a minimap.</li>
+<li><b>Roles:</b> Visitor (default), CEO and Staff admins. Admins set balances, budgets and per-visitor clearances; every change is kept in an audit log.</li>
+<li><b>Fake-money economy:</b> one append-only double-entry ledger. All firm money lives in the vault, budget transfers are shown as cash-robot trips, and visitor wins and losses flow through the vault.</li>
+<li><b>Trading floor:</b> real US stock data (delayed), two rival AI trading desks, a risk officer that can only veto, and live P&amp;L screens anyone can read.</li>
+<li><b>Visitors' Tower:</b> roulette and table games, a football arena with real fixtures, odds and crests, a Muay Thai ring, horse racing and a Thai lottery room using official draw results.</li>
+<li><b>Chart Desk:</b> a visitor uploads a chart image and the AI returns an UP/DOWN verdict with reasoning.</li>
+</ul>
+
+<h2>3. Requirements checklist</h2>
+<table>
+<tr><th style="width:24%">Requirement</th><th>How it is met</th></tr>
+<tr><td>User Login</td><td>Sign-up, log-in and log-out with per-user accounts. Passwords are hashed with scrypt and a per-user salt. Roles and balances are stored per account.</td></tr>
+<tr><td>API Integration</td><td>Yahoo Finance and Finnhub (stocks), football-data.org (fixtures, results, crests), Thai Government Lottery Office (draw results), Anthropic Claude and Google Gemini (agents, chart reading). Real data drives the trading screens, arena boards and settlements.</td></tr>
+<tr><td>Challenging: Tier S</td><td>Computer Vision. In the Chart Desk the uploaded image is the input; the vision model's structured answer is shown to the user. Tier B Dashboard &amp; Data Visualization is also present (market, Model League and ledger dashboards); the section cap is 20/20.</td></tr>
+<tr><td>Deployed &amp; Live</td><td>&lt;add public URL and host here&gt;</td></tr>
+</table>
+
+<h2>4. Architecture</h2>
+<table>
+<tr><th style="width:24%">Layer</th><th>Choice and reason</th></tr>
+<tr><td>Client</td><td>Three.js with Vite. Instanced low-poly meshes for seats, screens and people, and floors built as you reach them, so huge rooms stay smooth on a laptop.</td></tr>
+<tr><td>Server</td><td>One Node.js process: HTTP API plus WebSockets (<code>ws</code>) for presence, chat and live events. A server tick runs the firm whether or not anyone is online.</td></tr>
+<tr><td>Database</td><td>SQLite (<code>node:sqlite</code>, WAL mode). Every money write is one transaction, and triggers make the ledger append-only, so money cannot be duplicated or silently removed.</td></tr>
+<tr><td>Secrets</td><td>API keys live only in <code>.env.local</code> on the server (gitignored), never in client code. <code>.env.example</code> is committed.</td></tr>
+</table>
+
+<h2>5. AI design</h2>
+<p>Two providers run side by side: Claude (<code>claude-haiku-5-5</code>) and Gemini (free tier). Each agent has a preferred provider, and if a key is missing the call goes to the other one.</p>
+<ul>
+<li><b>Agents propose, the server disposes.</b> Model output is untrusted. Every money action passes a gateway that checks privileges, daily caps and maximum stake, and hard limits are enforced in code.</li>
+<li><b>Fallback:</b> with no key, an error, a refusal or an open cost breaker, every agent falls back to a deterministic rule book. The firm always runs for free.</li>
+<li><b>Model League:</b> every order, fill and lottery ticket records which model decided it, so Claude, Gemini and the rule book can be compared on P&amp;L, calls and cost.</li>
+<li><b>Cost control:</b> token usage is metered against a price table. One monthly cap (default $75) with a circuit breaker slows at 70%, allows events only at 90% and stops at 100%. Background characters never make their own LLM calls.</li>
+</ul>
+
+<h2>6. Data sources and limits</h2>
+<table>
+<tr><th style="width:24%">Source</th><th>Use and handling of the free-tier limit</th></tr>
+<tr><td>Stocks</td><td>Delayed prices and daily bars, cached and polled on a schedule (every 15 min when the market is open, 60 min when closed).</td></tr>
+<tr><td>Football</td><td>Fixtures, results and crests from the free tier; polling is scheduled and responses cached.</td></tr>
+<tr><td>Thai lottery</td><td>Official draw results from the Government Lottery Office, fetched per draw.</td></tr>
+<tr><td>Muay Thai, horses</td><td>No free structured source was used, so events are simulated in real style and rendered live in their arenas.</td></tr>
+</table>
+
+<h2>7. Testing</h2>
+<p>Server logic (ledger invariants, settlement, gateway limits) is covered by <code>node --test</code> suites. The 3D client was checked by walking each floor in the browser, taking screenshots and measuring frame rate; evidence is stored in the <code>verification/</code> folder. A copy-check script scans all player-visible text for banned words.</p>
+
+<h2>8. Limitations and next steps</h2>
+<ul>
+<li>Real two-player boxing and racing were simulated locally and not yet run with two live players.</li>
+<li>Free data tiers are rate-limited, so some boards fill in over several polling cycles.</li>
+<li>There is no dark-mode toggle and no per-user favourites list.</li>
+<li>The server needs a host that keeps a Node process running. Serverless-only hosts will not work.</li>
+</ul>
+
+<h2>9. Team and credit</h2>
+<p>Team members: &lt;Name 1 (ID)&gt; · &lt;Name 2 (ID)&gt; · &lt;Name 3 (ID)&gt;<br>
+Source: https://github.com/PoomPuwadon/com-eng-ess-project · Built with Claude Code as the AI coding assistant. All data and money are mock or fake.</p>
+</body></html>

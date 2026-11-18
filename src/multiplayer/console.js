@@ -18,7 +18,7 @@ export function showSignIn({ onDone, mode: startMode } = {}) {
   const prev = savedAccount() || '';
   let mode = startMode || (prev ? 'login' : 'register');
   const m = h(`<div class="mp-modal"><form class="card" autocomplete="on" novalidate>
-    <h2>Welcome to [FIRM NAME]</h2>
+    <h2>Welcome to FINANCIAL FIRM</h2>
     <div class="seg mp-tabs" role="tablist">
       <button type="button" class="mp-btn" role="tab" data-mode="login">Sign in</button>
       <button type="button" class="mp-btn" role="tab" data-mode="register">Sign up</button>

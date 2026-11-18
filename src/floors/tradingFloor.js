@@ -165,13 +165,13 @@ function letteringTexture() {
     g.fillStyle = '#1c2a4e'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#b3262d'; g.fillRect(0, 0, w, 6); g.fillRect(0, h - 6, w, 6);
     g.fillStyle = '#f0e4c8'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (let i = 0; i < 2; i++) { fitFont(g, '{FIRM NAME} MEMBERS EXCHANGE', w / 2 - 80, 46, '600', 'Georgia, serif'); g.fillText('{FIRM NAME} MEMBERS EXCHANGE', w / 4 + (i * w) / 2, h / 2 + 2); }
+    for (let i = 0; i < 2; i++) { fitFont(g, 'FINANCIAL FIRM MEMBERS EXCHANGE', w / 2 - 80, 46, '600', 'Georgia, serif'); g.fillText('FINANCIAL FIRM MEMBERS EXCHANGE', w / 4 + (i * w) / 2, h / 2 + 2); }
   });
 }
 function logoTexture() {
   return LOGOS ||= stdTexture(2048, 128, (g, w, h) => {
-    const segs = [['#1c2a4e', '#ffffff', '{FIRM NAME}', '#ffc65a'], ['#f0e4c8', '#1c2a4e', 'QUANTRIX', '#b3262d'], ['#b3262d', '#ffffff', 'ROSEMONT & CO', null],
-      ['#1c2a4e', '#ffffff', 'ALPHAGATE', '#4fd1ff'], ['#f0e4c8', '#1c2a4e', '{FIRM NAME}', '#b3262d'], ['#0b1e5b', '#ffffff', 'BLUE CHIP PARTNERS', null],
+    const segs = [['#1c2a4e', '#ffffff', 'FINANCIAL FIRM', '#ffc65a'], ['#f0e4c8', '#1c2a4e', 'QUANTRIX', '#b3262d'], ['#b3262d', '#ffffff', 'ROSEMONT & CO', null],
+      ['#1c2a4e', '#ffffff', 'ALPHAGATE', '#4fd1ff'], ['#f0e4c8', '#1c2a4e', 'FINANCIAL FIRM', '#b3262d'], ['#0b1e5b', '#ffffff', 'BLUE CHIP PARTNERS', null],
       ['#1c2a4e', '#ffffff', 'LIQUIDITY LABS', '#3dff7a'], ['#f0e4c8', '#b3262d', 'Thinkwell Equity', null]];
     const sw = w / segs.length;
     segs.forEach(([bg, fg, t, mark], i) => {
@@ -451,7 +451,7 @@ export function trading(ctx) {
     for (const zz of [za - 0.6, zb]) L.box(-108.9, -108.0, 1.8, 10.6, zz, zz + 0.6, 'gunmetal'); // jambs
   }
   L.box(-108.9, -108.8, 5.6, 11.2, -7.6, 7.6, 'navy'); L.box(-108.8, -108.78, 5.6, 6.0, -7.6, 7.6, 'redAccent');
-  plaque(ctx, '{FIRM NAME}', -108.76, 9.0, 0, Math.PI / 2, { h: 1.5, color: '#f3e7cc', sub: 'Members Exchange' });
+  plaque(ctx, 'FINANCIAL FIRM', -108.76, 9.0, 0, Math.PI / 2, { h: 1.5, color: '#f3e7cc', sub: 'Members Exchange' });
   // bell balcony
   L.box(-108.9, -104.0, 4.2, 4.6, -6, 6, 'gunmetal', { collide: true });
   L.box(-104.1, -104.0, 3.6, 4.6, -6, 6, 'navy'); L.box(-104.0, -103.985, 3.72, 3.84, -6, 6, 'redAccent');
@@ -511,7 +511,7 @@ export function trading(ctx) {
     for (const y of [7.0, 8.62]) L.box(sx - 0.28, sx + 0.28, y - 0.04, y + 0.08, -3.24, 3.24, 'gold');
     L.box(sx - 0.27, sx + 0.27, 7.12, 7.24, -3.2, 3.2, 'redAccent');
     for (const zz of [-2.6, 2.6]) L.box(sx - 0.03, sx + 0.03, 8.7, Y0, zz - 0.03, zz + 0.03, 'gunDark');
-    for (const yaw of [Math.PI / 2, -Math.PI / 2]) plaque(ctx, '{FIRM NAME}', sx + (yaw > 0 ? 0.26 : -0.26), 7.95, 0, yaw, { h: 0.9, color: '#f3e7cc', sub: 'Ring the bell' });
+    for (const yaw of [Math.PI / 2, -Math.PI / 2]) plaque(ctx, 'FINANCIAL FIRM', sx + (yaw > 0 ? 0.26 : -0.26), 7.95, 0, yaw, { h: 0.9, color: '#f3e7cc', sub: 'Ring the bell' });
     L.cyl(sx, 0, 0.36, 6.25, 6.75, 'gold', { rTop: 0.16, seg: 14 }); L.box(sx - 0.02, sx + 0.02, 6.75, 7.0, -0.02, 0.02, 'gunDark'); }
 
   // ---- TV broadcast booth on a platform (south-east), rope stanchions in front
@@ -520,7 +520,7 @@ export function trading(ctx) {
   for (const [x0, x1, z0, z1] of [[-67, -55, 20.5, 20.62], [-67, -66.88, 20.5, 30.5], [-55.12, -55, 20.5, 30.5]]) { L.box(x0, x1, 1.0, 4.0, z0, z1, 'glass'); ctx.colliders.push({ x0, x1, z0, z1, y0: ctx.e + 1, y1: ctx.e + 4 }); }
   L.box(-67, -55, 1.0, 4.0, 30.3, 30.5, 'navy'); // back panel
   L.box(-67.4, -54.6, 4.0, 4.5, 20.1, 30.9, 'navy'); L.box(-67.42, -54.58, 4.08, 4.2, 20.08, 30.92, 'redAccent');
-  plaque(ctx, '{FIRM NAME} TV · LIVE FROM THE FLOOR', -61, 4.27, 20.07, Math.PI, { h: 0.34, color: '#f3e7cc' });
+  plaque(ctx, 'FINANCIAL FIRM TV · LIVE FROM THE FLOOR', -61, 4.27, 20.07, Math.PI, { h: 0.34, color: '#f3e7cc' });
   L.box(-64, -58, 1.0, 1.8, 25, 26.2, 'cream'); L.box(-64.05, -57.95, 1.8, 1.86, 24.95, 26.25, 'gunmetal'); // anchor desk
   for (const x of [-63, -61, -59]) L.person(x, 27, { y: 1.0, yaw: Math.PI, suit: pick([0x1c2a4e, 0xb3262d, 0x3a3f47], x), skin: pick(SKIN, x), hair: pick(HAIR, x) });
   marketBoard(ctx, -61, 2.85, 30.28, Math.PI, 5.6, 1.9, 'FIRM TV');
