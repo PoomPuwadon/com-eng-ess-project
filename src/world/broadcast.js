@@ -393,12 +393,15 @@ export function setFixtureCards(map) {
 // 'h2h' | 'reel') show the head-to-head card and the highlights reel when staff attach them to a fixture.
 // Two shared textures (a CanvasTexture; a canvas-or-VideoTexture), so one video decode for every reel screen.
 // With nothing attached they fall back to the fixture cards like their neighbours.
-export const MEDIA = { h2h: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), reel: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), meshes: { h2h: new Set(), reel: new Set() }, items: { h2h: [], reel: [] }, on: { h2h: false, reel: false } };
+// The highlights screens alternate between two feeds ('reel' / 'reel2') so two clips can run side by side.
+const mediaMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+export const MEDIA_KINDS = ['h2h', 'reel', 'reel2'];
+export const MEDIA = { h2h: mediaMat(), reel: mediaMat(), reel2: mediaMat(), meshes: { h2h: new Set(), reel: new Set(), reel2: new Set() }, items: { h2h: [], reel: [], reel2: [] }, on: { h2h: false, reel: false, reel2: false } };
 function paintMedia() {
   // with nothing attached a media screen shows what it would have shown: the marquee (centre stack) or a fixture card
-  for (const k of ['h2h', 'reel']) for (const m of MEDIA.meshes[k]) m.material = MEDIA.on[k] ? MEDIA[k] : m.userData.marquee ? (FEATURE.on ? FEATURE.material : bcMaterial) : FEATURE.fixtures.map ? FEATURE.fixtures : bcMaterial;
+  for (const k of MEDIA_KINDS) for (const m of MEDIA.meshes[k]) m.material = MEDIA.on[k] ? MEDIA[k] : m.userData.marquee ? (FEATURE.on ? FEATURE.material : bcMaterial) : FEATURE.fixtures.map ? FEATURE.fixtures : bcMaterial;
 }
-/** kind 'h2h' | 'reel'; map = the texture to show, or null to hand those screens back to the fixture cards */
+/** kind 'h2h' | 'reel' | 'reel2'; map = the texture to show, or null to hand those screens back to the fixture cards */
 export function setMediaScreens(kind, map) {
   const mat = MEDIA[kind];
   if (map && mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
@@ -423,8 +426,11 @@ export function buildBroadcastScreens(items) {
   const fixMeshes = marquee.length ? buildInstanced(others.map((s, i) => ({ ...s, feat: (s.feat ?? i) % FIX.CELLS }))) : [];
   for (const m of fixMeshes) { FEATURE.fixtureMeshes.add(m); if (FEATURE.fixtures.map) m.material = FEATURE.fixtures; }
   const mediaMeshes = [];
-  for (const kind of ['h2h', 'reel']) {
-    const list = big.filter((s) => s.media === kind);
+  // highlights screens alternate feeds within each group (sign screens, hanging screens, centre ring)
+  const reels = big.filter((s) => s.media === 'reel');
+  const kindOf = (s) => (s.media === 'reel' ? (reels.indexOf(s) % 2 ? 'reel2' : 'reel') : s.media);
+  for (const kind of MEDIA_KINDS) {
+    const list = big.filter((s) => s.media && kindOf(s) === kind);
     MEDIA.items[kind] = list; // where they are (the YouTube layer aligns to a reel screen)
     for (const group of [list.filter((s) => s.marquee), list.filter((s) => !s.marquee)]) {
       for (const m of group.length ? buildInstanced(group.map((s, i) => ({ ...s, feat: (s.feat ?? i + 2) % FIX.CELLS }))) : []) { m.userData.marquee = Boolean(group[0].marquee); MEDIA.meshes[kind].add(m); mediaMeshes.push(m); }

@@ -2,8 +2,9 @@
 // head-to-head results and highlights — drawn onto the Arena's side screens (broadcast.js MEDIA).
 //   h2h screens  : one CanvasTexture, the head-to-head card (pages through the meetings, 1 Hz redraw).
 //   reel screens : (the side screens by the wall signs, the back faces of the big hanging screens and the
-//                  middle ring of the centre-hung stack) uploaded mp4/webm play muted through ONE <video> + ONE VideoTexture shared by every
-//                  reel screen (threejs-performance §4: one decode, many screens). YouTube clips cannot be
+//                  middle ring of the centre-hung stack) they alternate between two feeds so two clips run side by side;
+//                  each uploaded mp4/webm plays muted through ONE <video> + ONE VideoTexture shared by
+//                  all of its feed's screens (threejs-performance §4: one decode per clip, at most two). YouTube clips cannot be
 //                  drawn into WebGL (cross-origin frames): the clip plays in a muted embed laid exactly over
 //                  the nearest reel screen (arenaYoutube.js, CSS3D); the other reel screens show its card.
 // State comes from GET /api/arena-media and live 'arenaMedia' pushes from the hub.
@@ -20,7 +21,7 @@ const mk = () => { const c = document.createElement('canvas'); c.width = W; c.he
 const H2H = mk(), REEL = mk();
 const images = new Map();
 let media = null, t = 0, acc = 1, page = 0, pageT = 0;
-let video = null, videoTex = null, reelIdx = 0, reelT = 0, wasVisible = false;
+let wasVisible = false;
 const listeners = new Set();
 
 const img = (src) => {
@@ -85,8 +86,8 @@ function drawH2H(f) {
   H2H.t.needsUpdate = true;
 }
 
-function drawReelCard(f, v) {
-  const g = REEL.g;
+function drawReelCard(slot, f, v) {
+  const g = slot.card.g;
   frame(g, 'MATCH HIGHLIGHTS · ARENA MEDIA', f.label.toUpperCase());
   const th = v?.kind === 'youtube' ? img(v.thumb) : null;
   const bx = 112, by = 92, bw = 800, bh = 360;
@@ -101,38 +102,53 @@ function drawReelCard(f, v) {
   g.textAlign = 'center'; g.fillStyle = '#fff'; fit(g, v?.title || 'Highlights', W - 120, 30, 800); g.fillText(v?.title || 'Highlights', W / 2, 488);
   g.fillStyle = (Math.floor(t * 2) % 2) ? '#f0d18a' : '#fff'; g.font = '900 24px system-ui';
   g.fillText('NOW SHOWING ON THE ARENA HIGHLIGHTS REEL', W / 2, 530);
-  REEL.t.needsUpdate = true;
+  slot.card.t.needsUpdate = true;
 }
 
-function stopVideo() {
-  if (!video) return;
-  video.pause(); video.removeAttribute('src'); video.load(); video = null; videoTex?.dispose(); videoTex = null;
+// Two slots, one per feed. Slot k plays clips k, k+2, k+4… (each slot cycles through its share: files
+// advance when they end, YouTube cards every 2 minutes). A single clip runs on both feeds from ONE decode.
+const SLOTS = [{ kind: 'reel', card: REEL }, { kind: 'reel2', card: mk() }].map((sl) => ({ ...sl, video: null, tex: null, idx: 0, t: 0, cur: null }));
+const shareOf = (f, k) => f.videos.filter((_, i) => f.videos.length < 2 || i % 2 === k);
+function stopVideo(sl) {
+  if (!sl.video) return;
+  sl.video.pause(); sl.video.removeAttribute('src'); sl.video.load(); sl.video = null; sl.tex?.dispose(); sl.tex = null;
 }
-function playFile(v) {
-  stopVideo();
-  video = Object.assign(document.createElement('video'), { src: v.src, muted: true, playsInline: true, preload: 'auto' });
-  video.dataset.id = v.id;
-  video.addEventListener('ended', () => { reelIdx++; reelT = 0; stopVideo(); apply(); });
-  video.addEventListener('error', () => { reelIdx++; reelT = 0; stopVideo(); apply(); });
-  videoTex = new THREE.VideoTexture(video); videoTex.colorSpace = THREE.SRGBColorSpace; videoTex.generateMipmaps = false; videoTex.minFilter = THREE.LinearFilter;
-  video.play().catch(() => {});
-  setMediaScreens('reel', videoTex);
+const stopAll = () => SLOTS.forEach(stopVideo);
+function advance(sl) { sl.idx++; sl.t = 0; stopVideo(sl); apply(); }
+function playFile(sl, v) {
+  stopVideo(sl);
+  const vid = Object.assign(document.createElement('video'), { src: v.src, muted: true, playsInline: true, preload: 'auto' });
+  vid.dataset.id = v.id;
+  vid.addEventListener('ended', () => advance(sl));
+  vid.addEventListener('error', () => advance(sl));
+  sl.video = vid;
+  sl.tex = new THREE.VideoTexture(vid); sl.tex.colorSpace = THREE.SRGBColorSpace; sl.tex.generateMipmaps = false; sl.tex.minFilter = THREE.LinearFilter;
+  vid.play().catch(() => {});
 }
+let ytScreens = [];
 
-/** choose what the two screen groups show for the current state */
+/** choose what each screen group shows for the current state */
 function apply() {
   const f = currentMedia();
-  if (!f) { stopVideo(); setArenaYoutube(null); setMediaScreens('h2h', null); setMediaScreens('reel', null); return; }
+  if (!f) { stopAll(); setArenaYoutube(null); for (const k of ['h2h', 'reel', 'reel2']) setMediaScreens(k, null); return; }
   setMediaScreens('h2h', f.h2h.length ? H2H.t : null);
-  if (!f.videos.length) { stopVideo(); setArenaYoutube(null); setMediaScreens('reel', f.h2h.length ? H2H.t : null); return; } // a dossier but no clips: the reel screens show the dossier too
-  const v = f.videos[reelIdx % f.videos.length];
-  if (v.kind === 'file') { setArenaYoutube(null); if (video?.dataset.id !== v.id) playFile(v); }
-  else { stopVideo(); drawReelCard(f, v); setMediaScreens('reel', REEL.t); setArenaYoutube(v.yt); }
+  if (!f.videos.length) { stopAll(); setArenaYoutube(null); for (const sl of SLOTS) setMediaScreens(sl.kind, f.h2h.length ? H2H.t : null); return; } // a dossier but no clips
+  const solo = f.videos.length === 1;
+  let yt = null;
+  ytScreens = [];
+  SLOTS.forEach((sl, k) => {
+    if (solo && k === 1) { sl.cur = SLOTS[0].cur; stopVideo(sl); setMediaScreens(sl.kind, SLOTS[0].cur?.kind === 'file' ? SLOTS[0].tex : SLOTS[0].card.t); return; } // same clip, same decode
+    const share = shareOf(f, k), v = share[sl.idx % share.length];
+    sl.cur = v;
+    if (v.kind === 'file') { if (sl.video?.dataset.id !== v.id) playFile(sl, v); setMediaScreens(sl.kind, sl.tex); }
+    else { stopVideo(sl); drawReelCard(sl, f, v); setMediaScreens(sl.kind, sl.card.t); if (!yt) { yt = v.yt; ytScreens = solo ? [...MEDIA.items.reel, ...MEDIA.items.reel2] : MEDIA.items[sl.kind]; } }
+  });
+  setArenaYoutube(yt);
 }
 
 function ingest(m) {
   const prev = media?.onScreens;
-  media = m; if (prev !== m?.onScreens) { reelIdx = 0; page = 0; }
+  media = m; if (prev !== m?.onScreens) { for (const sl of SLOTS) { sl.idx = 0; sl.t = 0; } page = 0; }
   apply();
   for (const fn of listeners) { try { fn(m); } catch (e) { console.error(e); } }
 }
@@ -142,16 +158,17 @@ export function bindArenaMedia(rt) { rt.on('arenaMedia', (m) => ingest(m.media))
 
 /** per frame from main.js: draws only while VT-02 is visible; the video pauses when you leave */
 export function updateArenaMedia(dt, visible, camera, scene) {
-  if (camera) { try { updateArenaYoutube(camera, visible, MEDIA.items.reel, scene, dt, BOWL); } catch (e) { console.warn('[arena media]', e.message); } }
-  if (!visible) { if (video && !video.paused) video.pause(); wasVisible = false; return; }
+  if (camera) { try { updateArenaYoutube(camera, visible, ytScreens, scene, dt, BOWL); } catch (e) { console.warn('[arena media]', e.message); } }
+  if (!visible) { for (const sl of SLOTS) if (sl.video && !sl.video.paused) sl.video.pause(); wasVisible = false; return; }
   if (!wasVisible) { wasVisible = true; apply(); }
   const f = currentMedia();
   if (!f) return;
-  if (video?.paused) video.play().catch(() => {});
-  t += dt; acc += dt; pageT += dt; reelT += dt;
+  for (const sl of SLOTS) { if (sl.video?.paused) sl.video.play().catch(() => {}); sl.t += dt; }
+  t += dt; acc += dt; pageT += dt;
   if (pageT > 8) { pageT = 0; page++; }
-  const cur = f.videos.length ? f.videos[reelIdx % f.videos.length] : null;
-  if (cur && cur.kind === 'youtube' && reelT > 120 && f.videos.length > 1) { reelT = 0; reelIdx++; apply(); } // rotate cards; files advance on 'ended'
-  if (acc >= 0.5) { acc = 0; if (f.h2h.length) drawH2H(f); if (cur?.kind === 'youtube') drawReelCard(f, cur); }
+  const solo = f.videos.length === 1;
+  SLOTS.forEach((sl, k) => { if (!(solo && k === 1) && sl.cur?.kind === 'youtube' && sl.t > 120 && shareOf(f, k).length > 1) advance(sl); }); // YouTube cards rotate; files advance on 'ended'
+  if (acc >= 0.5) { acc = 0; if (f.h2h.length) drawH2H(f); SLOTS.forEach((sl, k) => { if (!(solo && k === 1) && sl.cur?.kind === 'youtube') drawReelCard(sl, f, sl.cur); }); }
 }
-export const arenaMediaDebug = () => ({ canvases: { h2h: H2H.c, reel: REEL.c }, youtube: arenaYoutubeState(), onScreens: media?.onScreens ?? null, video: video ? { src: video.currentSrc, paused: video.paused, t: video.currentTime } : null, reelIdx });
+export const arenaMediaDebug = () => ({ canvases: { h2h: H2H.c, reel: REEL.c, reel2: SLOTS[1].card.c }, youtube: arenaYoutubeState(), onScreens: media?.onScreens ?? null,
+  slots: SLOTS.map((sl) => ({ kind: sl.kind, clip: sl.cur?.title || null, video: sl.video ? { src: sl.video.currentSrc.split('/').pop(), paused: sl.video.paused, t: +sl.video.currentTime.toFixed(1) } : null })) });
