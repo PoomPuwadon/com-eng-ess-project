@@ -62,3 +62,14 @@ test('a model plan is used (and attributed) when it validates; a broke seat gets
   await ai2.plan('roulette_gemini');
   assert.equal(ai2.view().find((x) => x.id === 'roulette_gemini').provider, 'rules');
 });
+
+test('cadence: every 15 minutes normally, every 15 seconds only while the CEO tour is on the Leisure Suite floor', () => {
+  const app = mkApp(); let fast = false;
+  const ai = createRoulettePlayers({ db: app.db, llm: { enabled: () => false, breaker: () => 0 }, feed: app.feed, config: {}, isFast: () => fast, log: quiet });
+  const t0 = Date.now(); ai.tick();
+  const slow = ai.view()[0].nextSpinAt - t0;
+  assert.ok(slow > 14 * 60_000 && slow <= 15 * 60_000 + 50, `slow gap ${slow}`);
+  fast = true; ai.tick();
+  const quick = ai.view()[0].nextSpinAt - Date.now();
+  assert.ok(quick > 14_000 && quick <= 15_050, `fast gap ${quick}`);
+});

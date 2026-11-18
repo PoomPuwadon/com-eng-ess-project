@@ -18,7 +18,7 @@ export function hotspotAt(player, leisureCtx) {
     const t = nearestTable(leisureCtx, p.x, p.z)?.table;
     if (t && Math.abs(p.x - (t.tx + 0.3)) < 2.4 && Math.abs(p.z - t.z) < 2.6) return { app: 'roulette', table: t, label: 'E — Take a seat at the Rotational Variance Instrument' };
     const g = leisureCtx?.games, near = (list, r) => (list || []).find((m) => Math.hypot(p.x - m.x, p.z - m.z) < r);
-    for (const [kind, r, label] of [['slots', 1.5, 'E — Automated Yield Terminal: spin for real'], ['blackjack', 3.4, 'E — Twenty-One Advisory Table: take a seat'], ['baccarat', 3.8, 'E — Private Banking Table: place a position'], ['craps', 3.6, 'E — Kinetic Probability Pit: roll']]) {
+    for (const [kind, r, label] of [['slots', 1.5, 'E — Automated Yield Terminal: spin for real'], ['blackjack', 3.4, 'E — Twenty-One Advisory Table: take a seat'], ['baccarat', 3.8, 'E — Private Banking Table: place a position'], ['craps', 3.6, 'E — Kinetic Probability Pit: roll'], ['poker', 3.8, 'E — Private Card Salon: take a seat (hold\'em vs the house)']]) {
       const m = near(g?.[kind], r); if (m) return { app: 'game', kind, at: m, label };
     }
     return null;

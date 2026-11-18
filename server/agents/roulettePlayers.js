@@ -43,8 +43,9 @@ export function validatePlan(raw, bank) {
   return { bets, spins: clamp(Math.round(Number(raw.spins) || 10), 3, MAX_PLAN_SPINS) };
 }
 
-export function createRoulettePlayers({ db, llm, feed = nullFeed, config = {}, log = console }) {
-  const budgetUsd = config.rouletteAiBudgetUsd ?? 2, spinMs = config.rouletteSpinMs || 30_000;
+export function createRoulettePlayers({ db, llm, feed = nullFeed, config = {}, isFast = () => false, log = console }) {
+  // cadence (owner, 2026-11-19): one rotation every 15 minutes; every 15 seconds ONLY while the CEO runs a tour and is on the Leisure Suite floor (isFast)
+  const budgetUsd = config.rouletteAiBudgetUsd ?? 2, spinMs = config.rouletteSpinMs || 15 * 60_000, fastMs = config.rouletteFastMs || 15_000;
   const fresh = () => ({ bank: START_BANK, resets: 0, rounds: 0, wins: 0, plan: null, last: null, recent: [] });
   const saved = db.kvGet(KEY, {});
   const S = Object.fromEntries(Object.keys(SEATS).map((id) => [id, { ...fresh(), ...(saved[id] || {}) }]));
@@ -104,12 +105,15 @@ export function createRoulettePlayers({ db, llm, feed = nullFeed, config = {}, l
     id, name: SEATS[id].name, route: SEATS[id].route, provider: /^claude/.test(s.plan?.model || '') ? 'claude' : /^gemini/.test(s.plan?.model || '') ? 'gemini' : 'rules', model: s.plan?.model || null,
     bank: s.bank, net: net(s), rounds: s.rounds, wins: s.wins, resets: s.resets, last: s.last, note: s.plan?.note || null, planAt: s.plan?.at || null, spinsLeft: s.plan?.left ?? 0, nextSpinAt: nextAt,
   }));
+  const gap = () => (isFast() ? fastMs : spinMs);
   function tick() {
     for (const id of Object.keys(S)) { try { spinOne(id); } catch (e) { log.warn?.('[roulette-ai]', e.message); } }
-    nextAt = Date.now() + spinMs;
+    nextAt = Date.now() + gap();
     feed.status('VT-01', { nextAt, label: 'Next rotation' });
   }
   const stop = () => { if (timer) clearInterval(timer); timer = null; };
-  const start = () => { stop(); nextAt = Date.now() + 5000; timer = setInterval(tick, spinMs); setTimeout(tick, 5000); };
+  // a 3 s watcher: spins when due, and pulls the next rotation forward the moment the CEO's tour reaches the Leisure Suite
+  const watch = () => { const now = Date.now(); if (isFast()) nextAt = Math.min(nextAt, now + fastMs); if (now >= nextAt) tick(); };
+  const start = () => { stop(); nextAt = Date.now() + 5000; timer = setInterval(watch, 3000); };
   return { view, spinOne, plan, tick, start, stop, state: () => S, spent, budgetUsd };
 }

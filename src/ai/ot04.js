@@ -5,7 +5,8 @@
 //    chosen review: standing on a numbered spot, receiving kinetic performance feedback, or pacing the transition suite. While an agent is
 //    at Asset Protection its character at the desk disappears (`away(id)`), so the SAME character is the one being punished.
 import * as THREE from 'three';
-import { makeCFO, makeLeadQuant, makeOperator, makeHeadTrader, makeCoHeadTrader } from '../characters/roster.js';
+import { makeCFO, makeLeadQuant, makeOperator, makeHeadTrader, makeCoHeadTrader, makeGuard } from '../characters/roster.js';
+import { PUNCH_T, HIT_T } from '../characters/kit.js';
 import { makeTag } from '../characters/kit.js';
 import { FLOOR_BY_ID } from '../layout/building.js';
 import { api } from '../net/api.js';
@@ -43,11 +44,16 @@ export class Ot04Ai {
       this.group.add(c.root);
       return { d, c, tag, i: i + 4, custody: null, pos: new THREE.Vector3(), yaw: 0, dir: 1 };
     });
+    // guards who beat whoever is receiving KINETIC PERFORMANCE FEEDBACK (two per victim, up to two victims at once); the victim recoils on every blow and goes down after a while
+    this.guards = Array.from({ length: 4 }, () => { const c = makeGuard(); c.root.traverse?.((m) => { m.castShadow = false; }); c.root.visible = false; c.pose = 'box'; this.group.add(c.root); return { c, t: Math.random() }; });
+    this.victimOf = () => null; // main.js: (agentId) => the trading agent's { c, pos } (those characters live in aiTraders.js)
+    this.beat = new Map(); // agentId -> seconds of beating so far
     this.load(); setInterval(() => this.load(), 30_000);
   }
   async load() { try { this.perf = await api('/api/ai/performance'); this.board?.touch(); } catch { /* server down: the board says so */ } }
   bind(rt) { const apply = (m) => this.set(m?.custody || []); rt.on('meta', apply); apply(rt.meta); }
   set(list) {
+    this.list = list;
     const by = new Map(list.map((c) => [c.agent, c]));
     for (const x of this.doubles) {
       const c = by.get(x.d.id);
@@ -77,14 +83,41 @@ export class Ot04Ai {
     this.board.mesh.position.set(BOARD.x, SEC() + BOARD.y0 + BOARD.h / 2, BOARD.z); this.group.add(this.board.mesh);
     const frame = new THREE.Mesh(new THREE.BoxGeometry(BOARD.w + 0.2, BOARD.h + 0.2, 0.06), new THREE.MeshBasicMaterial({ color: 0x1b2230 })); frame.position.set(BOARD.x, SEC() + BOARD.y0 + BOARD.h / 2, BOARD.z - 0.04); this.group.add(frame);
   }
+  /** drive the guards and the victims: every ~0.9 s a guard throws a blow, the victim recoils, and after ~12 s the victim is on the floor */
+  beating(dt) {
+    const victims = [];
+    for (const c of this.list || []) if (c.kind === 'feedback') {
+      const dbl = this.doubles.find((x) => x.d.id === c.agent), tr = dbl ? null : this.victimOf(c.agent);
+      if (dbl?.custody) victims.push({ id: c.agent, ch: dbl.c, pos: dbl.pos, set: (v) => { dbl.guardFace = v; } });
+      else if (tr?.custody) victims.push({ id: c.agent, ch: tr.c, pos: tr.pos, tr });
+    }
+    for (const id of [...this.beat.keys()]) if (!victims.some((v) => v.id === id)) { this.beat.delete(id); }
+    this.guards.forEach((g) => { g.c.root.visible = false; });
+    victims.slice(0, 2).forEach((v, vi) => {
+      const T = (this.beat.get(v.id) || 0) + dt; this.beat.set(v.id, T);
+      const down = T > 12;
+      v.ch.ko = down; v.ch.walkIn = true;
+      if (v.tr) { v.tr.beaten = true; } else v.ch.pose = 'box';
+      v.ch.root.rotation.x = down ? -1.35 : 0; // face-down on the floor once the beating has done its work
+      for (let k = 0; k < 2; k++) {
+        const g = this.guards[vi * 2 + k], side = k ? 1 : -1; g.t += dt;
+        g.c.root.visible = true; g.c.pose = 'box';
+        g.c.root.position.set(v.pos.x + side * 0.85, SEC(), v.pos.z + (down ? 0.35 : 0.55)); g.c.root.rotation.y = Math.atan2(-side * 0.85, -(down ? 0.35 : 0.55));
+        const period = 0.9 + k * 0.17;
+        if (g.t >= period && g.c.punchT <= 0) { g.t = 0; g.c.punchT = PUNCH_T; g.c.punchSide = k ? 1 : -1; if (!down) v.ch.hitT = HIT_T; }
+        g.c.update(dt, this.t, 0);
+      }
+    });
+  }
   update(dt, visibleIds, viewer = globalThis.__crowdViewer) {
     const vis = visibleIds.includes('OT-04'); this.group.visible = vis; this.t += dt;
     if (!vis) return;
     this.ensureBoard(); this.board.tick(dt, true);
+    this.beating(dt);
     for (const x of this.doubles) {
       const k = x.custody; x.c.root.visible = Boolean(k); if (!k) continue;
       let speed = 0;
-      if (k.kind === 'feedback') { x.c.pose = 'panic'; x.pos.x = k.x + Math.sin(this.t * 3.1 + x.i) * 0.18; x.pos.z = k.z + Math.cos(this.t * 2.3 + x.i) * 0.18; x.yaw = x.i + Math.sin(this.t * 2) * 0.5; }
+      if (k.kind === 'feedback') { x.c.pose = 'box'; x.c.walkIn = true; x.pos.set(k.x, SEC(), k.z); x.yaw = x.guardFace ?? x.yaw; } // the beating itself is driven by beating()
       else if (k.pace) { const tx = k.x + 3 * x.dir; if (Math.abs(tx - x.pos.x) < dt * k.pace) x.dir = -x.dir; else { x.pos.x += Math.sign(tx - x.pos.x) * dt * k.pace; speed = k.pace; x.yaw = Math.sign(tx - x.pos.x) * Math.PI / 2; } x.c.pose = 'cross'; }
       x.c.root.position.copy(x.pos); x.c.root.rotation.y = x.yaw; x.c.update(dt, this.t, speed);
       const s = viewer ? Math.min(2.2, Math.max(0.45, Math.hypot(viewer.x - x.pos.x, viewer.z - x.pos.z) / 9)) : 1; if (x.base) x.tag.scale.set(x.base.x * s, x.base.y * s, 1);

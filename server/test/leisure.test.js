@@ -75,3 +75,35 @@ test('limits and guards: bad stakes, no double-up after hitting, no second hand,
   let r = L.bjDeal(p.id, 100);
   if (!r.done) { assert.throws(() => L.bjDeal(p.id, 100), /current hand/); r = L.bjAct(p.id, 'hit'); if (!r.done) assert.throws(() => L.bjAct(p.id, 'double'), /first two/); app.leisure.sweep(); }
 });
+
+import { score, categoryName, newDeck, equity } from '../games/poker.js';
+const C = (s) => s.split(' ').map((t) => ({ r: '23456789TJQKA'.indexOf(t[0]) * 4, s: 'shdc'.indexOf(t[1]) })).map((x) => x.r + x.s);
+
+test('poker evaluator ranks hands correctly (incl. wheel straight, kickers, flush over straight)', () => {
+  const H = (s) => score(C(s));
+  assert.equal(categoryName(H('As Ks Qs Js Ts 2d 3c')), 'Straight flush');
+  assert.equal(categoryName(H('9s 9h 9d 9c 2d 3c 4h')), 'Four of a kind');
+  assert.equal(categoryName(H('Ks Kh Kd 2c 2d 3c 4h')), 'Full house');
+  assert.equal(categoryName(H('As 2s 5s 9s Js 3d 4c')), 'Flush');
+  assert.equal(categoryName(H('As 2d 3h 4c 5s 9d Kc')), 'Straight');
+  assert.ok(H('As 2d 3h 4c 5s 9d Kc') < H('2d 3h 4c 5s 6d 9d Kc'), 'six-high straight beats the wheel');
+  assert.ok(H('As Ad 2c 7s 9d 3h 5c') > H('Ks Kd Ac 7s 9d 3h 5c'));
+  assert.equal(new Set(newDeck()).size, 52);
+  assert.ok(equity(C('As Ad'), [], 300) > 0.75 && equity(C('7s 2d'), [], 300) < 0.45);
+});
+
+test('poker hand vs the bot settles on the ledger: conservation, escrow back to zero, fold and showdown paths', () => {
+  const app = mkApp(), L = app.leisure, { player: p } = app.players.create(), acct = player(p.id);
+  const total0 = app.ledger.balance(acct) + app.ledger.balance(VAULT);
+  let showdowns = 0;
+  for (let i = 0; i < 60; i++) {
+    let r = L.pokerDeal(p.id, 500), guard = 0;
+    while (!r.done && guard++ < 20) r = L.pokerAct(p.id, i % 5 === 0 && r.street > 1 ? 'fold' : r.facing > 0 ? 'call' : (i % 2 ? 'bet' : 'check'));
+    assert.ok(r.done, 'hand always ends'); if (r.botHole[0] !== '??') showdowns++;
+  }
+  assert.equal(app.ledger.balance(acct) + app.ledger.balance(VAULT), total0, 'player + vault conserved');
+  assert.equal(app.db.all("SELECT balance FROM balances WHERE account_id LIKE 'ESCROW:BET:pk%' AND balance != 0").length, 0);
+  assert.ok(showdowns > 5 && app.ledger.reconcile().ok);
+  assert.equal(L.pokerState(p.id), null);
+  L.pokerDeal(p.id, 500); assert.throws(() => L.pokerDeal(p.id, 500), /current hand/); assert.throws(() => L.pokerAct(p.id, 'call'), /Check, bet|Call, raise/);
+});

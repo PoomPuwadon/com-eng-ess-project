@@ -63,7 +63,7 @@ export function createApp(config, log = console, extra = {}) {
   const feed = createFeed({ db, bus, routeOf: llm.route }); // AI visuals: one attributed event stream for OT-01 / OT-02 / VT-02
   const news = createNews({ config, log });
   const research = createResearch({ db, llm, market, gateway, feed, news, config, log });
-  const rouletteAi = createRoulettePlayers({ db, llm, feed, config, log }); // VT-01: Claude + Gemini seats play with their OWN notional bankroll, never the firm's money
+  const rouletteAi = createRoulettePlayers({ db, llm, feed, config, log, isFast: () => { const t = hub.meta().tour; return Boolean(t?.on && t.floor === 'VT-01'); } }); // VT-01: Claude + Gemini seats play with their OWN notional bankroll, never the firm's money
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, feed, research, log });
   const league = createLeague({ db, market, desk });
   const chartDesk = createChartAnalyst({ llm, log });
@@ -195,6 +195,9 @@ export function createApp(config, log = console, extra = {}) {
     'POST /api/leisure/craps': async (req) => { const p = need(req); limit(p.id, 2); const b = await readBody(req); return leisure.craps(p.id, b.side, b.stake); },
     'POST /api/leisure/blackjack/deal': async (req) => { const p = need(req); limit(p.id, 2); return leisure.bjDeal(p.id, (await readBody(req)).stake); },
     'POST /api/leisure/blackjack/act': async (req) => { const p = need(req); limit(p.id, 4); return leisure.bjAct(p.id, (await readBody(req)).action); },
+    'POST /api/leisure/poker/deal': async (req) => { const p = need(req); limit(p.id, 2); return leisure.pokerDeal(p.id, (await readBody(req)).stake); },
+    'POST /api/leisure/poker/act': async (req) => { const p = need(req); limit(p.id, 4); return leisure.pokerAct(p.id, (await readBody(req)).action); },
+    'GET /api/leisure/poker': (req) => ({ hand: leisure.pokerState(need(req).id) }),
     'GET /api/leisure/blackjack': (req) => ({ hand: leisure.bjState(need(req).id), limits: leisure.LIMITS }),
     'GET /api/roulette/state': (req) => { const p = authOf(req); return { recent: roulette.recent(), limits: roulette.LIMITS, stats: roulette.stats(), commitment: p ? roulette.commitment(p.id) : null }; },
     'POST /api/roulette/spin': async (req) => { const p = need(req); limit(p.id, 2); return roulette.spin(p.id, (await readBody(req)).bets); },

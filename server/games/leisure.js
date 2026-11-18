@@ -6,6 +6,7 @@
 // craps is the pass / don't-pass line only, played to resolution in one request.
 import { randomInt } from 'node:crypto';
 import { VAULT, player } from '../ledger.js';
+import { newDeck, cardName, score, categoryName, botAct } from './poker.js';
 
 export const LIMITS = { min: 100, max: 100_000 }; // ¤ 1.00 .. ¤ 1,000.00 per round
 const err = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -152,8 +153,75 @@ export function createLeisureGames(db, ledger, bus, players) {
     throw err('Hit, stand or double.');
   }
   /** a hand left idle (closed tab, teleport) stands on its own after 5 minutes so no stake sits in escrow */
-  const sweep = () => { for (const [pid, g] of [...bj]) if (Date.now() - g.at > 300_000) { try { bjFinish(pid, g); } catch { bj.delete(pid); } } };
+  const sweep = () => { for (const [pid, g] of [...bj]) if (Date.now() - g.at > 300_000) { try { bjFinish(pid, g); } catch { bj.delete(pid); } } for (const [pid, g] of [...pk]) if (Date.now() - g.at > 300_000) { try { pkSettle(pid, g, 'bot', 'Hand abandoned.'); } catch { pk.delete(pid); } } };
+  // ---- heads-up hold'em vs the house bot: ante u each, fixed-limit (bet 2u, one raise per street); player chips escrowed as they go in, the bot's side is the vault at settlement
+  const pk = new Map();
+  const PK_MAX_UNIT = 5_000;
+  const pkView = (g, reveal) => ({ round: g.id, hole: g.hole.map(cardName), board: g.board.map(cardName), street: g.street, pot: g.pC + g.bC, mine: g.pC, bot: g.bC, facing: g.facing, canRaise: g.facing > 0 && !g.raised, unit: g.u, done: g.done,
+    botHole: reveal ? g.bot.map(cardName) : ['??', '??'], note: g.note || '' });
+  function pkAdd(pid, g, amount) {
+    if (amount <= 0) return;
+    if (ledger.balance(player(pid)) < amount) throw err('You are currently liquidity-constrained for this allocation.', 402);
+    ledger.post({ actor: `player:${pid}`, reason: 'WAGER_PLACED', ref: `pk:${g.id}`, idem: `pk:${g.id}:add${g.adds++}`, transfers: [{ from: player(pid), to: `ESCROW:BET:pk${g.id}`, amount }] });
+    g.pC += amount;
+  }
+  function pkSettle(pid, g, winner, note) { // winner: 'player' | 'bot' | 'split'
+    const acct = player(pid), esc = `ESCROW:BET:pk${g.id}`;
+    const t = winner === 'player' ? [{ from: esc, to: acct, amount: g.pC }, ...(g.bC ? [{ from: VAULT, to: acct, amount: g.bC }] : [])] : winner === 'split' ? [{ from: esc, to: acct, amount: g.pC }] : [{ from: esc, to: VAULT, amount: g.pC }];
+    ledger.post({ actor: `player:${pid}`, reason: winner === 'player' ? 'WAGER_WON' : winner === 'split' ? 'WAGER_VOID' : 'WAGER_LOST', ref: `pk:${g.id}`, idem: `pk:${g.id}:settle`, transfers: t });
+    g.done = true; g.note = note; pk.delete(pid);
+    const net = winner === 'player' ? g.bC : winner === 'split' ? 0 : -g.pC;
+    bus?.emit('leisure', { game: 'poker', net, name: players.nameOf(pid), at: Date.now() });
+    return { ...pkView(g, winner !== 'bot' || g.showdown), result: winner, net, balance: ledger.balance(acct) };
+  }
+  function pkShowdown(pid, g) {
+    const a = score([...g.hole, ...g.board]), b = score([...g.bot, ...g.board]); g.showdown = true;
+    const note = `You: ${categoryName(a)}. House: ${categoryName(b)}.`;
+    return pkSettle(pid, g, a > b ? 'player' : a < b ? 'bot' : 'split', note);
+  }
+  function pkNextStreet(pid, g) { // after a street's betting closes
+    g.facing = 0; g.raised = false; g.street++;
+    if (g.street >= 4) return pkShowdown(pid, g);
+    g.board.push(...(g.street === 1 ? [g.deck.pop(), g.deck.pop(), g.deck.pop()] : [g.deck.pop()]));
+    return pkView(g, false);
+  }
+  function pkBotReply(pid, g, kind) { // kind: 'check' | 'bet' | 'raise' by the player
+    const u = g.u, pot = (g.pC + g.bC) / u;
+    if (kind === 'check') {
+      const a = botAct({ hole: g.bot, board: g.board, facing: 0, canRaise: true, potUnits: pot });
+      if (a === 'bet') { g.bC += 2 * u; g.facing = 2 * u; g.raised = false; return pkView(g, false); }
+      return pkNextStreet(pid, g);
+    }
+    const facing = kind === 'bet' ? 2 : 2; // the player's bet / raise the bot must meet (units)
+    const a = botAct({ hole: g.bot, board: g.board, facing, canRaise: kind === 'bet', potUnits: pot });
+    if (a === 'fold') { g.bC += 0; return pkSettle(pid, g, 'player', 'The house folds.'); }
+    if (a === 'raise' && kind === 'bet') { g.bC += 2 * u + 2 * u; g.facing = 2 * u; g.raised = true; return pkView(g, false); } // call 2u and raise 2u: the player may call or fold
+    g.bC += 2 * u; return pkNextStreet(pid, g);
+  }
+  function pokerDeal(pid, stake) {
+    if (pk.has(pid)) throw err('Finish your current hand first.', 409);
+    stake = Number(stake); if (!Number.isSafeInteger(stake) || stake < LIMITS.min || stake > PK_MAX_UNIT) throw err(`Ante must be between ¤${LIMITS.min / 100} and ¤${PK_MAX_UNIT / 100}.`);
+    if (ledger.balance(player(pid)) < stake * 17) throw err('You are currently liquidity-constrained for this allocation.', 402);
+    solvent(0, stake * 17);
+    const deck = newDeck(), g = { at: Date.now(), id: nextId(), deck, hole: [deck.pop(), deck.pop()], bot: [deck.pop(), deck.pop()], board: [], street: 0, pC: 0, bC: stake, u: stake, facing: 0, raised: false, done: false, adds: 0 };
+    pkAdd(pid, g, stake); pk.set(pid, g);
+    return pkView(g, false);
+  }
+  function pokerAct(pid, action) {
+    const g = pk.get(pid); if (!g) throw err('No hand in play.', 409);
+    const u = g.u;
+    if (action === 'fold') return pkSettle(pid, g, 'bot', 'You folded.');
+    if (g.facing > 0) { // the bot has bet
+      if (action === 'call') { pkAdd(pid, g, g.facing); return pkNextStreet(pid, g); }
+      if (action === 'raise' && !g.raised) { pkAdd(pid, g, g.facing + 2 * u); const r = pkBotReply(pid, g, 'raise'); return r; }
+      throw err('Call, raise or fold.', 409);
+    }
+    if (action === 'check') return pkBotReply(pid, g, 'check');
+    if (action === 'bet') { pkAdd(pid, g, 2 * u); return pkBotReply(pid, g, 'bet'); }
+    throw err('Check, bet or fold.', 409);
+  }
+  const pokerState = (pid) => { const g = pk.get(pid); return g ? pkView(g, false) : null; };
   const bjState = (pid) => { const g = bj.get(pid); return g ? bjView(g, false) : null; };
 
-  return { slots, baccarat, craps, bjDeal, bjAct, bjState, sweep, LIMITS };
+  return { slots, baccarat, craps, bjDeal, bjAct, bjState, pokerDeal, pokerAct, pokerState, sweep, LIMITS };
 }

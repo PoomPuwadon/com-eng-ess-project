@@ -409,7 +409,7 @@ export function leisure(ctx) {
   // ---- walkway-edge showcase terminals (as in the reference: machines right at the walkway)
 
   // ---- south front: twenty-one, private banking, kinetic pit
-  ctx.games = { slots, blackjack: [], baccarat: [], craps: [] }; // positions for the E-to-play hotspots (src/interact.js)
+  ctx.games = { slots, blackjack: [], baccarat: [], craps: [], poker: [] }; // positions for the E-to-play hotspots (src/interact.js)
   for (let i = 0; i < 5; i++) for (const z of [14.4, 21.0, 27.6]) { blackjack(L, ctx, r, 58 + i * 9, z, -1); ctx.games.blackjack.push({ x: 58 + i * 9, z }); }
   for (const bxx of [106.5, 121.5]) for (const z of [16.5, 24.6]) { // private banking: ovals inside velvet ropes
     ovalTable(L, ctx, r, bxx, z, 2.1, 1.05, 7); ctx.games.baccarat.push({ x: bxx, z });
@@ -438,10 +438,10 @@ export function leisure(ctx) {
   part(SAL.x0, SAL.x1, SAL.z1 - 0.08, SAL.z1 + 0.08);
   for (const [x, z] of [[176, SAL.z0], [182, SAL.z0], [SAL.x0, 22], [SAL.x0, 27]]) L.box(x - 0.25, x + 0.25, 0, 3.4, z - 0.25, z + 0.25, 'lsGold');
   plaque(ctx, 'PRIVATE CARD SALON', 179, 3.25, SAL.z0 - 0.3, Math.PI, { h: 0.42, color: '#ffd877', sub: 'Strategic Negotiation' });
-  for (const x of [163, 175, 187]) for (const z of [21, 32, 43]) { ovalTable(L, ctx, r, x, z, 1.9, 1.05, 8); for (let k = 0; k < 2; k++) if (r() < 0.5) standing(L, r, x + (r() - 0.5) * 4, z + 2.3 + r() * 0.6, Math.PI, 0.4); }
+  for (const x of [163, 175, 187]) for (const z of [21, 32, 43]) { ovalTable(L, ctx, r, x, z, 1.9, 1.05, 8); ctx.games.poker.push({ x, z }); for (let k = 0; k < 2; k++) if (r() < 0.5) standing(L, r, x + (r() - 0.5) * 4, z + 2.3 + r() * 0.6, Math.PI, 0.4); }
   // High-Conviction Salon (corner room, glass)
   part(193, 205.9, 42.9, 43.05); part(192.9, 193.05, 43, 47.5); part(192.9, 193.05, 50.5, 55.9);
-  ovalTable(L, ctx, r, 199.5, 49.5, 2.2, 1.2, 8, 'lsVelvet');
+  ovalTable(L, ctx, r, 199.5, 49.5, 2.2, 1.2, 8, 'lsVelvet'); ctx.games.poker.push({ x: 199.5, z: 49.5 });
   plaque(ctx, 'HIGH-CONVICTION SALON', 199.4, 3.0, 42.85, Math.PI, { h: 0.3, color: '#ffd877' });
   for (const x of [165, 181, 197]) for (const z of [26, 40]) { // salon chandeliers (smaller)
     L.cyl(x, z, 0.04, 9.6, SOFFIT - 0.2, 'lsGold', { seg: 6 });

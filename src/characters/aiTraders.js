@@ -189,6 +189,7 @@ export class AiTraders {
     this.say(a, r.label, true);
   }
   sendBack(a) {
+    a.beaten = false; a.c.ko = false; a.c.root.rotation.x = 0; a.c.hitT = 0;
     a.custody = null; a.state = 'desk'; a.timer = 8;
     a.pos.set(a.def.stand[0], ELEV(), a.def.stand[1]); a.yaw = a.def.faceYaw; a.c.pose = 'deal';
     this.say(a, a.last || a.def.idle, true);
@@ -258,7 +259,8 @@ export class AiTraders {
       a.c.root.visible = vis; a.pad.visible = vis && !a.custody; // the desk pad stays dark while its agent is away
       if (a.state === 'custody') {
         const k = a.custody;
-        if (k.kind === 'feedback') { a.c.pose = 'panic'; a.pos.x = k.x + Math.sin(this.t * 3.1 + k.yaw) * 0.18; a.pos.z = k.z + Math.cos(this.t * 2.3 + k.yaw) * 0.18; a.yaw = k.yaw + Math.sin(this.t * 2) * 0.5; }
+        if (k.kind === 'feedback' && a.beaten) { a.c.pose = 'box'; a.pos.set(k.x, SEC_ELEV(), k.z); a.yaw = k.yaw; } // guards beat this agent (src/ai/ot04.js drives the blows)
+        else if (k.kind === 'feedback') { a.c.pose = 'panic'; a.pos.x = k.x + Math.sin(this.t * 3.1 + k.yaw) * 0.18; a.pos.z = k.z + Math.cos(this.t * 2.3 + k.yaw) * 0.18; a.yaw = k.yaw + Math.sin(this.t * 2) * 0.5; }
         else if (k.pace) { // pace the glass suite
           const tx = k.x + k.pace * k.dir;
           if (this.moveToward(a, tx, k.z, 0.9 * dt)) k.dir = -k.dir; else speed = 0.9;
