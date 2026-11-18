@@ -166,10 +166,11 @@ export class ExecConsole {
   click(ev) {
     const mb = ev.target.closest('[data-mop]');
     if (mb) { this.mediaOp(mb.dataset.mop, mb.dataset); return; }
-    const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-money]');
+    const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-bring],[data-money]');
     if (!b) return;
     if (b.dataset.money) { const inp = this.el.querySelector(`[data-amt="${b.dataset.money}"]`); if (inp) this.amt[b.dataset.money] = inp.value; this.money(b.dataset.money, b.dataset.mop); return; }
     if (b.dataset.tab) { this.tab = b.dataset.tab; this.render(true); return; }
+    if (b.dataset.bring) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.bring); if (p) this.act('bring', { target: p.id }, `${p.name} has been brought to you.`); return; }
     if (b.dataset.kick) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.kick); if (p && confirm(`Remove ${p.name} from the building?`)) this.act('kick', { target: p.id }, `${p.name} has been removed.`); return; }
     const rt = this.ctx.rt, op = b.dataset.op;
     const ops = {
@@ -235,7 +236,7 @@ export class ExecConsole {
   tab_guests() {
     const { rt } = this.ctx;
     const rows = rt.players.map((p) => `<tr><td>${esc(p.name)} ${p.id === rt.id ? '<span class="badge you">YOU</span>' : ''}</td><td>${this.roleBadge(p) || 'Player'}</td><td><b>${esc(p.floor || '—')}</b> ${esc(roomName(p.room))}</td><td>${this.badge(p)}</td>
-      <td>${p.id === rt.id ? '' : `<button class="mp-btn sm danger" data-kick="${p.id}">Kick</button>`}</td></tr>`).join('');
+      <td style="white-space:nowrap">${p.id === rt.id ? '' : `<button class="mp-btn sm" data-bring="${p.id}">TP to me</button> <button class="mp-btn sm danger" data-kick="${p.id}">Kick</button>`}</td></tr>`).join('');
     return `<table><tr><th>Name</th><th>Role</th><th>Floor · room</th><th>Device</th><th></th></tr>${rows}</table>`;
   }
 

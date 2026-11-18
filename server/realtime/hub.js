@@ -188,6 +188,18 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     return { changed, net, balances: balances(by) };
   }
 
+  /** teleport one guest to the caller (CEO panel "TP to me"): lands beside the caller on the caller's floor */
+  function bring(by, target) {
+    needStaff(by);
+    if (!by.pose) throw err(409, 'Your position is not known yet.');
+    const c = conns.get(target);
+    if (!c || !c.ready) throw err(404, 'That guest is no longer connected.');
+    if (c.id === by.id) throw err(400, 'You are already here.');
+    if (basketOf(c.id) || boxing.isBoxer(c.id) || race.isRacer(c.id)) throw err(409, 'That guest is in the basket, the ring or a race right now.');
+    send(c, { t: 'teleport', ...dropPoint(by.pose, 0, 1), yaw: by.pose.yaw, safe: true, by: by.name });
+    return { brought: c.id };
+  }
+
   function kick(by, target) {
     needStaff(by);
     const c = conns.get(target);
@@ -240,6 +252,7 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     elevate: (c, m) => elevate(c, m.password, m.role),
     role: (c, m) => setRole(c, m.role),
     kick: (c, m) => kick(c, m.target),
+    bring: (c, m) => bring(c, m.target),
     balances: (c) => balances(c),
     money: (c, m) => adjustMoney(c, m),
     tour: (c, m) => setTour(c, Boolean(m.on)),

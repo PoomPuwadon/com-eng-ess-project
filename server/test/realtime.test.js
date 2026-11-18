@@ -321,3 +321,18 @@ test('tour: a guest who joins while Tour Mode is on arrives on the host\'s floor
   assert.equal(tp.floor, 'VT-03');
   assert.ok(Math.hypot(tp.x - 120, tp.z - 30) < 3.5, 'lands in a ring round the host');
 });
+
+test('bring: a CEO can teleport one guest to their position; guests cannot, and you cannot bring yourself', () => {
+  const app = mkApp();
+  const ceo = client(app, 'Boss'), guest = client(app, 'Guest'), other = client(app, 'Other');
+  ceo.ask({ t: 'elevate', password: 'sesame', role: 'ceo' });
+  ceo.pose('VT-02', 100, 53.5, 10, 1.2, 'sports_arena');
+  assert.equal(guest.ask({ t: 'bring', target: other.c.id }).ok, false, 'guests cannot bring anyone');
+  assert.equal(ceo.ask({ t: 'bring', target: ceo.c.id }).ok, false, 'no self-bring');
+  assert.equal(ceo.ask({ t: 'bring', target: 'nobody' }).ok, false, 'unknown target');
+  assert.equal(ceo.ask({ t: 'bring', target: guest.c.id }).ok, true);
+  const tp = guest.last('teleport');
+  assert.equal(tp.floor, 'VT-02');
+  assert.ok(Math.hypot(tp.x - 100, tp.z - 10) < 2.5, 'lands beside the CEO');
+  assert.equal(other.inbox.filter((m) => m.t === 'teleport').length, 0, 'only the chosen guest moves');
+});
