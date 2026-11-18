@@ -184,7 +184,7 @@ let ledTex = null, ledCount = 0;
 function ledTexture() {
   if (ledTex) return ledTex;
   // every message gets a slot sized to its own measured width (+ padding), so nothing overlaps
-  const segs = [['#0b1e5b', '#ffc65a', '{FIRM_NAME} · SPORTS ANALYTICS'], ['#111827', '#3dff7a', 'LIVE PRICING · 1X2 · O/U 2.5 · BTTS'],
+  const segs = [['#0b1e5b', '#ffc65a', 'FINANCIAL FIRM · SPORTS ANALYTICS'], ['#111827', '#3dff7a', 'LIVE PRICING · 1X2 · O/U 2.5 · BTTS'],
     ['#4b0f2e', '#ffffff', 'CHAMPIONS LEAGUE · LIVE'], ['#2a0606', '#ffffff', 'F1 GRAND PRIX · LIVE TIMING'], ['#1f2937', '#93c5fd', 'POSITIONS OPEN · 24/7'],
     ['#0b1e5b', '#ffffff', 'RESPONSIBLE RECREATION'], ['#3b0d0d', '#ffc65a', 'PREMIER LEAGUE · IN-PLAY'], ['#111827', '#ffffff', 'LIQUIDITY IS A LIFESTYLE']];
   const c = document.createElement('canvas'), g = c.getContext('2d'), H = 128, FONT = 'bold 64px sans-serif', PAD = 90;
@@ -393,7 +393,7 @@ export function arena(ctx) {
     add(new THREE.CylinderGeometry((ap - 0.15) / Math.cos(Math.PI / sides), (ap - 0.15) / Math.cos(Math.PI / sides), rows * (h + 0.1) + 0.2, sides, 1, false), mats.dark, A.cx, y0 + (rows * (h + 0.1)) / 2, A.cz);
     for (let row = 0; row < rows; row++) for (let i = 0; i < sides; i++) {
       const a = Math.PI / 2 - ((i + 0.5) / sides) * TAU; // facet centres of the cylinder
-      bc.push({ x: A.cx + ap * Math.cos(a), y: e + y0 + row * (h + 0.1) + h / 2 + 0.1, z: A.cz + ap * Math.sin(a), yaw: Math.atan2(Math.cos(a), Math.sin(a)), w: pw - 0.12, h, cell: cellFor(row, i) });
+      bc.push({ x: A.cx + ap * Math.cos(a), y: e + y0 + row * (h + 0.1) + h / 2 + 0.1, z: A.cz + ap * Math.sin(a), yaw: Math.atan2(Math.cos(a), Math.sin(a)), w: pw - 0.12, h, cell: cellFor(row, i), marquee: true });
     }
   };
   // stacked from the top down to the pit floor: three tall eight-sided tiers (each one merges two of the

@@ -106,7 +106,7 @@ export function marketBoard(ctx, x, y, z, yaw, w, h, title = 'MARKETS') {
     const head = Ht * 0.16;
     g.fillStyle = '#141924'; g.fillRect(0, 0, W, head);
     g.fillStyle = GOLD; g.font = `600 ${head * 0.52}px Georgia, serif`; g.textBaseline = 'middle';
-    g.fillText(`{FIRM NAME} · ${title}`, W * 0.015, head / 2);
+    g.fillText(`FINANCIAL FIRM · ${title}`, W * 0.015, head / 2);
     g.fillStyle = '#8b93a5'; g.font = `${head * 0.34}px sans-serif`; g.textAlign = 'right';
     g.fillText('15-MIN DELAYED · DEMO DATA', W * 0.985, head / 2); g.textAlign = 'left';
     const rows = 5, cols = 3, rowH = (Ht - head * 2.1) / rows, colW = W / cols;
@@ -152,7 +152,7 @@ export function lobbyDashboard(ctx, x, y, z, yaw, w, h) {
     const bg = g.createLinearGradient(0, 0, 0, Ht); bg.addColorStop(0, '#0d1220'); bg.addColorStop(1, '#05070c');
     g.fillStyle = bg; g.fillRect(0, 0, W, Ht);
     g.textBaseline = 'middle';
-    g.fillStyle = GOLD; g.font = `600 ${Ht * 0.055}px Georgia, serif`; g.fillText('{FIRM NAME}', W * 0.035, Ht * 0.075);
+    g.fillStyle = GOLD; g.font = `600 ${Ht * 0.055}px Georgia, serif`; g.fillText('FINANCIAL FIRM', W * 0.035, Ht * 0.075);
     g.fillStyle = '#9aa3b5'; g.font = `${Ht * 0.026}px sans-serif`; g.fillText('Excellence. Discretion. Liquidity.  ·  Firm Performance (notional, demo)', W * 0.035, Ht * 0.13);
     const t = new Date(); g.textAlign = 'right'; g.fillStyle = '#e8ecf3'; g.font = `500 ${Ht * 0.05}px monospace`;
     g.fillText(t.toTimeString().slice(0, 5), W * 0.965, Ht * 0.085); g.textAlign = 'left';

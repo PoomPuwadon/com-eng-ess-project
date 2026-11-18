@@ -3,8 +3,9 @@ import { FLOOR_BY_ID, ROLES, findRoom, canAccess, landingZone, BANKS } from './l
 import { buildExterior, FloorManager } from './world/world.js';
 import { updateScreens, updateTicker } from './world/screens.js';
 import { Player } from './player.js';
-import { ElevatorSystem, zoneAt, rideCheck } from './elevators.js';
+import { ElevatorSystem, zoneAt, rideCheck, canUseLifts, LIFT_REFUSAL } from './elevators.js';
 import { Life } from './life.js';
+import { AiTraders } from './characters/aiTraders.js';
 import { HUD } from './ui.js';
 import { PerfSampler, findPath, planRoute, roomSpawn, ALL_FLOOR_IDS } from './debug.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -13,12 +14,27 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCREEN_CTRL, setScreenMode, playBigScreenVideo } from './world/lobbyScreens.js';
 import { QUALITY, saveQuality, mountQualityButton } from './quality.js';
-import { openApp, appOpen, buildWallet } from './apps/shell.js';
+import { openApp, appOpen, closeApp, buildWallet } from './apps/shell.js';
 import './apps/markets.js';
 import './apps/research.js';
+import './apps/chartDesk.js';
+import './apps/sportsDesk.js';
+import { updateArenaFeed, playArenaVideo } from './world/arenaFeed.js';
+import { updateArenaMedia, bindArenaMedia, arenaMediaDebug } from './world/arenaMedia.js';
 import { hotspotAt, nearestTable } from './interact.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
+import { avatarFor } from './characters/roster.js';
+import { CeoPresence } from './characters/ceoMarker.js';
+import { Crowd } from './characters/crowd.js';
+import { Realtime } from './net/realtime.js';
+import { savedAccount, signIn, setBalance, onMe } from './net/api.js';
+import { RemotePlayers } from './multiplayer/remotes.js';
+import { ExecConsole, showSignIn } from './multiplayer/console.js';
+import { TourGuides } from './multiplayer/tourGuides.js';
+import { ArenaHud } from './multiplayer/arenaHud.js';
+import { withVeil } from './multiplayer/teleportVeil.js';
+import { memberPose } from '../server/realtime/basket.js';
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -51,8 +67,8 @@ addEventListener('resize', () => {
 });
 
 const ext = buildExterior(scene, renderer);
-const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-02', 'OT-03', 'OT-04', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
-const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-02': 'lab', 'OT-03': 'outreach', 'OT-04': 'security', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
+const LUX_FLOORS = ['L0', 'PLAZA', 'BRIDGE', 'OT-01', 'OT-02', 'OT-03', 'OT-04', 'OT-05', 'VT-01', 'VT-02', 'VT-03', 'VT-04', 'B1'];
+const LOOK_OF = { PLAZA: 'outdoor', 'OT-01': 'trading', 'OT-02': 'lab', 'OT-03': 'outreach', 'OT-04': 'security', 'OT-05': 'command', 'VT-01': 'leisure', 'VT-02': 'arena', 'VT-03': 'pavilion', 'VT-04': 'racing', B1: 'vault' };
 // Lighting profiles: the lobby is lit from inside (reflections, chandeliers, lamps, onyx wall) with
 // only a soft sun through the glass roof; the plaza gets daylight. Greybox floors keep the old rig.
 const LOOKS = {
@@ -78,6 +94,8 @@ const LOOKS = {
   vault: { tone: THREE.ACESFilmicToneMapping, exp: 0.95, env: 0.65, sun: 0, sunCol: 0xfff0dc, hemi: 0.7, sky: 0xeef3ff, gnd: 0x2a2c30, shadow: false, bloom: 0.32 },
   // probability institute theatre: a bright white/navy research lab; even, cool-white fill, the screens glow
   lab: { tone: THREE.ACESFilmicToneMapping, exp: 0.82, env: 0.45, sun: 0, sunCol: 0xfff0dc, hemi: 0.45, sky: 0xf2f6ff, gnd: 0x4a5468, shadow: false, bloom: 0.18 },
+  // executive command centre (NORAD bunker): near-black, the screens, money streams and gold edges carry the light
+  command: { tone: THREE.ACESFilmicToneMapping, exp: 1.0, env: 0.35, sun: 0, sunCol: 0xfff0dc, hemi: 0.42, sky: 0xe6eee8, gnd: 0x2a2010, shadow: false, bloom: 0.36 },
   trading: { tone: THREE.ACESFilmicToneMapping, exp: 0.92, env: 0.55, sun: 0, sunCol: 0xfff0dc, hemi: 0.85, sky: 0xfff0d8, gnd: 0xc08850, shadow: false },
 };
 let luxOn = null, lookName = null;
@@ -115,7 +133,10 @@ const floors = new FloorManager(scene);
 const player = new Player(camera, canvas);
 const elev = new ElevatorSystem(scene);
 const life = new Life(scene, elev);
+const aiTraders = new AiTraders(scene); // the four live trading agents at their PCs by the OT-01 entrance
 floors.agents = () => life.robots.map((rb) => rb.pos); // security doors also cycle for the cash convoys
+player.blockInput = () => appOpen();
+const ceoPresence = new CeoPresence(scene, camera); // the one CEO + the green through-walls marker
 const perf = new PerfSampler(renderer);
 let assigned = null; // car assigned to the player by the last call
 
@@ -128,16 +149,29 @@ const allColliders = () => floors.colliders.concat(elev.colliders(player.pos.y))
 function tick(dt, movePlayer = true) {
   if (appOpen()) player.keys.clear(); // an open application owns the keyboard
   if (movePlayer) player.update(dt, allColliders(), floors.shapes);
+  Crowd.viewer.copy(camera.position); globalThis.__crowdViewer = Crowd.viewer; // crowd animation level of detail
   if (player.floor && player.floor.id !== floors.current) floors.ensureAround(player.floor.id);
   floors.update(dt, performance.now() / 1000, player.pos);
   elev.update(dt, floors.landingSets());
   life.update(dt, floors.visibleIds());
+  aiTraders.update(dt, floors.visibleIds());
+  // the stand-in CEO paces OT-05 only while no real CEO is online (and hides, like every CEO highlight, during a bout)
+  ceoPresence.self = player.role === 'ceo' || remotes.ceoCount() > 0 || arena.boxingLive;
+  ceoPresence.update(dt, player, floors.visibleIds());
 }
 
 // ---------------------------------------------------------------- actions
+let ownName = null; // your account (or guest) name, on the name plate above your own avatar
+onMe((m) => {
+  if (!m?.name || m.name === ownName) return;
+  ownName = m.name;
+  player.setAvatar(scene, avatarFor(player.role, ownName));
+});
 function setRole(role) {
   if (!ROLES.includes(role)) return false;
   player.role = role;
+  player.setAvatar(scene, avatarFor(role, ownName));
+  ceoPresence.setPlayerRole(role);
   floors.applyRole(role);
   hud.setRole(role);
   hud.toast(`Role: ${role.toUpperCase()}`, 1.5);
@@ -190,14 +224,105 @@ function requestLift(bank, stop, car = null) {
 }
 
 const hud = new HUD({
-  onTeleportFloor: (id) => teleport(id),
+  onTeleportFloor: (id) => withVeil(id, () => teleport(id)),
   onRole: setRole,
   onRide: (bank, stop, car) => requestLift(bank, stop, car),
 });
 
+// ---------------------------------------------------------------- multiplayer presence (server/realtime/hub.js)
+const rt = new Realtime();
+bindArenaMedia(rt); // VT-02 Arena Media: head-to-head + highlights on the side screens, live from the hub
+const remotes = new RemotePlayers(scene, camera);
+const isMobile = () => rt.device === 'mobile';
+let reviewTools = new URLSearchParams(location.search).has('review');
+const paintStaffTools = () => document.body.classList.toggle('staff-tools', reviewTools || rt.isStaff);
+paintStaffTools();
+/** server role -> access role: guests are visitors (on tour while Tour Mode is on); admin/ceo keep their powers */
+function applyServerRole() {
+  const access = rt.role === 'player' ? (rt.meta?.tour?.on ? 'tour' : 'visitor') : rt.role;
+  if (access !== player.role) setRole(access);
+  paintStaffTools();
+}
+rt.on('role', applyServerRole);
+rt.on('meta', applyServerRole);
+rt.on('welcome', () => { remotes.selfId = rt.id; });
+rt.on('status', (s) => { remotes.selfId = rt.id; if (!s.connected) for (const r of remotes.list()) remotes.drop(r.id); });
+rt.on('snap', (s) => { remotes.selfId = rt.id; remotes.ingest(s.at, s.players); });
+rt.on('left', (m) => remotes.drop(m.id));
+rt.on('toast', (m) => hud.toast(m.text, 3));
+rt.on('announce', (m) => hud.toast(m.text, 3.5));
+rt.on('balance', (m) => setBalance(m.balance));
+rt.on('error', (m) => hud.toast(m.text, 5));
+rt.on('kicked', (m) => {
+  for (const r of remotes.list()) remotes.drop(r.id);
+  const o = document.createElement('div'); o.className = 'mp-modal'; o.dataset.keep = '1';
+  o.innerHTML = `<div class="card"><h2>Session ended</h2><div class="sub" style="font-size:15px;color:#fff">${m.text || 'You have been kicked by an admin'}</div><div class="row"><button class="mp-btn primary">Reload</button></div></div>`;
+  o.querySelector('button').onclick = () => location.reload();
+  document.body.append(o);
+});
+// carried in a CEO's basket: ride at our slot above the host's head (the host's interpolated pose)
+let basket = null;
+rt.on('basket', (m) => {
+  const joined = Boolean(m.host && (!basket || basket.host !== m.host)); // only when you are picked up, not on every roster change
+  basket = m.host ? m : null;
+  if (joined) closeOpenThings();
+  if (basket) { player.ride = () => { const hp = remotes.hostPose(basket.host); return hp ? new THREE.Vector3().copy(memberPose(hp, basket.slot, basket.n)) : null; }; player.rideYaw = null; hud.toast('You are in the Executive Basket. Enjoy the view.', 3); }
+  else if (!arena.amRacer()) { player.ride = null; }
+});
+/** place on a floor at a world point, stepping aside if something solid is there */
+function placeAt(floorId, x, y, z, yaw = player.yaw) {
+  const f = FLOOR_BY_ID[floorId];
+  if (!f) return;
+  floors.ensureAround(floorId);
+  const blocked = (px, pz) => floors.colliders.some((c) => c.y1 > y + 0.45 && c.y0 < y + 1.8 &&
+    !(c.lock && canAccess(player.role, c.lock)) && px > c.x0 - 0.5 && px < c.x1 + 0.5 && pz > c.z0 - 0.5 && pz < c.z1 + 0.5);
+  if (blocked(x, z)) {
+    search: for (let rr = 1; rr < 40; rr += 0.5) for (let a = 0; a < 16; a++) {
+      const px = x + Math.cos((a / 16) * Math.PI * 2) * rr, pz = z + Math.sin((a / 16) * Math.PI * 2) * rr;
+      if (!blocked(px, pz)) { x = px; z = pz; break search; }
+    }
+  }
+  player.place(x, y, z, yaw);
+  player.update(0, allColliders(), floors.shapes);
+}
+/** being moved by someone else (teleport, basket) ends whatever you had open: the roulette seat, any
+ * application, the lift panel, the console, any dialog (user, 2026-11-18) */
+function closeOpenThings() {
+  if (rouletteSeat.active()) rouletteSeat.stand();
+  closeApp();
+  if (hud.elevatorOpen) hud.closeElevator();
+  if (execConsole.open) execConsole.toggle(false);
+  execConsole.closeUnlock?.();
+  for (const m of document.querySelectorAll('.mp-modal:not([data-keep])')) m.remove();
+  document.getElementById('help')?.classList.add('hidden');
+  document.exitPointerLock?.();
+}
+rt.on('teleport', (m) => {
+  closeOpenThings();
+  const sub = m.objective === 'boxing' ? 'You are a competitor in the Combat Sports session' : m.by ? `Convened by ${m.by}` : '';
+  withVeil(m.floor, () => {
+    if (!arena.amRacer()) player.ride = null;
+    placeAt(m.floor, m.x, m.y, m.z, m.yaw ?? player.yaw);
+  }, { sub }).then(() => {
+    if (m.objective === 'boxing') hud.toast('You are a competitor: walk down the walkout into the ring!', 5);
+    else if (m.by) hud.toast(`${m.by} has convened everyone here.`, 3);
+  });
+});
+// 10 Hz on a timer (not the render loop), so a background tab still reports where it stands
+let poseT = performance.now();
+function sendPose() {
+  if (!rt.connected || !player.floor) return;
+  const now = performance.now(), dt = Math.max(0.05, (now - poseT) / 1000); poseT = now;
+  const p = player.pos, sp = player.lastPos ? Math.hypot(p.x - player.lastPos.x, p.z - player.lastPos.z) / dt : 0;
+  player.lastPos = (player.lastPos || new THREE.Vector3()).copy(p);
+  rt.send('pose', { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), yaw: +player.yaw.toFixed(3), f: player.floor.id, r: player.room?.id || null, s: +sp.toFixed(1) });
+}
+setInterval(sendPose, 100);
+
 // ---------------------------------------------------------------- roulette: sit at a real 3D table
 const leisureCtx = () => floors.loaded.get('VT-01');
 const rouletteSeat = createRouletteSeat({ camera, canvas, player, getLeisureCtx: leisureCtx, hud });
+const tourGuides = new TourGuides({ scene, camera, rt, remotes, player, leisureCtx, seated: () => rouletteSeat.active() }); // Tour Mode: CEO trackers + Leisure Suite arrows
 function sitAtTable(table) {
   if (rouletteSeat.active()) return true;
   if (!table) {
@@ -206,7 +331,10 @@ function sitAtTable(table) {
   }
   return table ? rouletteSeat.sit(table) : false;
 }
+const arena = new ArenaHud({ rt, scene, camera, canvas, player, remotes, hud, isMobile, placeAt, restoreAvatar: () => player.setAvatar(scene, avatarFor(player.role, ownName)) });
+const execConsole = new ExecConsole({ rt, toast: (t, s = 2.5) => hud.toast(t, s) });
 function openFromHud(id) {
+  if (id === 'signin') { document.exitPointerLock?.(); showSignIn(); return; }
   if (id === 'roulette') return sitAtTable(null);
   if (rouletteSeat.active()) rouletteSeat.stand();
   openApp(id);
@@ -349,13 +477,16 @@ window.__debug = {
   look: (yaw, pitch = 0) => { player.yaw = yaw; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   place: (x, z, yaw, pitch = 0, y = 0) => { placeOn(player.floor.id, x, z, yaw); player.pos.y += y; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   robots: () => life.status(),
+  aiTraders: () => aiTraders.status(),
   floors: () => ALL_FLOOR_IDS,
   buildTimes: () => Object.fromEntries([...floors.loaded].map(([id, c]) => [id, Math.round(c.buildMs)])),
   seatCounts: () => Object.fromEntries([...floors.loaded].filter(([, c]) => c.seatCount).map(([id, c]) => [id, c.seatCount])),
   setHud: (v) => document.body.classList.toggle('nohud', !v),
   // advance the world N steps of 1/60 s without rendering (player stays put), then render one frame
   _three: { scene, renderer, floors, elev, composer }, // dev-only profiling access
-  bigScreenVideo: (url) => playBigScreenVideo(url), // dev: play a video on the lobby's big screen (null = dashboard)
+  bigScreenVideo: (url) => playBigScreenVideo(url),
+  arenaMedia: () => arenaMediaDebug(),
+  arenaVideo: (url) => playArenaVideo(url), // dev: play a preview clip/stream on every VT-02 big screen (null = preview card) // dev: play a video on the lobby's big screen (null = dashboard)
   // dev: render one frame from an arbitrary camera and hold it on screen (for screenshots)
   shot: (pos, look, fov = 70, holdMs = 4000) => {
     const cam = new THREE.PerspectiveCamera(fov, innerWidth / innerHeight, 0.1, 1500);
@@ -376,7 +507,7 @@ async function bench(secs) {
   const out = [];
   const views = {
     B1: ['vault', Math.PI / 2], L0: ['grand_lobby', 0], 'OT-01': ['trading_floor', Math.PI / 2], 'OT-02': ['lottery_institute', Math.PI / 2],
-    'OT-03': ['outreach_centre', Math.PI / 2], 'OT-04': ['security_hq', Math.PI / 2], 'OT-05': ['master_dashboards', Math.PI],
+    'OT-03': ['outreach_centre', Math.PI / 2], 'OT-04': ['security_hq', Math.PI / 2], 'OT-05': ['command_deck', Math.PI / 2],
     BRIDGE: ['glass_bridge', -Math.PI / 2], 'VT-01': ['leisure_suite', -Math.PI / 2],
     'VT-02': ['football_arena', -Math.PI / 2], 'VT-03': ['muay_thai_arena', -Math.PI / 2], 'VT-04': ['racing_hall', -Math.PI / 2],
   };
@@ -453,11 +584,13 @@ addEventListener('keydown', (e) => {
   if (appOpen() || e.target.closest?.('input, textarea, select')) return; // applications own the keyboard
   if (e.code === 'KeyM' && !hud.elevatorOpen) { openApp('markets'); return; }
   if (e.code === 'KeyL' && !hud.elevatorOpen) { openApp('research'); return; }
+  if (e.code === 'KeyC' && !hud.elevatorOpen && player.floor?.id === 'OT-01') { openApp('chartdesk'); return; } // OT-01 Chart Desk
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
+    if ((car || zone) && !canUseLifts(player.role)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel
     if (car) { document.exitPointerLock?.(); hud.openElevator(car.bank, car.at || player.floor.id, player.role, { car }); }
     else if (zone) { document.exitPointerLock?.(); hud.openElevator(zone.bank, player.floor.id, player.role); }
     else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : openApp(h.app); }
@@ -465,7 +598,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'F3') { e.preventDefault(); document.getElementById('perf').classList.toggle('hidden'); }
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
   const n = Number(e.key);
-  if (n >= 1 && n <= ROLES.length && !hud.elevatorOpen) setRole(ROLES[n - 1]);
+  // review shortcut: local access-role switch, only for staff (or ?review=1); real roles come from the server
+  if (n >= 1 && n <= ROLES.length && !hud.elevatorOpen && !e.altKey && document.body.classList.contains('staff-tools')) setRole(ROLES[n - 1]);
 });
 
 // ---------------------------------------------------------------- start
@@ -476,6 +610,16 @@ startLiveData();
 window.__debug.openApp = (id, opts) => openFromHud(id, opts);
 window.__debug.roulette = { sit: () => sitAtTable(null), stand: () => rouletteSeat.stand(), spin: () => rouletteSeat.spin(), view: (v) => rouletteSeat.setView(v), state: () => rouletteSeat.state() };
 setRole(params.get('role') || 'visitor');
+if (params.get('role')) reviewTools = true; // scripted review runs keep the local role tools
+paintStaffTools();
+// sign in (Name + Password) unless this browser already holds an account, or a review/automation run
+const AUTOMATION = ['shots', 'bench', 'guest', 'role', 'review'].some((k) => params.has(k));
+if (!savedAccount() && !AUTOMATION) showSignIn();
+rt.start();
+window.__debug.mp = {
+  rt, remotes, arena, console: execConsole, tourGuides: () => tourGuides.state, signIn: (n, p) => signIn(n, p),
+  ask: (t, d) => rt.ask(t, d), players: () => rt.players, meta: () => rt.meta, basket: () => basket,
+};
 if (params.get('floor')) teleport(params.get('floor'), params.get('room'), params.has('yaw') ? Number(params.get('yaw')) : null);
 else teleport('PLAZA'); // the journey starts outside
 if (params.get('hud') === '0') document.body.classList.add('nohud');
@@ -490,12 +634,19 @@ function frame(now) {
   last = now;
   const t0 = performance.now();
   if (!simWalking) tick(dt);
+  const overrides = arena.update(dt);
+  remotes.update(dt, { visibleIds: floors.visibleIds(), viewer: player.pos, selfPose: { pos: player.pos, floor: player.floor?.id }, overrides });
   rouletteSeat.update(dt);
+  tourGuides.update(dt);
+  updateArenaFeed(dt, floors.visibleIds().includes('VT-02'));
+  updateArenaMedia(dt, floors.visibleIds().includes('VT-02'), camera, scene);
   updateScreens(dt);
   updateTicker(dt);
   renderFrame(shotHold && performance.now() < shotHold ? shotCam : camera);
   const ui = uiState();
-  if (ui.car) {
+  if ((ui.car || ui.zone) && !canUseLifts(player.role)) {
+    hud.prompt(`Staff lift · ${LIFT_REFUSAL}`);
+  } else if (ui.car) {
     const c = ui.car;
     const dir = c.state === 'closed' && c.queue.length ? (FLOOR_BY_ID[c.queue[0]].elevation > c.y ? '▲' : '▼') : '';
     hud.prompt(`Car ${c.label} · ${c.at || `${c.y.toFixed(0)} m`} ${dir} ${c.queue.length ? `→ ${c.queue.join(' → ')}` : ''} · E: choose floor`);

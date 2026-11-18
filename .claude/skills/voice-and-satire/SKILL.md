@@ -9,8 +9,7 @@ description: The firm's voice — euphemism glossary, banned words for all UI an
 straight corporate face. The firm never admits what anything is. Signage is serene, expensive and
 euphemistic; the staff are chaotic Gen-Z; the contrast is the joke.
 
-The firm's name is still `[FIRM NAME]` — use the `{FIRM_NAME}` placeholder in copy until the user
-picks one.
+The firm's name is `FINANCIAL FIRM` (decided by the user, 2026-11-18) — use it verbatim in all copy.
 
 ## 1. Banned words (all UI, signage, chat system messages, NPC lines, generated text)
 

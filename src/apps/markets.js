@@ -3,8 +3,10 @@
 import { registerApp } from './shell.js';
 import { api, on, fmt, pct, px, ago, esc, setBalance, getMe } from '../net/api.js';
 import { lineChart } from './charts.js';
+import { leagueCard, writtenBy } from './league.js';
 
-const AGENT_INITIALS = { head_trader: 'HT', quant: 'Q', risk_officer: 'RO' };
+const AGENT_INITIALS = { head_trader: 'A', co_head_trader: 'B', quant: 'Q', risk_officer: 'RO' };
+const AGENT_SHORT = { head_trader: 'Desk A', co_head_trader: 'Desk B' };
 const cls = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : '');
 const until = (ms) => { const s = Math.max(0, (ms - Date.now()) / 1000); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h} h ${m} min` : `${m} min`; };
 const tfmt = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -30,7 +32,9 @@ registerApp('markets', {
       if (!firm) { body.innerHTML = '<div class="empty">Loading the firm book…</div>'; return; }
       const b = firm.book, start = 100_000_000, pnl = b.nav - start;
       const agents = Object.fromEntries(firm.agents.map((a) => [a.agent, a]));
-      const ht = agents.head_trader, q = agents.quant, ro = agents.risk_officer;
+      const ht = agents.head_trader, ch = agents.co_head_trader, q = agents.quant, ro = agents.risk_officer;
+      const routes = firm.llm.routes || {};
+      const modelPill = (id) => { const r = routes[id]; return r ? `<span class="pill ${r.provider === 'claude' ? 'claude' : 'gemini'}">${esc(r.model)}</span>` : '<span class="pill">rule book</span>'; };
       const sig = q?.reports[0]?.data?.signals || [];
       body.innerHTML = `
         <div class="grid g4">
@@ -41,24 +45,25 @@ registerApp('markets', {
         </div>
         <div class="grid g2" style="margin-top:14px">
           <div class="card"><h3>NAV history <span class="pill">5-min marks</span></h3><canvas class="chart" id="navc"></canvas></div>
-          <div class="card"><h3>AI desk status <span class="pill ${firm.llm.enabled ? 'ok' : 'warn'}">${firm.llm.enabled ? `LLM · ${esc(firm.llm.model)}` : 'Rule book (no API key)'}</span></h3>
+          <div class="card"><h3>AI desk status <span class="pill ${firm.llm.enabled ? 'ok' : 'warn'}">${firm.llm.enabled ? `LLM · ${(firm.llm.providers || []).map((p) => esc(p.model)).join(' + ')}` : 'Rule book (no API key)'}</span></h3>
             <div class="muted" style="font-size:12px;margin-bottom:6px">Last decision ${firm.lastTick ? ago(firm.lastTick) : '—'} · next in ${firm.nextTickInMs != null ? until(Date.now() + firm.nextTickInMs) : '—'} · LLM spend this month $${firm.llm.monthToDateUsd.toFixed(3)} of $${firm.llm.capUsd} cap</div>
-            ${[ht, ro].filter(Boolean).map((a) => `<div class="agent" style="margin-top:8px"><div class="avatar">${AGENT_INITIALS[a.agent]}</div><div><b>${esc(a.name)}</b> <span class="muted">· ${esc(a.title)}</span>
-              ${a.reports[0] ? `<div class="memo">${esc(a.reports[0].report)}</div><div class="muted" style="font-size:11px">${ago(a.reports[0].created_at)}${a.reports[0].llm ? ' · written by the LLM' : ''}</div>` : '<div class="empty">No report yet.</div>'}</div></div>`).join('')}
+            ${[ht, ch, q, ro].filter(Boolean).map((a) => `<div class="agent" style="margin-top:8px"><div class="avatar">${AGENT_INITIALS[a.agent]}</div><div><b>${esc(a.name)}</b> ${modelPill(a.agent)} <span class="muted">· ${esc(a.title)}</span>
+              ${a.reports[0] ? `<div class="memo">${esc(a.reports[0].report)}</div><div class="muted" style="font-size:11px">${ago(a.reports[0].created_at)}${writtenBy(a.reports[0])}</div>` : '<div class="empty">No report yet.</div>'}</div></div>`).join('')}
           </div>
         </div>
+        <div style="margin-top:14px">${leagueCard(firm.league, firm.llm, 'trading')}</div>
         <div class="grid g2" style="margin-top:14px">
           <div class="card"><h3>Positions</h3><div class="scroll"><table class="t"><tr><th>Symbol</th><th class="r">Qty</th><th class="r">Avg</th><th class="r">Last</th><th class="r">Value</th><th class="r">Unrealised</th><th class="r">Weight</th></tr>
             ${b.positions.map((p) => `<tr class="click" data-sym="${p.symbol}"><td><b>${p.symbol}</b> <span class="muted">${esc(p.name || '')}</span></td><td class="r">${p.qty}</td><td class="r">${px(p.avg / 100)}</td><td class="r">${px(p.price / 100)}</td><td class="r">${fmt(p.value, { dp: 0 })}</td><td class="r ${cls(p.unrealized)}">${fmt(p.unrealized, { sign: true, dp: 0 })}</td><td class="r">${((p.value / b.nav) * 100).toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="7" class="empty">No positions yet — orders queue while the market is closed.</td></tr>'}
             </table></div>
-            ${b.pending.length ? `<h3 style="margin-top:12px">Working orders</h3><table class="t">${b.pending.map((o) => `<tr><td><span class="pill ${o.side === 'buy' ? 'ok' : 'bad'}">${o.side.toUpperCase()}</span> ${o.qty} <b>${o.symbol}</b></td><td class="muted">${esc(o.rationale || '')}</td><td class="r muted">${ago(o.created_at)}</td></tr>`).join('')}</table>` : ''}
+            ${b.pending.length ? `<h3 style="margin-top:12px">Working orders</h3><table class="t">${b.pending.map((o) => `<tr><td><span class="pill ${o.side === 'buy' ? 'ok' : 'bad'}">${o.side.toUpperCase()}</span> ${o.qty} <b>${o.symbol}</b> <span class="muted">${esc(AGENT_SHORT[o.agent] || '')}</span></td><td class="muted">${esc(o.rationale || '')}</td><td class="r muted">${ago(o.created_at)}</td></tr>`).join('')}</table>` : ''}
           </div>
           <div class="card"><h3>Quant signal table <span class="pill">${esc(q?.reports[0]?.data?.regime || '—')}</span></h3><div class="scroll"><table class="t"><tr><th>#</th><th>Symbol</th><th class="r">Score</th><th class="r">6m</th><th class="r">Trend</th><th class="r">RSI</th><th class="r">Vol</th></tr>
             ${sig.slice(0, 16).map((s, i) => `<tr class="click" data-sym="${s.symbol}"><td class="muted">${i + 1}</td><td><b>${s.symbol}</b></td><td class="r ${cls(s.score)}">${s.score.toFixed(2)}</td><td class="r ${cls(s.ret6m)}">${pct(s.ret6m, 1)}</td><td class="r ${cls(s.trend50)}">${pct(s.trend50, 1)}</td><td class="r">${(s.rsi14 || 0).toFixed(0)}</td><td class="r">${(s.vol20 * 100).toFixed(0)}%</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Awaiting daily bars…</td></tr>'}
             </table></div><div class="muted" style="font-size:11px;margin-top:6px">Score = 0.45·z(6-month return) + 0.3·z(3-month) + 0.25·z(price vs 50-day average) − 0.15·z(volatility), RSI overbought penalty. Built from one year of real daily bars.</div></div>
         </div>
         <div class="card" style="margin-top:14px"><h3>Fill log — every trade the desk made, with its reasoning</h3><div class="scroll"><table class="t"><tr><th>Time</th><th>Agent</th><th>Side</th><th>Symbol</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Amount</th><th class="r">Realised</th><th>Rationale</th></tr>
-          ${firm.trades.map((t) => `<tr><td class="muted">${tfmt(t.created_at)}</td><td>${esc(t.agent ? 'Head Trader' : '—')}</td><td><span class="pill ${t.side === 'buy' ? 'ok' : 'bad'}">${t.side.toUpperCase()}</span></td><td><b>${t.symbol}</b></td><td class="r">${t.qty}</td><td class="r">${px(t.price / 100)}</td><td class="r">${fmt(t.amount, { dp: 0 })}</td><td class="r ${cls(t.realized)}">${t.realized == null ? '—' : fmt(t.realized, { sign: true, dp: 0 })}</td><td class="muted" style="max-width:380px">${esc(t.rationale || '')}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No fills yet. Orders sent while the market is closed fill at the next open.</td></tr>'}
+          ${firm.trades.map((t) => `<tr><td class="muted">${tfmt(t.created_at)}</td><td>${esc(AGENT_SHORT[t.agent] || (t.agent ? 'Desk A' : '—'))}<div class="muted" style="font-size:11px">${esc(t.model && t.model !== 'rules' ? t.model : 'rule book')}</div></td><td><span class="pill ${t.side === 'buy' ? 'ok' : 'bad'}">${t.side.toUpperCase()}</span></td><td><b>${t.symbol}</b></td><td class="r">${t.qty}</td><td class="r">${px(t.price / 100)}</td><td class="r">${fmt(t.amount, { dp: 0 })}</td><td class="r ${cls(t.realized)}">${t.realized == null ? '—' : fmt(t.realized, { sign: true, dp: 0 })}</td><td class="muted" style="max-width:380px">${esc(t.rationale || '')}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No fills yet. Orders sent while the market is closed fill at the next open.</td></tr>'}
           </table></div></div>`;
       const nav = firm.navHistory.map((p) => [p.t, p.nav / 100]);
       lineChart(body.querySelector('#navc'), [{ pts: nav, color: '#f0d18a', fill: 'rgba(240,209,138,0.25)' }], { height: 170, refY: start / 100, refLabel: 'initial budget', xFmt: (t) => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' }) });

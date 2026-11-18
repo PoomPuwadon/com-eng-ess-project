@@ -22,24 +22,54 @@ export class Player {
     this.enabled = true;
     this.lastMoveBlocked = false;
 
-    addEventListener('keydown', (e) => { this.keys.add(e.code); });
+    // third person (user decision 2026-11-18): the camera orbits the avatar while the right mouse
+    // button is held; the wheel zooms; Space jumps.
+    this.camDist = 4.2;
+    this.bodyYaw = this.yaw + Math.PI; // the avatar's facing (kit characters face +z)
+    this.avatar = null;
+    this.grounded = true;
+    this.groundY = this.pos.y;
+    this.blockInput = () => false; // set by main: true while an application owns the keyboard
+    this.t = 0;
+    const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable;
+    addEventListener('keydown', (e) => {
+      if (typing(e)) return;
+      this.keys.add(e.code);
+    });
     addEventListener('keyup', (e) => { this.keys.delete(e.code); });
-    addEventListener('blur', () => this.keys.clear());
-    dom.addEventListener('click', () => {
-      if (!this.enabled || document.pointerLockElement === dom) return;
-      try { const p = dom.requestPointerLock?.(); if (p && p.catch) p.catch(() => {}); } catch { /* embedded views may refuse pointer lock */ }
+    addEventListener('blur', () => { this.keys.clear(); this.drag = false; });
+    dom.addEventListener('contextmenu', (e) => e.preventDefault());
+    dom.addEventListener('pointerdown', (e) => {
+      if (e.button !== 2 || !this.enabled) return;
+      this.drag = true;
+      try { dom.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     });
-    addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== dom) return;
-      this.yaw -= e.movementX * 0.0022;
-      this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch - e.movementY * 0.0022));
+    const end = (e) => { if (e.button === 2 || e.type === 'pointercancel') this.drag = false; };
+    dom.addEventListener('pointerup', end);
+    dom.addEventListener('pointercancel', end);
+    dom.addEventListener('pointermove', (e) => {
+      if (!this.drag) return;
+      this.yaw -= e.movementX * 0.005;
+      this.pitch = Math.max(-1.05, Math.min(0.55, this.pitch - e.movementY * 0.004));
     });
+    dom.addEventListener('wheel', (e) => { if (this.enabled) this.camDist = Math.max(1.6, Math.min(12, this.camDist * (e.deltaY > 0 ? 1.1 : 0.9))); }, { passive: true });
+  }
+
+  /** Swap the avatar (kit Character) — the look follows the role. */
+  setAvatar(scene, char) {
+    if (this.avatar) scene.remove(this.avatar.root);
+    this.avatar = char;
+    if (!char) return;
+    char.root.traverse((o) => { o.castShadow = false; }); // the shadow map is static: no ghost shadows
+    char.root.userData.selfAvatar = true; // e.g. the Arena's on-screen YouTube layer ignores your own body
+    scene.add(char.root); // the name plate stays on, above your own head too
   }
 
   place(x, y, z, yaw = this.yaw) {
     this.pos.set(x, y, z);
     this.yaw = yaw;
-    this.vy = 0;
+    this.bodyYaw = yaw + Math.PI;
+    this.vy = 0; this.grounded = true; this.groundY = y;
     this.locate();
   }
 
@@ -51,10 +81,26 @@ export class Player {
   blocks(c) {
     if (c.lock && canAccess(this.role, c.lock)) return false;
     if (c.openFn && c.openFn()) return false; // open landing door
-    return c.y1 > this.pos.y + STEP && c.y0 < this.pos.y + HEIGHT;
+    if (c.lock) return c.y0 < this.pos.y + HEIGHT && c.y1 + 2.5 > this.pos.y; // closed gates: no jumping over them
+    // step height is measured from the ground you jumped from, so a jump never clears a rail or barrier
+    return c.y1 > Math.min(this.pos.y, this.groundY) + STEP && c.y0 < this.pos.y + HEIGHT;
   }
 
   update(dt, colliders, shapes = []) {
+    // carried (the CEO's basket, a race horse): the server/host decides where we are; no input, no gravity
+    if (this.ride) {
+      const before = this.pos.clone(), p = this.ride();
+      if (p) {
+        this.pos.copy(p); this.vy = 0; this.grounded = true; this.groundY = p.y;
+        if (this.rideYaw != null) this.bodyYaw = this.rideYaw;
+        this.locate();
+        this.t += dt;
+        const a = this.avatar;
+        if (a) { a.root.position.copy(this.pos); a.root.rotation.y = this.bodyYaw; a.airborne = false; a.update(dt, this.t, 0); a.root.visible = true; void before; }
+        this.placeCamera(colliders);
+        return;
+      }
+    }
     const live = shapes.filter((sh) => sh.active(this.pos.y));
     // ---- input direction (camera-relative)
     let fx = 0, fz = 0, speed = WALK;
@@ -87,16 +133,70 @@ export class Player {
     const carY = this.carrier ? this.carrier(this.pos) : null;
     const ground = carY != null ? carY : this.groundHeight(colliders, live);
     if (carY != null) { this.pos.y = carY; this.vy = 0; }
-    else if (this.pos.y > ground + 0.01) {
+    else if (this.vy > 0 || this.pos.y > ground + 0.01) {
       this.vy -= GRAVITY * dt;
       this.pos.y = Math.max(ground, this.pos.y + this.vy * dt);
-      if (this.pos.y === ground) this.vy = 0;
+      if (this.pos.y === ground && this.vy < 0) this.vy = 0;
     } else { this.pos.y = ground; this.vy = 0; }
-    this.lastMoveBlocked = len > 0 && before.distanceTo(this.pos) < speed * dt * 0.2;
+    this.grounded = carY != null || (this.pos.y <= ground + 0.01 && this.vy <= 0);
+    if (this.grounded) this.groundY = this.pos.y;
+    this.lastMoveBlocked = len > 0 && Math.hypot(this.pos.x - before.x, this.pos.z - before.z) < speed * dt * 0.2;
     this.locate();
 
-    this.camera.position.set(this.pos.x, this.pos.y + EYE, this.pos.z);
-    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+    // ---- the avatar: faces where it walks, walk cycle from the real ground speed, legs tucked in the air
+    this.t += dt;
+    const a = this.avatar;
+    if (a) {
+      const v = dt > 0 ? Math.hypot(this.pos.x - before.x, this.pos.z - before.z) / dt : 0;
+      if (v > 0.2) {
+        let d = Math.atan2(this.pos.x - before.x, this.pos.z - before.z) - this.bodyYaw;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        this.bodyYaw += d * Math.min(1, dt * 12);
+      }
+      a.root.position.copy(this.pos); a.root.rotation.y = this.bodyYaw;
+      a.airborne = !this.grounded;
+      a.update(dt, this.t, v);
+      a.root.visible = this.enabled; // seated at a table: the seat view takes over
+    }
+    this.placeCamera(colliders);
+  }
+
+  // ---- third-person camera: orbit behind the avatar, pulled in when something is in the way
+  placeCamera(colliders) {
+    const a = this.avatar;
+    const s = a ? a.root.scale.x : 1;
+    const tx = this.pos.x, ty = this.pos.y + 1.55 * s, tz = this.pos.z;
+    const el = 0.3 - this.pitch; // camera elevation above the look target
+    const dx = Math.sin(this.yaw) * Math.cos(el), dy = Math.sin(el), dz = Math.cos(this.yaw) * Math.cos(el);
+    let dist = this.camClear(colliders, tx, ty, tz, dx, dy, dz, this.camDist * s);
+    if (dy < 0) dist = Math.min(dist, (ty - this.pos.y - 0.25) / -dy); // not under the floor
+    const top = this.floor ? this.floor.elevation + (this.floor.height || 6) - 0.35 : Infinity;
+    if (dy > 0 && ty < top) dist = Math.min(dist, (top - ty) / dy); // not through the ceiling
+    this.camera.position.set(tx + dx * dist, ty + dy * dist, tz + dz * dist);
+    this.camera.rotation.set(-el, this.yaw, 0, 'YXZ');
+  }
+
+  /** distance along the camera ray before it would enter a solid collider (slab test) */
+  camClear(colliders, ox, oy, oz, dx, dy, dz, maxD) {
+    let best = maxD;
+    for (const c of colliders) {
+      if (c.y1 - c.y0 < 0.6) continue; // low furniture: look over it
+      if (c.lock && canAccess(this.role, c.lock)) continue;
+      if (c.openFn && c.openFn()) continue;
+      let t0 = 0, t1 = best, ok = true;
+      for (let k = 0; k < 3 && ok; k++) {
+        const o = k === 0 ? ox : k === 1 ? oy : oz, d = k === 0 ? dx : k === 1 ? dy : dz;
+        const lo = k === 0 ? c.x0 : k === 1 ? c.y0 : c.z0, hi = k === 0 ? c.x1 : k === 1 ? c.y1 : c.z1;
+        if (Math.abs(d) < 1e-6) { if (o < lo || o > hi) ok = false; continue; }
+        let a = (lo - o) / d, b = (hi - o) / d;
+        if (a > b) [a, b] = [b, a];
+        if (a > t0) t0 = a;
+        if (b < t1) t1 = b;
+        if (t0 > t1) ok = false;
+      }
+      if (ok && t0 > 0.05 && t0 < best) best = t0;
+    }
+    return Math.max(0.6, best - 0.25);
   }
 
   groundHeight(colliders, shapes = []) {

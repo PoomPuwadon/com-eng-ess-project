@@ -64,7 +64,7 @@ made the Trading Floor hall read as "plaza"; the plaza volume is now 6 m.
 
 ### Trading floor v3 (user's photo — supersedes v2 below)
 
-Each post is now a hollow ring, as in the photo: plain dark base wall lettered "{FIRM NAME} MEMBERS
+Each post is now a hollow ring, as in the photo: plain dark base wall lettered "FINANCIAL FIRM MEMBERS
 EXCHANGE" (no screens) → waist-high ring counter with a blue-lit edge, 14 monitors on arms and
 keyboards, stools outside, 8 monitors inside for the specialists → an **open gap** on thin supports →
 a raised **crown of 16 large data screens tilted down** at the floor → a sloped **member-logo band**

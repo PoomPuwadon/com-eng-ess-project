@@ -2,7 +2,8 @@ import { buildBase, finalize } from './base.js';
 import { buildScreens } from '../world/screens.js';
 import { shiftedCtx } from '../world/geom.js';
 import { lobby, plaza } from './lobby.js';
-import { department, control } from './officeTower.js';
+import { department } from './officeTower.js';
+import { commandCentre as command } from './commandCentre.js';
 import { outreach } from './outreach.js';
 import { drawTheatre as lottery } from './drawTheatre.js';
 import { securityHQ } from './securityHQ.js';
@@ -17,7 +18,7 @@ import { hall } from './halls.js';
 import { basement, bridge } from './basementBridge.js';
 
 const PROPS = {
-  lobby, plaza, trading, department, control, lottery, outreach, security: securityHQ,
+  lobby, plaza, trading, department, command, lottery, outreach, security: securityHQ,
   leisure, football: sportsArena, muaythai, racing, equine, treasury,
   basement, bridge,
 };
@@ -26,7 +27,7 @@ const PROPS = {
 // original tower coordinates; this offset moves them with their tower. Builders that read the
 // layout data or were rewritten in world coordinates (lobby, plaza, department, lottery,
 // trading, leisure, arena, pavilion, bridge, halls) need none.
-const PROP_DX = { control: 30, basement: 30, racing: -30 };
+const PROP_DX = { basement: 30, racing: -30 };
 
 // Build one floor: generic shell (incl. lift shafts + landing doors) + its props.
 export function buildFloor(floor) {

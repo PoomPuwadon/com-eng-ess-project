@@ -32,9 +32,10 @@
       "renderMs": 1.18
     },
     "OT-05": {
-      "drawCalls": 17,
-      "triangles": 14880,
-      "renderMs": 1.68
+      "drawCalls": 124,
+      "triangles": 55252,
+      "renderMs": 1.08,
+      "note": "Executive Command Centre redesign (2026-11-17), viewpoint = the CEO's chair looking west; 30 forced renders + gl.finish, RTX 3070 dev machine"
     },
     "OT-06": {
       "drawCalls": 15,

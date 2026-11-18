@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>1-Page Summary</title>
+<style>
+@page{size:A4;margin:12mm 14mm}
+*{box-sizing:border-box}
+body{font:9.4pt/1.32 "Segoe UI",Arial,sans-serif;color:#1b1b1f;margin:0}
+h1{font-size:17pt;margin:0;color:#14213d}
+.sub{color:#555;font-size:9pt;margin-bottom:5px}
+h2{font-size:10pt;margin:7px 0 2px;padding-bottom:1px;border-bottom:1.5px solid #c9a227;color:#14213d;text-transform:uppercase;letter-spacing:.04em}
+table{width:100%;border-collapse:collapse;font-size:9pt}
+td,th{border:1px solid #ccc;padding:2px 5px;vertical-align:top;text-align:left}
+th{background:#f1ece0;width:23%}
+ul{margin:2px 0 0 16px;padding:0}
+li{margin:0 0 1px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.note{font-size:8.3pt;color:#555;margin-top:5px}
+</style></head><body>
+
+<h1>FINANCIAL FIRM — A Walkable 3D Mock Financial Firm</h1>
+<div class="sub">Computer Engineering Essential · Final Project, Semester 1/2026 · 1-Page Summary</div>
+
+<table>
+<tr><th>Problem chosen</th><td>Free Track (own idea; same grading criteria as P1–P4)</td></tr>
+<tr><th>Optional tier claimed</th><td><b>Tier S — Computer Vision</b> (Chart Desk: AI reads an uploaded chart image). Extra: Tier B Dashboard &amp; Data Visualization (live market, league and ledger dashboards).</td></tr>
+<tr><th>Live URL</th><td>https://com-eng-ess-project.onrender.com</td></tr>
+<tr><th>GitHub URL</th><td>https://github.com/PoomPuwadon/com-eng-ess-project</td></tr>
+<tr><th>Team members</th><td>Buddharat Attipa (6830249921) · Puwadon Thammavimutti (6830275121) · Mathis Thayathorn Dubas (6830284821)</td></tr>
+</table>
+
+<h2>What it does</h2>
+<p style="margin:2px 0">A multiplayer 3D web world: an absurdly luxurious, satirical financial firm in two towers that you can walk through in the browser. It runs 24/7 on a server simulation where AI employees trade, research and bet using real-world free data with <b>fake money only</b>. Players sign up as visitors, explore the lobby, trading floor, leisure suites and arenas, chat, and play. Staff roles (CEO / admins) control budgets, balances and clearances.</p>
+
+<h2>Features built</h2>
+<div class="two">
+<ul>
+<li><b>Accounts:</b> sign-up, log-in, log-out; accounts stored in Supabase Postgres with scrypt-hashed passwords; roles (Visitor, CEO, Staff admin).</li>
+<li><b>3D building:</b> lobby, Office Tower, Visitors' Tower, glass bridge, vault, working elevators, minimap.</li>
+<li><b>Multiplayer:</b> WebSocket presence, text chat, per-visitor clearances.</li>
+<li><b>Fake-money ledger:</b> append-only double-entry ledger in Supabase Postgres; vault, budgets, cash-robot trips, audit log.</li>
+<li><b>Trading floor:</b> real delayed US stock data, rival AI desks, risk officer veto, live P&amp;L screens.</li>
+</ul>
+<ul>
+<li><b>Leisure suite &amp; arenas:</b> roulette and table games, football arena (real fixtures, odds, crests), Muay Thai ring, horse racing, Thai lottery room.</li>
+<li><b>AI agents:</b> Claude and Gemini side by side; agents propose, server code validates every money action.</li>
+<li><b>Model League:</b> dashboard ranking Claude vs Gemini vs rule book by P&amp;L, calls and cost.</li>
+<li><b>Chart Desk (Computer Vision):</b> upload a chart image, the AI returns an UP/DOWN verdict with reasoning.</li>
+<li><b>Cost control:</b> monthly LLM cap with circuit breaker; rule-book fallback with no API key.</li>
+</ul>
+</div>
+
+<h2>External APIs and how they are used</h2>
+<p style="margin:2px 0">Yahoo Finance / Finnhub (stock quotes and charts) · football-data.org (fixtures, results, crests) · Thai Government Lottery Office API (official draw results) · Anthropic Claude API and Google Gemini API (agent decisions, research notes, chart reading). All free tiers; keys stay on the server in <code>.env.local</code>, never in client code.</p>
+
+<h2>Tech stack</h2>
+<p style="margin:2px 0">Three.js + Vite (client, instanced low-poly rendering) · Node.js server with WebSockets (<code>ws</code>) · <b>Supabase Postgres</b> (database of record, write-through from an in-memory SQLite working set) · Render (free web service) · Claude SDK + Gemini REST · ~24,000 lines of JavaScript, 45+ commits, server tests via <code>node --test</code>.</p>
+
+<div class="note">Legal context: stock trading and the government lottery are legal in Thailand; this project uses fake money only, by design. Mock data only: all money is fake, all visitors and staff are invented. Fiction note: the firm's "wellness" tower and its euphemistic copy are satire.</div>
+</body></html>

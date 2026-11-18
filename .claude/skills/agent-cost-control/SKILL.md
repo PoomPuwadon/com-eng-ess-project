@@ -74,6 +74,12 @@ concurrency limit.
 | Summons + CFO speeches (Sonnet) | ~60 | 10k / 2k | ≈ $2 |
 | **Total** | | | **≈ $50 / month** |
 
+**As built (2026-11-18), multi-model:** the Trading Floor makes 4 calls per tick (Quant, Desk A, Desk B,
+Risk Officer) × ~44 ticks/day ≈ 5,300 calls/month, split half Claude Haiku (≈ $0.0011/call → ≈ $3/month)
+and half Gemini 2.5 Flash (free tier: $0 real; metered at list price ≈ $0.004/call → ≈ $11/month counted
+against the cap). The Thai desk adds 2 calls per draw, the Fixture Scout a few per day: negligible.
+Per-agent provider routing lives in `ROUTES` (`server/agents/llm.js`), see CLAUDE.md "AI workflow".
+
 **Default ceiling: $75 / month** (`LLM_MONTHLY_CAP_USD`), i.e. $2.50/day soft daily budget.
 Recompute this table whenever the agent count, tick intervals or models change, and tell the user
 the new estimate.

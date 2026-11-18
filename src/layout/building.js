@@ -252,22 +252,28 @@ export const FLOORS = [
     props: 'security',
   },
   {
-    id: 'OT-05', tower: 'OT', short: 'Executive', sign: 'Executive Floor', elevation: 94, // was 67, then 74 (OT-04 grew to 12 m), then 94 (OT-02 IMAX theatre, 2026-11-12)
-    height: 8,
-    bounds: OT_B, area: 'control',
+    // Executive Command Centre (redesign, user 2026-11-17; floors/commandCentre.js): a sealed,
+    // NORAD-style bunker in black, gold and money-green. No rooms: every executive function is an
+    // open station on tiers that step down by rank (CEO deck 0 -> CFO -1.25 -> Legal/HR -2.5 ->
+    // IT/Security -3.75 -> the pit -5, sunk into the gap above OT-04). From the CEO's chair the
+    // 10 m model of both towers, the money streams into the Treasury Column and the Big Board line
+    // up in one view. Entry: lift hall -> airlock -> blast door onto the CEO deck.
+    id: 'OT-05', tower: 'OT', short: 'Command', sign: 'Executive Command Centre', elevation: 99, // was 67, 74, 94; +5 for the pit (2026-11-17)
+    height: 15, below: 5, slabHoleRect: r(-109, -50.5, -39, 39),
+    bounds: OT_B, area: 'control', lux: true, customHall: true, slabColor: 0x0b0c0e, ceilColor: 0x07080a, wallColor: 0x101114,
     rooms: [
-      { id: 'ceo_office', sign: 'Office of the Chief Executive', short: 'CEO Office', ...r(-108, -83, 18, 38), h: 6, doors: ['n', 'e'], doorWidth: 4 },
-      { id: 'boardroom', sign: 'Boardroom', short: 'Boardroom', ...r(-79, -52, 23, 38), h: 6, doors: ['n'], doorWidth: 4 },
-      { id: 'cfo_office', sign: 'Office of the CFO', short: 'CFO Office', ...r(-62, -52, -38, -26), h: 5, doors: ['s', 'w'], doorWidth: 3 },
-      { id: 'legal', sign: 'Legal & Compliance', short: 'Legal', ...r(-108, -88, -38, -23), h: 5, doors: ['e'], doorWidth: 3 },
-      { id: 'it', sign: 'Information Technology', short: 'IT', ...r(-108, -88, -19, -4), h: 5, doors: ['e'], doorWidth: 3 },
-      { id: 'hr', sign: 'Human Capital', short: 'HR', ...r(-108, -88, 0, 14), h: 5, doors: ['e'], doorWidth: 3 },
-      { id: 'security_monitoring', sign: 'Surveillance Operations Centre', short: 'Monitoring', ...r(-84, -66, -38, -26), h: 5, doors: ['s', 'e'], doorWidth: 3 },
-      { id: 'cigar_lounge', sign: "Private Members' Lounge", short: 'Cigar Lounge', ...r(-84, -64, -22, -7), h: 5, doors: ['e', 's'], doorWidth: 3 },
-      { id: 'master_dashboards', sign: 'Enterprise Performance Centre', short: 'Dashboards', ...r(-84, -59, -2, 13), h: 6, doors: ['n', 's', 'e'], doorWidth: 4 },
-      { id: 'trophy_wall', sign: 'Hall of Achievement', short: 'Trophy Wall', ...r(-83, -60, 15, 21), zone: true },
+      { id: 'command_centre', sign: 'Executive Command Centre', short: 'Command', ...OT_MAIN, full: true, noSign: true, spawn: { x: -54, z: -9 } },
+      { id: 'command_deck', sign: 'Command Deck', short: 'CEO Deck', ...r(-64, -50.5, -39, 39), zone: true, noSign: true, spawn: { x: -54, z: -9 } },
+      { id: 'cfo_station', sign: 'Office of the CFO', short: 'CFO', ...r(-70, -64, -39, 39), zone: true, noSign: true },
+      { id: 'legal', sign: 'Legal & Compliance', short: 'Legal', ...r(-76, -70, -39, 0), zone: true, noSign: true },
+      { id: 'hr', sign: 'Human Capital', short: 'HR', ...r(-76, -70, 0, 39), zone: true, noSign: true },
+      { id: 'it', sign: 'Information Technology', short: 'IT', ...r(-82, -76, -39, 0), zone: true, noSign: true },
+      { id: 'security_monitoring', sign: 'Surveillance Operations', short: 'Monitoring', ...r(-82, -76, 0, 39), zone: true, noSign: true },
+      { id: 'master_dashboards', sign: 'Liquidity Theatre', short: 'Pit', ...r(-109, -82, -39, 39), zone: true, noSign: true, spawn: { x: -84, z: -14 } },
+      { id: 'cigar_lounge', sign: "Private Members' Lounge", short: 'Lounge', ...r(-58, -50.5, 9, 39), zone: true, noSign: true },
+      { id: 'trophy_wall', sign: 'Hall of Achievement', short: 'Trophies', ...r(-58, -50.5, -39, -27), zone: true, noSign: true },
     ],
-    props: 'control',
+    props: 'command',
   },
   // ------------------------------------------------------------ bridge (spans the atrium)
   {
@@ -367,7 +373,8 @@ const HALLS = {
   'OT-03': ['outreach', 'Global Client Outreach Centre — Lift Hall', 12, 6],
   // two portals (user, 2026-11-06): luxury reception (north) + processing (south); dressed by securityHQ.js
   'OT-04': ['security', 'Asset Protection — Screening Hall', 8, 5.5, { doors: [{ side: 'w', at: -14, width: 8, top: 5.5 }, { side: 'w', at: 14, width: 6, top: 4.2 }] }],
-  'OT-05': ['executive', 'Executive Reception', 10, 5.5],
+  // two portals (user, 2026-11-17): the airlock to the blast door (Z 0) and the Chief Executive's private passage (Z -23.4); dressed by commandCentre.js
+  'OT-05': ['command', 'Command Centre — Security Lobby', 6.4, 4.2, { doors: [{ side: 'w', at: 0, width: 6.4, top: 4.2 }, { side: 'w', at: -23.4, width: 4.4, top: 3.4 }] }],
   'VT-01': ['portal', 'Executive Leisure Suite — Grand Hall', 18, 12],
   'VT-02': ['concourse', 'Sports Analytics Arena', 14, 6, { rect: r(30, 50, -40, 30), open: ['w'] }],
   'VT-03': ['shrine', 'Combat Pavilion — Arrivals', 8, 7, { rect: r(30, 44, -40, 30), open: ['w'], extraDoors: [{ side: 'n', at: 40, width: 3 }], narrow: true }],

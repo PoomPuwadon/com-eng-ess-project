@@ -13,9 +13,16 @@ import { createTrading } from './market/trading.js';
 import { createLLM } from './agents/llm.js';
 import { createGateway, AGENTS } from './agents/gateway.js';
 import { createTradingDesk } from './agents/tradingDesk.js';
+import { createChartAnalyst } from './agents/chartAnalyst.js';
+import { createLeague } from './agents/league.js';
+import { createFootball } from './football/service.js';
+import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
 import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
+import { createAuth, dbStore, memoryStore } from './auth.js';
+import { createHub } from './realtime/hub.js';
+import { attachWs } from './realtime/ws.js';
 
 function createBus() {
   const clients = new Set();
@@ -31,18 +38,28 @@ function createBus() {
   };
 }
 
-export function createApp(config, log = console) {
-  const db = openDb(config.dbFile);
+/** extra.store / extra.seed: the Supabase write-through store and the rows it loaded (see server/store.js and index.js). */
+export function createApp(config, log = console, extra = {}) {
+  const db = openDb(config.dbFile, { seed: extra.seed });
+  extra.store?.attach(db);
   const bus = createBus();
   const ledger = createLedger(db);
   const treasury = createTreasury(db, ledger, bus);
   const players = createPlayers(db, ledger, config);
+  const auth = createAuth({ store: config.dbFile === ':memory:' && !extra.store ? memoryStore() : dbStore(db, config.usersFile), players, adminPassword: config.adminPassword || 'admin123' });
+  const hub = createHub({ players, auth, ledger, config, log });
   const roulette = createRoulette(db, ledger, bus, players);
   const market = createMarketData(db, bus, config, log);
   const trading = createTrading(db, ledger, market, bus, config);
   const llm = createLLM(db, config, log);
   const gateway = createGateway(db);
   const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log });
+  const league = createLeague({ db, market, desk });
+  const chartDesk = createChartAnalyst({ llm, log });
+  const football = createFootball({ db, ledger, treasury, llm, config, log });
+  const media = createArenaMedia({ db, football, dir: config.mediaDir || join(ROOT, 'data', 'arena-media'), offline: Boolean(config.offline), log });
+  hub.extend(media.hubOps(hub));
+  media.onChange((v) => hub.broadcast({ t: 'arenaMedia', media: v })); // live to every connected client
   const lotto = createLotteryData(db, bus, config, log);
   const institute = createInstitute({ db, ledger, data: lotto, gateway, llm, bus, players, log });
   let reconcile = ledger.reconcile();
@@ -50,7 +67,7 @@ export function createApp(config, log = console) {
 
   // ---------------------------------------------------------------- schedulers (the firm runs 24/7, players or not)
   const timers = [];
-  function start() {
+  let start = function start() {
     timers.push(setInterval(() => { try { treasury.deliverDue(); trading.processPending(); } catch (e) { log.warn('[exec]', e.message); } }, 4000));
     timers.push(setInterval(() => { try { trading.snapshotNav([DEPT.trading, ...db.all("SELECT DISTINCT owner FROM positions WHERE owner LIKE 'PLAYER:%' AND qty > 0").map((r) => r.owner)]); } catch (e) { log.warn('[nav]', e.message); } }, 300_000));
     timers.push(setInterval(() => { reconcile = ledger.reconcile(); if (!reconcile.ok) log.error('[ledger] LEDGER_DRIFT', reconcile.problems); }, 600_000));
@@ -79,14 +96,15 @@ export function createApp(config, log = console) {
       if (t.status !== 'delivered') return;
       if (t.to === DEPT.thai) institute.cycle('budget delivered').catch(() => {});
       if (t.to === DEPT.trading) desk.tick({ reason: 'budget delivered' }).catch(() => {});
+      if (t.to === DEPT.sports) football.agentTick();
     });
   }
-  const stop = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
+  let stop = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); }); market.stop(); };
 
   // ---------------------------------------------------------------- HTTP
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
-  const readBody = (req) => new Promise((resolve, reject) => {
-    let s = ''; req.on('data', (c) => { s += c; if (s.length > 64_000) { reject(Object.assign(new Error('Body too large'), { status: 413 })); req.destroy(); } });
+  const readBody = (req, max = 64_000) => new Promise((resolve, reject) => {
+    let s = ''; req.on('data', (c) => { s += c; if (s.length > max) { reject(Object.assign(new Error('Body too large'), { status: 413 })); req.destroy(); } });
     req.on('end', () => { try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('Invalid JSON'), { status: 400 })); } });
   });
   const authOf = (req) => players.auth((req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
@@ -103,7 +121,7 @@ export function createApp(config, log = console) {
     const book = trading.portfolio(DEPT.trading);
     return {
       book, navHistory: trading.navHistory(DEPT.trading), trades: trading.trades(DEPT.trading, 60), orders: trading.orders(DEPT.trading, 30),
-      agents: gateway.latestReports('trading_floor', 3), budget: { inTransit: treasury.inTransit(DEPT.trading) }, llm: llm.status(),
+      agents: gateway.latestReports('trading_floor', 3), desks: desk.sleeves(), league: league.table(), budget: { inTransit: treasury.inTransit(DEPT.trading) }, llm: llm.status(),
       lastTick: desk.lastTick(), nextTickInMs: desk.lastTick() ? Math.max(0, desk.lastTick() + desk.intervalMs() - Date.now()) : null,
     };
   }
@@ -117,6 +135,11 @@ export function createApp(config, log = console) {
       return players.create();
     },
     'GET /api/me': (req) => ({ player: need(req) }),
+    // name + password: unknown names open an account (Visitor), known names must match
+    'POST /api/auth/enter': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.enter(b.name, b.password); },
+    'POST /api/auth/login': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.login(b.name, b.password); },
+    'POST /api/auth/register': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.register(b.name, b.password); },
+    'GET /api/presence': () => ({ players: hub.snapshot().length, meta: hub.meta() }),
     'POST /api/me/name': async (req) => ({ player: players.rename(need(req).id, (await readBody(req)).name) }),
 
     'GET /api/roulette/state': (req) => { const p = authOf(req); return { recent: roulette.recent(), limits: roulette.LIMITS, stats: roulette.stats(), commitment: p ? roulette.commitment(p.id) : null }; },
@@ -138,6 +161,12 @@ export function createApp(config, log = console) {
     'POST /api/market/cancel': async (req) => { const p = need(req); return { order: trading.cancelOrder(p.account, Number((await readBody(req)).id)), portfolio: trading.portfolio(p.account) }; },
     'GET /api/market/leaderboard': () => ({ leaders: trading.leaderboard(players, config.startingBalance), firm: { nav: trading.portfolio(DEPT.trading).nav, start: 100_000_000 } }),
     'GET /api/firm/book': () => firmBook(),
+    'GET /api/ai/league': () => ({ league: league.table(), llm: llm.status() }),
+    'GET /api/football/state': (req) => { const p = authOf(req); return { ...football.snapshot(p ? p.account : null), league: league.table(), llm: llm.status() }; },
+    'GET /api/arena-media': () => media.view(),
+    'POST /api/football/position': async (req) => { const p = need(req); limit(p.id); const b = await readBody(req); const out = football.open({ owner: p.account, matchId: b.matchId, market: b.market, pick: b.pick, stake: Math.round(Number(b.amount)), actor: `player:${p.id}` }); return { position: out, balance: ledger.balance(p.account) }; },
+    // OT-01 Chart Desk: image -> UP/DOWN (AI when a key is set, labelled demo otherwise)
+    'POST /api/vision/chart': async (req) => { const p = need(req); limit(`chart:${p.id}`, 1); const b = await readBody(req, 6_000_000); return chartDesk.analyse({ image: b.image, hint: b.hint }); },
 
     'GET /api/lottery/state': (req) => {
       const p = authOf(req);
@@ -146,7 +175,7 @@ export function createApp(config, log = console) {
         calendar: institute.calendar(), latest: lotto.latest(), sales: institute.sales(institute.calendar().next),
         recentDraws: lotto.draws().slice(-12).reverse().map((d) => ({ date: d.date, first: d.first, last2: d.last2, last3f: d.last3f, last3b: d.last3b })), draws: lotto.count(), backfill: lotto.state, attribution: ATTRIBUTION, price: TICKET_PRICE,
         run, history: institute.history(), models: MODELS.map(({ id, name, desc }) => ({ id, name, desc })), targets: Object.fromEntries(Object.entries(TARGETS).map(([k, t]) => [k, { label: t.label, k: t.k, topK: t.topK }])),
-        agents: gateway.latestReports('thai_markets', 2), tickets: p ? institute.tickets(p.account) : [], llm: llm.status(),
+        agents: gateway.latestReports('thai_markets', 2), league: league.table(), tickets: p ? institute.tickets(p.account) : [], llm: llm.status(),
       };
     },
     'POST /api/lottery/buy': async (req) => { const p = need(req); limit(p.id); const b = await readBody(req); return institute.buy(p.id, b.number, b.qty || 1); },
@@ -160,6 +189,28 @@ export function createApp(config, log = console) {
 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://x');
+    if (url.pathname === '/api/football/crest') { // club crests, proxied same-origin (3D canvases) and cached
+      try { const c = await football.crest(url.searchParams.get('u')); res.writeHead(200, { 'Content-Type': c.type, 'Cache-Control': 'public, max-age=86400' }); res.end(c.body); }
+      catch (e) { json(res, e.status || 502, { error: e.status ? e.message : 'Crest unavailable' }); }
+      return;
+    }
+    // VT-02 Arena Media: staff upload a highlight video (raw mp4/webm body), stored under data/arena-media/
+    if (req.method === 'POST' && url.pathname === '/api/arena-media/upload') {
+      try {
+        const p = need(req);
+        if (!hub.isStaffPlayer(p.id)) throw Object.assign(new Error('Executive clearance required.'), { status: 403 });
+        limit('upload:' + p.id, 1);
+        const v = await media.upload(url.searchParams.get('match'), req, { title: url.searchParams.get('title'), length: Number(req.headers['content-length']) || 0, by: 'staff:' + p.name });
+        json(res, 200, { video: v });
+      } catch (e) { if (!res.headersSent) { req.resume(); json(res, e.status || 500, { error: e.status ? e.message : 'Upload failed' }); } if (!e.status) log.error('[upload]', e); }
+      return;
+    }
+    if (req.method === 'GET' && url.pathname.startsWith('/api/arena-media/file/')) { media.serveFile(req, res, url.pathname.slice('/api/arena-media/file/'.length)); return; }
+    if (req.method === 'GET' && url.pathname.startsWith('/api/arena-media/thumb/')) {
+      try { const t = await media.thumb(url.pathname.slice('/api/arena-media/thumb/'.length)); res.writeHead(200, { 'Content-Type': t.type, 'Cache-Control': 'public, max-age=86400' }); res.end(t.body); }
+      catch (e) { json(res, e.status || 502, { error: e.status ? e.message : 'Thumbnail unavailable' }); }
+      return;
+    }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(`event: hello\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
@@ -190,5 +241,9 @@ export function createApp(config, log = console) {
   }
 
   const server = createServer(handle);
-  return { db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  let ws = null;
+  const start0 = start, stop0 = stop;
+  start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
+  stop = () => { ws?.stop(); football.stop(); stop0(); };
+  return { store: extra.store, auth, hub, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

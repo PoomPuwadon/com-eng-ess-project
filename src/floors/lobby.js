@@ -176,7 +176,7 @@ export function lobby(ctx) {
   lobbyDashboard(ctx, 0, 30.25, -38.62, 0, 56, 31.5); // sharp 1920 x 1080 market dashboard
   L.box(-28.6, 28.6, 13.9, 14.25, -38.84, -38.5, 'bronze'); L.box(-28.6, 28.6, 46.25, 46.6, -38.84, -38.5, 'bronze');
   for (const xx of [-28.6, 28.25]) L.box(xx, xx + 0.35, 13.9, 46.6, -38.84, -38.5, 'bronze');
-  plaque(ctx, '{FIRM NAME}', 0, 10.6, -38.8, 0, { h: 2.0, sub: 'Excellence. Discretion. Liquidity.' });
+  plaque(ctx, 'FINANCIAL FIRM', 0, 10.6, -38.8, 0, { h: 2.0, sub: 'Excellence. Discretion. Liquidity.' });
 
   // ---- columns (4, full height): marble shafts, bronze bases and capitals
   for (const x of [-16, 16]) for (const z of [-16, 20]) {
@@ -333,12 +333,12 @@ export function lobby(ctx) {
   }
   { const shape = new THREE.Shape(); shape.absarc(0, 0, DESK.r1 + 0.01, DESK.a0 + 0.55, DESK.a1 - 0.55, false); shape.absarc(0, 0, DESK.r1 - 0.02, DESK.a1 - 0.55, DESK.a0 + 0.55, true);
     const band = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: false, curveSegments: 16 }); band.rotateX(Math.PI / 2); band.translate(DESK.cx, 0.2, DESK.cz); L.geo(band, 'lampWarm'); }
-  plaque(ctx, '{FIRM NAME}', DESK.cx, 0.62, DESK.cz + DESK.r1 + 0.03, 0, { h: 0.42 });
+  plaque(ctx, 'FINANCIAL FIRM', DESK.cx, 0.62, DESK.cz + DESK.r1 + 0.03, 0, { h: 0.42 });
   for (const a of [DESK.a0 + 0.12, DESK.a1 - 0.12]) lamp(L, DESK.cx + Math.cos(a) * 6.5, DESK.cz + Math.sin(a) * 6.5, 1.12);
   for (const a of [1.0, 1.35, 1.79, 2.14]) miniMonitor(ctx, DESK.cx + Math.cos(a) * 6.2, 1.42, DESK.cz + Math.sin(a) * 6.2, Math.atan2(-Math.cos(a), -Math.sin(a)), 0.55, 0.34, 'desk');
   L.box(-9, 9, 0.3, 5.8, -38.83, -38.78, 'onyx'); // back-lit onyx wall under the mezzanine
   L.box(-9.2, 9.2, 0.25, 0.32, -38.84, -38.74, 'bronze'); L.box(-9.2, 9.2, 5.8, 5.88, -38.84, -38.74, 'bronze');
-  plaque(ctx, '{FIRM NAME}', 0, 3.4, -38.76, 0, { h: 0.9, color: '#3a2410' });
+  plaque(ctx, 'FINANCIAL FIRM', 0, 3.4, -38.76, 0, { h: 0.9, color: '#3a2410' });
   pointLight(ctx, 0, 5.2, -29, 28, 16, 1.8);
   // concierge (east, under the mezzanine edge)
   L.box(14.8, 18.6, 0, 1.05, -31.2, -30.2, 'walnut', { collide: true, round: 0.05 }); L.box(14.7, 18.7, 1.05, 1.12, -31.3, -30.1, 'bronze');
@@ -427,8 +427,8 @@ export function plaza(ctx) {
   for (const z of [30.6, 34.6, 38.6]) L.box(-9.3, 9.3, 5.45, 5.7, z - 0.12, z + 0.12, 'bronze');
   for (const x of [-6.9, -2.3, 2.3, 6.9]) for (const z of [32.6, 36.6]) L.box(x - 0.22, x + 0.22, 5.41, 5.45, z - 0.22, z + 0.22, 'downlight');
   for (const sx of [-1, 1]) L.cyl(sx * 8.6, 38.2, 0.17, 0, 5.45, 'bronze', { seg: 12, collide: true });
-  plaque(ctx, '{FIRM NAME}', 0, 6.25, 38.75, 0, { h: 0.7 });
-  plaque(ctx, '{FIRM NAME}', 0, 9.0, 30.8, 0, { h: 1.4, sub: 'Excellence. Discretion. Liquidity.' });
+  plaque(ctx, 'FINANCIAL FIRM', 0, 6.25, 38.75, 0, { h: 0.7 });
+  plaque(ctx, 'FINANCIAL FIRM', 0, 9.0, 30.8, 0, { h: 1.4, sub: 'Excellence. Discretion. Liquidity.' });
   for (const sx of [-1, 1]) { // topiary in bronze pots by the doors
     L.cyl(sx * 6.6, 31.6, 0.5, 0, 0.8, 'bronze', { seg: 12, rTop: 0.6, collide: true });
     const c = new THREE.ConeGeometry(0.7, 2.6, 7); c.translate(sx * 6.6, 2.1, 31.6); L.geo(c, 'foliage', 0x3c7536);
@@ -474,8 +474,8 @@ export function plaza(ctx) {
   }
   // ---- monument sign (both faces) with up-lights
   L.box(-6, 6, 0, 2.2, 59.4, 60.8, 'granite', { collide: true }); L.box(-6.1, 6.1, 2.2, 2.32, 59.3, 60.9, 'bronze');
-  plaque(ctx, '{FIRM NAME}', 0, 1.35, 59.36, Math.PI, { h: 0.9, sub: 'Two Towers. One Vision.' });
-  plaque(ctx, '{FIRM NAME}', 0, 1.35, 60.84, 0, { h: 0.9, sub: 'Two Towers. One Vision.' });
+  plaque(ctx, 'FINANCIAL FIRM', 0, 1.35, 59.36, Math.PI, { h: 0.9, sub: 'Two Towers. One Vision.' });
+  plaque(ctx, 'FINANCIAL FIRM', 0, 1.35, 60.84, 0, { h: 0.9, sub: 'Two Towers. One Vision.' });
   for (const x of [-4, 0, 4]) L.box(x - 0.2, x + 0.2, 0, 0.08, 58.8, 59.1, 'downlight');
   // ---- people: doormen, valet, guests
   for (const sx of [-1, 1]) L.person(sx * 5.9, 31.3, { yaw: 0, suit: 0x101114, hair: 0x101010 });

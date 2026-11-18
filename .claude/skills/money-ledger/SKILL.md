@@ -75,6 +75,7 @@ idempotency key in parallel.
 | --- | --- | --- |
 | Visitor signs up | `MINT → PLAYER` starting balance (amount from config set by CEO/admins) | `STARTING_BALANCE` |
 | Admin/CEO top-up | `MINT → PLAYER` | `ADMIN_TOPUP` |
+| CEO removes money (Treasury tab) | `PLAYER → MINT`, never below zero; "set" posts whichever of top-up/removal reaches the target | `ADMIN_DEBIT` |
 | Admin/CEO reset | `PLAYER → MINT` (whole balance), then `MINT → PLAYER` (starting balance), one transaction | `RESET` |
 | Place a wager | `PLAYER → ESCROW:BET` | `WAGER_PLACED` |
 | Wager lost | `ESCROW:BET → VAULT` | `WAGER_LOST` |

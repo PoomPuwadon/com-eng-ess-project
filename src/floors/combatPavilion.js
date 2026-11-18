@@ -176,10 +176,7 @@ export function combatPavilion(ctx) {
     L.box(C.x - rp - 0.03, C.x - rp + 0.03, yy, yy + 0.06, C.z - rp, C.z + rp, m); L.box(C.x + rp - 0.03, C.x + rp + 0.03, yy, yy + 0.06, C.z - rp, C.z + rp, m);
   });
   for (const [x0, x1, h] of [[R, R + 0.8, 0.8], [R + 0.8, R + 1.6, 0.4]]) { L.box(C.x + x0, C.x + x1, 0, h, C.z - 1, C.z + 1, 'cpDark'); L.box(C.x + x0, C.x + x1 - 0.7, h, h + 0.02, C.z - 1, C.z + 1, 'cpGold'); }
-  // fighters, referee
-  L.person(C.x - 1.4, C.z - 0.3, { y: top, yaw: Math.PI / 2, suit: 0xc8202a, skin: 0xc68c62, hair: 0x111111 });
-  L.person(C.x + 1.4, C.z + 0.3, { y: top, yaw: -Math.PI / 2, suit: 0x2244cc, skin: 0xb07850, hair: 0x111111 });
-  L.person(C.x, C.z + 2.2, { y: top, yaw: Math.PI, suit: 0xf2f2f2, skin: 0xd8a47f, hair: 0x2a1a10 });
+  // the canvas stays empty: only real competitors (live VT-03 sessions) fight in this ring (user, 2026-11-18)
   // square lighting rig over the ring (hung from the dome), lamps aimed down
   const RIG = 6.5, RY = 10.5;
   for (const [x0, x1, z0, z1] of [[-RIG, RIG, -RIG, -RIG + 0.5], [-RIG, RIG, RIG - 0.5, RIG], [-RIG, -RIG + 0.5, -RIG, RIG], [RIG - 0.5, RIG, -RIG, RIG]]) L.box(C.x + x0, C.x + x1, RY, RY + 0.5, C.z + z0, C.z + z1, 'cpDark');

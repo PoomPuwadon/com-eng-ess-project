@@ -126,8 +126,70 @@ test('trading desk ticks on synthetic data, respects risk limits, stays in budge
   for (const p of book.positions) assert.ok(p.value / book.nav <= 0.2 + 1e-9, `${p.symbol} ${p.value / book.nav}`);
   assert.ok(book.invested / book.nav <= 0.95);
   const reports = app.gateway.latestReports('trading_floor');
-  assert.equal(reports.length, 3);
+  assert.equal(reports.length, 4, 'two desks + quant + risk officer');
   assert.ok(reports.every((a) => a.reports.length === 1));
+  // both desks traded their own sleeve with their own (rule-book) style; nothing claims an AI model
+  const sl = app.desk.sleeves();
+  assert.deepEqual(sl.map((d) => d.agent), ['head_trader', 'co_head_trader']);
+  for (const d of sl) assert.ok(d.fills > 0 && d.invested <= d.nav * 0.96, `${d.agent} ${d.invested} / ${d.nav}`);
+  assert.ok(app.db.all('SELECT model FROM trades').every((t) => t.model === 'rules'));
+  const lg = app.league.table();
+  assert.equal(lg.families.find((f) => f.id === 'rules').trading.fills, app.db.get('SELECT COUNT(*) AS n FROM trades').n);
+  assert.equal(lg.families.find((f) => f.id === 'claude').trading.fills, 0);
+  assert.ok(app.ledger.reconcile().ok);
+});
+
+test('multi-model desk: each desk on its own model, risk veto, models recorded, league splits P&L by model', async () => {
+  const { createTradingDesk } = await import('../agents/tradingDesk.js');
+  const { createLeague } = await import('../agents/league.js');
+  const app = mkApp();
+  const r = rng(5);
+  const syms = ['SPY', 'AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'JPM', 'XOM', 'KO', 'WMT'];
+  for (const s of syms) {
+    let p = 100 + r() * 300; const drift = (r() - 0.4) * 0.002; const bars = [];
+    for (let i = 0; i < 260; i++) { p *= Math.exp(drift + (r() - 0.5) * 0.03); bars.push([Date.now() - (260 - i) * 864e5, p, p * 1.01, p * 0.99, p, 1e6]); }
+    app.db.run('INSERT INTO bars(symbol, kind, json, as_of, fetched_at) VALUES (?,?,?,?,?)', s, '1d', JSON.stringify(bars), Date.now(), Date.now());
+    app.db.run('INSERT INTO quotes(symbol, name, price, prev_close, as_of, fetched_at, source) VALUES (?,?,?,?,?,?,?)', s, s, p, p * 0.99, Date.now(), Date.now(), 'test');
+  }
+  app.db.run('UPDATE cash_trips SET eta = 0'); app.treasury.deliverDue();
+  const MODEL = { head_trader: 'claude-haiku-5-5', co_head_trader: 'gemini-2.5-flash', quant: 'gemini-2.5-flash', risk_officer: 'claude-haiku-5-5' };
+  const calls = [];
+  const fake = {
+    enabled: () => true, breaker: () => 0,
+    route: (a) => ({ provider: MODEL[a].startsWith('claude') ? 'claude' : 'gemini', model: MODEL[a] }),
+    async ask({ agent, user }) {
+      calls.push(agent);
+      const st = JSON.parse(user), model = MODEL[agent];
+      if (agent === 'quant') return { model, data: { note: 'Tilted.', tilts: [{ symbol: 'KO', tilt: 9, reason: 'clamped' }] } };
+      if (agent === 'risk_officer') return { model, data: { memo: 'Vetoed AAPL.', vetoes: st.orders.filter((o) => o.symbol === 'AAPL').map((o) => ({ id: o.id, reason: 'too shiny' })) } };
+      // desk A buys AAPL + MSFT, desk B buys KO + WMT; plus a sell of something it does not hold (rejected in code)
+      const buys = agent === 'head_trader' ? ['AAPL', 'MSFT'] : ['KO', 'WMT'];
+      return { model, data: { memo: `${agent} memo`, conviction: 'high', actions: [...buys.map((s) => ({ symbol: s, side: 'buy', qty: 10, rationale: 'test' })), { symbol: 'TSLA', side: 'sell', qty: 1, rationale: 'naked' }] } };
+    },
+  };
+  const desk = createTradingDesk({ db: app.db, ledger: app.ledger, market: app.market, trading: app.trading, gateway: app.gateway, llm: fake, bus: app.bus, log: quiet });
+  const res = await desk.tick();
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.deepEqual(calls.sort(), ['co_head_trader', 'head_trader', 'quant', 'risk_officer']);
+  assert.deepEqual(res.desks, [{ agent: 'head_trader', model: 'claude-haiku-5-5' }, { agent: 'co_head_trader', model: 'gemini-2.5-flash' }]);
+  const orders = app.db.all('SELECT symbol, agent, model FROM orders ORDER BY symbol');
+  assert.deepEqual(orders.map((o) => `${o.symbol}:${o.agent}:${o.model}`), ['KO:co_head_trader:gemini-2.5-flash', 'MSFT:head_trader:claude-haiku-5-5', 'WMT:co_head_trader:gemini-2.5-flash']);
+  assert.ok(app.db.all('SELECT reason FROM agent_rejections').some((x) => /Risk Officer veto: too shiny/.test(x.reason)));
+  assert.ok(app.db.all('SELECT reason FROM agent_rejections').some((x) => /does not hold/.test(x.reason)));
+  const quantRep = app.gateway.latestReports('trading_floor').find((a) => a.agent === 'quant').reports[0];
+  assert.equal(quantRep.data.tilts[0].tilt, 0.5, 'tilts are clamped to ±0.5');
+  assert.equal(quantRep.data.model, 'gemini-2.5-flash');
+  app.trading.processPending();
+  // price moves: Claude's MSFT up 10 %, Gemini's KO down 10 %
+  const bump = (s, f) => app.db.run('UPDATE quotes SET price = price * ? WHERE symbol = ?', f, s);
+  const px = (s) => app.db.get('SELECT price FROM trades WHERE symbol = ?', s).price;
+  bump('MSFT', 1.1); bump('KO', 0.9);
+  const lg = createLeague({ db: app.db, market: app.market, desk }).table();
+  const fam = (id) => lg.families.find((f) => f.id === id);
+  assert.equal(fam('claude').trading.fills, 1);
+  assert.equal(fam('gemini').trading.fills, 2);
+  assert.ok(fam('claude').trading.pnl > 0 && Math.abs(fam('claude').trading.unrealized - Math.round(10 * px('MSFT') * 0.1)) <= 10);
+  assert.ok(fam('gemini').trading.unrealized < 0);
   assert.ok(app.ledger.reconcile().ok);
 });
 

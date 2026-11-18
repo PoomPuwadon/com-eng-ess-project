@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FloorCtx, MAT, makeSign } from '../world/geom.js';
 import { BANKS, CARS, FLOOR_BY_ID } from '../layout/building.js';
+import { Crowd } from '../characters/crowd.js';
 
 // Tower colour palettes (greybox: colour only tells you where you are)
 export const PALETTE = {
@@ -228,22 +229,11 @@ export function finalize(ctx, buildScreens) {
   const g = ctx.glass.build(ctx.floor.lux ? MAT.glassLux : MAT.glass);
   if (g) { g.renderOrder = 5; ctx.add(g, g.geometry); }
   if (ctx.screens.length) for (const m of buildScreens(ctx.screens)) ctx.add(m, m.geometry);
-  if (ctx.npcs.length) {
-    const geo = new THREE.CapsuleGeometry(0.3, 1.1, 3, 8);
-    const mesh = new THREE.InstancedMesh(geo, MAT.npc, ctx.npcs.length);
-    const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
-    const col = new THREE.Color();
-    ctx.npcs.forEach((n, i) => {
-      q.setFromAxisAngle(up, n.yaw || 0);
-      m4.compose(new THREE.Vector3(n.x, ctx.e + (n.y || 0) + 0.85, n.z), q, new THREE.Vector3(1, 1, 1));
-      mesh.setMatrixAt(i, m4);
-      mesh.setColorAt(i, col.set(n.color));
-    });
-    mesh.computeBoundingSphere();
-    ctx.add(mesh, geo);
-    ctx.npcMesh = mesh;
+  if (ctx.npcs.length) { // the approved caricature characters (was: greybox capsules)
+    const crowd = new Crowd(ctx);
+    for (const n of ctx.npcs) crowd.add({ x: n.x, y: n.y || 0, z: n.z, yaw: n.yaw || 0, suit: n.color });
+    crowd.build();
+    ctx.npcCrowd = crowd;
   }
   return ctx;
 }

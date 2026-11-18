@@ -21,7 +21,6 @@
 body.nohud #wallet { display: none; }
 @media (max-width: 1250px) { /* the floor list fills the top edge: move to the bottom, above the role bar */
   #wallet { top: auto; bottom: 88px; left: auto; right: 12px; transform: none; }
-  #wallet .who:nth-of-type(2) { display: none; }
 }
 body.app-open #wallet { z-index: 60; }
 
@@ -59,6 +58,9 @@ body.app-open #wallet { z-index: 60; }
 .pill.ok { background: rgba(61, 220, 132, .12); color: var(--up); border-color: rgba(61, 220, 132, .3); }
 .pill.warn { background: rgba(240, 209, 138, .1); color: var(--gold2); border-color: var(--line); }
 .pill.bad { background: rgba(255, 92, 108, .12); color: var(--down); border-color: rgba(255, 92, 108, .3); }
+.pill.claude { background: rgba(217, 119, 87, .14); color: #f0a184; border-color: rgba(217, 119, 87, .4); }
+.pill.gemini { background: rgba(79, 141, 245, .14); color: #8fb6ff; border-color: rgba(79, 141, 245, .4); }
+.lg-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
 table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.t th { text-align: left; font: 600 11px system-ui; text-transform: uppercase; letter-spacing: .06em; color: var(--ink3); padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, .08); position: sticky; top: 0; background: var(--card); }
 table.t td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, .04); vertical-align: top; }
@@ -160,3 +162,6 @@ body.seated #help-btn, body.seated #loc, body.seated #perf, body.seated .perf-bt
 #rt.busy .rt-rail { opacity: .55; pointer-events: none; }
 #rt .rt-tip { position: fixed; pointer-events: none; background: rgba(10, 12, 18, .9); border: 1px solid rgba(201, 162, 58, .6); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--ink); white-space: nowrap; }
 @media (max-width: 1100px) { #rt .rt-rail { flex-wrap: wrap; justify-content: center; width: calc(100vw - 40px); } #rt .rt-side { width: 200px; } }
+#wallet .acct { cursor: pointer; padding: 2px 6px; margin: -2px -2px; border-radius: 6px; }
+#wallet .acct:hover, #wallet .acct:focus-visible { background: rgba(201, 162, 58, 0.14); outline: none; }
+#wallet .acct small i { font-style: normal; color: var(--gold2); text-transform: none; letter-spacing: 0; }

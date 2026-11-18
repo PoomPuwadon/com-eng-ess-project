@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Character Showcase</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0e0d12; overflow: hidden; font-family: "Segoe UI", Inter, Arial, sans-serif; color: #eee; }
+    canvas { display: block; }
+    #panel { position: fixed; top: 12px; left: 12px; width: 270px; max-height: calc(100% - 24px); overflow-y: auto; background: rgba(12, 11, 16, .86); border: 1px solid #5a4a22; border-radius: 10px; padding: 12px 14px; font-size: 13px; backdrop-filter: blur(6px); }
+    #panel h1 { font-size: 15px; margin: 0 0 2px; color: #e3c27a; letter-spacing: .04em; }
+    #panel .sub { color: #9a9488; font-size: 11px; margin-bottom: 10px; }
+    #panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #b9a46a; margin: 12px 0 5px; }
+    .row { display: flex; flex-wrap: wrap; gap: 4px; }
+    button { background: #1d1b22; color: #ddd; border: 1px solid #3a3528; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+    button:hover { border-color: #c9a24a; }
+    button.on { background: #c9a24a; color: #111; border-color: #c9a24a; font-weight: 700; }
+    .list button { display: block; width: 100%; text-align: left; margin-bottom: 3px; }
+    .list small { color: #8d877a; }
+    #keys { color: #a7a196; font-size: 11.5px; line-height: 1.55; }
+    kbd { background: #2a2730; border: 1px solid #444; border-radius: 3px; padding: 0 4px; font-size: 11px; }
+    #hud { position: fixed; bottom: 12px; right: 14px; font-size: 11px; color: #8d877a; }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h1>CHARACTER SHOWCASE</h1>
+    <div class="sub">Style test (not in the game yet). Stylised caricature, painted faces, procedural.</div>
+    <div id="keys"><kbd>W A S D</kbd> walk · <kbd>Shift</kbd> run<br /><b>Hold right-click + drag</b> to turn the camera · <kbd>wheel</kbd> zoom</div>
+    <h2>Play as</h2><div class="row" id="playAs"></div>
+    <h2>Expression (all faces)</h2><div class="row" id="faces"></div>
+    <h2>Tests</h2>
+    <div class="row">
+      <button id="wall">Wall around CEO</button>
+      <button id="reroll">Reroll random staff</button>
+      <button id="pause">Pause</button>
+    </div>
+    <h2>Go to</h2><div class="list" id="list"></div>
+  </div>
+  <div id="hud"></div>
+  <script type="module" src="/src/characters/showcase.js"></script>
+</body>
+</html>

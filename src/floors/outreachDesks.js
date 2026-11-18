@@ -51,9 +51,11 @@ export function buildDesks(ctx, L, groups, seed = 911) {
       const x = row.x, d0 = x + gp.dir * 1.09, d1 = x + gp.dir * 0.35; // desk span (front edge .. operator edge)
       list.push({ x, z });
       const empty = r() < (gp.emptyRate ?? 0.07);
-      seats.push({ x, y: gp.y, z, dir: gp.dir, sector: gp.sector, empty });
+      const seat = { x, y: gp.y, z, dir: gp.dir, sector: gp.sector, empty, L };
+      seats.push(seat);
       ctx.colliders.push({ x0: Math.min(d0, d1), x1: Math.max(d0, d1), z0: z - 0.53, z1: z + 0.53, y0: ctx.e + gp.y, y1: ctx.e + gp.y + 1.28 });
-      if (!empty) L.person(x, z, { yaw: gp.dir > 0 ? Math.PI / 2 : -Math.PI / 2, y: gp.y, sit: true, fidget: 0.25, suit: gp.suit ?? SUITS[Math.floor(r() * SUITS.length)], skin: SKIN[Math.floor(r() * SKIN.length)], hair: HAIR[Math.floor(r() * HAIR.length)] });
+      // operators wear the outreach uniform (hoodie/polo + headset); supervisors stay in suits. seat.pid = id in L.crowd
+      if (!empty) seat.pid = L.person(x, z, { yaw: gp.dir > 0 ? Math.PI / 2 : -Math.PI / 2, y: gp.y, sit: true, fidget: 0.25, kind: gp.sector === 'sup' ? 'suit' : 'casual', suit: gp.suit ?? SUITS[Math.floor(r() * SUITS.length)], skin: SKIN[Math.floor(r() * SKIN.length)], hair: HAIR[Math.floor(r() * HAIR.length)] });
     }
     for (const [mat, geo] of Object.entries(T)) {
       const mesh = new THREE.InstancedMesh(geo, LM[mat], list.length);

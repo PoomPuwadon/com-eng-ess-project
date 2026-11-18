@@ -1,4 +1,4 @@
-# PROJECT: [FIRM NAME] — A Walkable 3D Mock Financial Firm
+# PROJECT: FINANCIAL FIRM — A Walkable 3D Mock Financial Firm
 
 ## What this is
 Build a multiplayer, walkable 3D web experience of an absurdly luxurious financial
@@ -232,3 +232,87 @@ in phases, pausing for review after each:
 5. AI agents: key agents, situation summaries, background dialogue,
    summoning, offline privileges.
 6. Events: budget alarm, roll call, CFO speech, firings and rehires.
+## AI workflow (as built — keep this section current when agents, models or routing change)
+
+### Providers and routing — `server/agents/llm.js`
+- Two LLM providers run side by side: **Claude** (`ANTHROPIC_API_KEY`, `@anthropic-ai/sdk`, model
+  `AGENT_MODEL_TICK`, default `claude-haiku-5-5`) and **Gemini** (`GEMINI_API_KEY`, REST, model
+  `GEMINI_MODEL`, a comma-separated fallback chain, default `gemini-3.5-flash,gemini-3.1-flash-lite`;
+  free tier). Google retires Gemini ids for new keys (404) and overloads them (503): the chain moves on to
+  the next model, and the model that actually answered is what gets recorded. Keys live in `.env.local` only (gitignored),
+  never in `.env.example`, never sent to the client or logged.
+- Every LLM call goes through `llm.ask({ job, agent, system, user, schema, ... })`, which returns
+  `{ data, provider, model }` or `null`. `llm.json()` is the same without the metadata.
+- **Per-agent routing**: `ROUTES` in `llm.js` gives each agent a preferred provider
+  (head_trader=claude, co_head_trader=gemini, quant=gemini, risk_officer=claude, thai_head=claude,
+  lottery_quant=gemini, fixture_scout=gemini). Override with `AGENT_PROVIDERS` in `.env.local`
+  (e.g. `head_trader=gemini,quant=claude`). If the preferred provider has no key, the call goes to
+  the other one. Jobs with no agent use `LLM_PROVIDER` (default claude).
+- **No key / error / refusal / banned word / cost breaker open → `null`**, and every caller falls back
+  to its deterministic rule book. The firm always runs, for free, with no keys at all.
+- **Cost control**: every response's token usage × the price table → `llm_spend`. One monthly cap
+  (`LLM_MONTHLY_CAP_USD`, default $75) and circuit breaker cover both providers (70 % slow, 90 %
+  events only, 100 % stop). Free-tier Gemini calls are still metered at list price as an estimate.
+  See the `agent-cost-control` skill for rules and the cost estimate.
+
+### Agents (registry: `AGENTS` in `server/agents/gateway.js`)
+Agents PROPOSE, the server DISPOSES: model output is untrusted. Every money action passes the action
+gateway (privileges, daily caps, max stake), and hard limits are enforced in code.
+
+**Trading Floor** (`server/agents/tradingDesk.js`, one tick every 15 min market open / 60 min closed):
+1. **Quant** (Gemini): code builds the signal table from real daily bars (momentum score + defensive
+   score). The LLM may tilt up to 5 scores, clamped to ±0.5, and writes the research note.
+2. **Two rival trading desks**, each running its own **sleeve** (50 % of the book's NAV), each on its
+   own model, thinking in parallel:
+   - Desk A, **Head Trader** (Claude), momentum style.
+   - Desk B, **Co-Head Trader** (Gemini), defensive-quality style.
+   Each sees its own sleeve, the signals, its rule-book baseline, the rival desk's scoreline and its
+   own rejected orders. A desk can only sell shares its own sleeve holds. Sleeves are rebuilt by
+   replaying each desk's own fills (`trades.agent`), so there is still ONE ledger account
+   (`DEPT:trading_floor`) and one positions table.
+3. **Risk Officer** (Claude): hard limits in code first (20 % per name per sleeve and firm-wide,
+   95 % invested, sleeve cash, stale prices, one working order per symbol per desk); then the LLM
+   reviews the surviving orders and may only **veto** (never add or enlarge). Survivors execute,
+   sells first.
+
+**Thai Markets** (`server/lottery/institute.js`, once per draw): the research pipeline is code;
+**Lottery Quant** (Gemini) ranks the candidate certificates into a shortlist and writes the note;
+**Head of Thai Markets** (Claude) picks 0–8 certificates from the candidates and buys them through
+the gateway.
+
+**Sports Desk** (`server/football/service.js`): **Fixture Scout** (Gemini) picks the marquee fixture.
+The desk's stake is still the rule book.
+
+**Chart Desk** (`server/agents/chartAnalyst.js`): visitor-uploaded chart → UP/DOWN verdict (default
+provider), labelled demo without a key.
+
+### The walking AI desk (client only) — `src/characters/aiTraders.js`
+- Four live agents stand at PCs just inside the OT-01 entrance and stroll the aisle: Head Trader (Claude),
+  Co-Head Trader (Gemini), Quant (Gemini), Risk Officer (Claude). Desks are built in
+  `floors/tradingFloor.js` (`aiDesks`, orange glow = Claude, blue = Gemini) at `DESK_X` / `DESK_Z`.
+- Big provider-coloured tags (name, role, live status), a floor ring and a spinning marker; tags are rescaled
+  per frame to stay the same size on screen from 3 m to 20 m.
+- It only SHOWS what the server decides: `order` / `trade` events send the matching agent (`o.agent`) to its
+  PC with the order text; a `firm` tick sends the Quant and Risk Officer. Without a server they keep a timer routine.
+- Routes mirror `ROUTES` in `llm.js`; change both together. A new trading agent needs an entry in `AI_AGENTS`.
+
+### Model League (Claude v Gemini v rule book) — `server/agents/league.js`
+- Every order, fill and certificate records the model that decided it (`orders.model`,
+  `trades.model`, `lottery_tickets.model`; `'rules'` = rule book). Agent reports store it as
+  `data.model`. Never drop these fields when adding new money decisions: every new AI money action
+  must record its model so the league stays truthful.
+- Trading P&L is credited to the model that **bought** each lot (FIFO per desk and symbol), with
+  realised + unrealised at the delayed price. Thai desk: certificate cost v settled payouts.
+  LLM calls and cost come from `llm_spend`.
+- Shown by `src/apps/league.js` (`leagueCard`) in the Markets terminal, the Research Institute and
+  the Sports Desk; served from `GET /api/ai/league`, and included in `/api/firm/book`,
+  `/api/lottery/state` and `/api/football/state`.
+
+### Adding a new AI agent or decision
+1. Add it to `AGENTS` (and to `DEFAULTS` privileges if it spends money) in `gateway.js`.
+2. Give it a route in `ROUTES` (`llm.js`).
+3. Call `llm.ask(...)` with a JSON schema; always keep a rule-book fallback for `null`.
+4. Validate everything in code; send money actions through `gateway.check(...)`.
+5. Record `model` on whatever it creates and report with `gateway.report(agent, text, data, model || false)`.
+6. Add it to the league if it makes or loses money, update this section, and recompute the
+   `agent-cost-control` cost estimate.

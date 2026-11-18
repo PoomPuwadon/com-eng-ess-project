@@ -4,7 +4,8 @@
 import { dayKey } from '../time.js';
 
 export const AGENTS = {
-  head_trader: { name: 'Head Trader', dept: 'trading_floor', title: 'Managing Director, Global Equities' },
+  head_trader: { name: 'Head Trader', dept: 'trading_floor', title: 'Managing Director, Global Equities (Desk A)', trader: true },
+  co_head_trader: { name: 'Co-Head Trader', dept: 'trading_floor', title: 'Co-Managing Director, Global Equities (Desk B)', trader: true },
   quant: { name: 'Quant', dept: 'trading_floor', title: 'Head of Systematic Alpha' },
   risk_officer: { name: 'Risk Officer', dept: 'trading_floor', title: 'Chief Risk Officer (Equities)' },
   thai_head: { name: 'Head of Thai Markets', dept: 'thai_markets', title: 'Head of Thai Markets' },
@@ -14,6 +15,7 @@ export const AGENTS = {
 // Default privileges until the CEO console exists (Phase 5): offline allowed, with hard caps.
 const DEFAULTS = {
   head_trader: { offline_allowed: 1, daily_spend_cap: 120_000_000, max_actions_per_day: 40, max_single_stake: 20_000_000, allowed_actions: ['PLACE_TRADE'] },
+  co_head_trader: { offline_allowed: 1, daily_spend_cap: 120_000_000, max_actions_per_day: 40, max_single_stake: 20_000_000, allowed_actions: ['PLACE_TRADE'] },
   thai_head: { offline_allowed: 1, daily_spend_cap: 400_000, max_actions_per_day: 4, max_single_stake: 160_000, allowed_actions: ['BUY_TICKETS'] },
 };
 
@@ -45,7 +47,9 @@ export function createGateway(db) {
   }
   const recentRejections = (agent, sinceMs) => db.all('SELECT created_at, action, reason FROM agent_rejections WHERE agent = ? AND created_at > ? ORDER BY id DESC LIMIT 10', agent, sinceMs)
     .map((r) => ({ ...r, action: JSON.parse(r.action) }));
+  /** llm: false (rule book) or the model id that wrote it (stored as data.model) */
   function report(agent, text, data, llm = false) {
+    if (typeof llm === 'string') data = { ...(data || {}), model: llm };
     db.run('INSERT INTO agent_reports(agent, dept, created_at, report, data, llm) VALUES (?,?,?,?,?,?)', agent, AGENTS[agent].dept, Date.now(), text, data ? JSON.stringify(data) : null, llm ? 1 : 0);
   }
   const latestReports = (dept, perAgent = 1) => Object.keys(AGENTS).filter((a) => AGENTS[a].dept === dept).map((agent) => ({

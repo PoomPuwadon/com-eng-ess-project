@@ -368,13 +368,88 @@ bcMaterial.onBeforeCompile = (shader) => {
     .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vMapUv * vec2(${1 / COLS}, ${1 / ROWS}) + cellOffset;\n#endif`);
 };
 const _e = new THREE.Euler(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+// ---- the FEATURE feed: one shared texture (a VideoTexture when a preview stream plays, else the
+// animated marquee preview card from arenaFeed.js) shown on every BIG screen in VT-02 — the centre-hung
+// stack, the ring boards, the pylons, the overhead screens. One decode, many screens (threejs-performance §4).
+// Not every big screen shows the marquee (user, 2026-11-18): only the centre-hung stack (items flagged
+// `marquee`) does; every other big screen shows one of the other upcoming real fixtures, from a second
+// shared atlas of FIX_CELLS fixture cards (arenaFeed.js draws it; FIX_COLS x FIX_ROWS cards).
+export const FIX = { COLS: 3, ROWS: 2 }; FIX.CELLS = FIX.COLS * FIX.ROWS;
+export const FEATURE = { on: false, material: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), meshes: new Set(),
+  fixtures: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), fixtureMeshes: new Set() };
+FEATURE.fixtures.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute vec2 featOffset;')
+    .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vMapUv * vec2(${1 / FIX.COLS}, ${1 / FIX.ROWS}) + featOffset;\n#endif`);
+};
+const isBig = (s) => s.w * s.h >= 1.5;
+/** the fixtures atlas (null = keep the simulated match atlas on those screens) */
+export function setFixtureCards(map) {
+  if (map && FEATURE.fixtures.map !== map) { FEATURE.fixtures.map = map; FEATURE.fixtures.needsUpdate = true; }
+  for (const m of FEATURE.fixtureMeshes) m.material = map ? FEATURE.fixtures : bcMaterial;
+  paintMedia();
+}
+// ---- the MEDIA screens (VT-02 Arena Media, arenaMedia.js): a few side screens (items flagged media:
+// 'h2h' | 'reel') show the head-to-head card and the highlights reel when staff attach them to a fixture.
+// Two shared textures (a CanvasTexture; a canvas-or-VideoTexture), so one video decode for every reel screen.
+// With nothing attached they fall back to the fixture cards like their neighbours.
+// The highlights screens alternate between two feeds ('reel' / 'reel2') so two clips can run side by side.
+const mediaMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+export const MEDIA_KINDS = ['h2h', 'reel', 'reel2'];
+export const MEDIA = { h2h: mediaMat(), reel: mediaMat(), reel2: mediaMat(), meshes: { h2h: new Set(), reel: new Set(), reel2: new Set() }, items: { h2h: [], reel: [], reel2: [] }, on: { h2h: false, reel: false, reel2: false } };
+function paintMedia() {
+  // with nothing attached a media screen shows what it would have shown: the marquee (centre stack) or a fixture card
+  for (const k of MEDIA_KINDS) for (const m of MEDIA.meshes[k]) m.material = MEDIA.on[k] ? MEDIA[k] : m.userData.marquee ? (FEATURE.on ? FEATURE.material : bcMaterial) : FEATURE.fixtures.map ? FEATURE.fixtures : bcMaterial;
+}
+/** kind 'h2h' | 'reel' | 'reel2'; map = the texture to show, or null to hand those screens back to the fixture cards */
+export function setMediaScreens(kind, map) {
+  const mat = MEDIA[kind];
+  if (map && mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
+  MEDIA.on[kind] = Boolean(map);
+  paintMedia();
+}
+/** switch every big screen between the match atlas and the feature feed; map = the feature texture */
+export function setFeature(on, map) {
+  if (map && FEATURE.material.map !== map) { FEATURE.material.map = map; FEATURE.material.needsUpdate = true; }
+  FEATURE.on = Boolean(on && FEATURE.material.map);
+  for (const m of FEATURE.meshes) m.material = FEATURE.on ? FEATURE.material : bcMaterial;
+  paintMedia();
+}
+
 // items: {x,y,z,yaw,w,h,cell}
 export function buildBroadcastScreens(items) {
+  const big = items.filter(isBig), small = items.filter((s) => !isBig(s));
+  const marquee = big.filter((s) => s.marquee && !s.media), others = big.filter((s) => !s.marquee && !s.media);
+  // an arena without flagged screens keeps the old behaviour (the marquee on every big screen)
+  const bigMeshes = buildInstanced(marquee.length ? marquee : big);
+  for (const m of bigMeshes) { FEATURE.meshes.add(m); if (FEATURE.on) m.material = FEATURE.material; }
+  const fixMeshes = marquee.length ? buildInstanced(others.map((s, i) => ({ ...s, feat: (s.feat ?? i) % FIX.CELLS }))) : [];
+  for (const m of fixMeshes) { FEATURE.fixtureMeshes.add(m); if (FEATURE.fixtures.map) m.material = FEATURE.fixtures; }
+  const mediaMeshes = [];
+  // highlights screens alternate feeds within each group (sign screens, hanging screens, centre ring)
+  const reels = big.filter((s) => s.media === 'reel');
+  const kindOf = (s) => (s.media === 'reel' ? (reels.indexOf(s) % 2 ? 'reel2' : 'reel') : s.media);
+  for (const kind of MEDIA_KINDS) {
+    const list = big.filter((s) => s.media && kindOf(s) === kind);
+    MEDIA.items[kind] = list; // where they are (the YouTube layer aligns to a reel screen)
+    for (const group of [list.filter((s) => s.marquee), list.filter((s) => !s.marquee)]) {
+      for (const m of group.length ? buildInstanced(group.map((s, i) => ({ ...s, feat: (s.feat ?? i + 2) % FIX.CELLS }))) : []) { m.userData.marquee = Boolean(group[0].marquee); MEDIA.meshes[kind].add(m); mediaMeshes.push(m); }
+    }
+  }
+  paintMedia();
+  return [...buildInstanced(small), ...bigMeshes, ...fixMeshes, ...mediaMeshes];
+}
+function buildInstanced(items) {
   return chunked(items, 40, (list) => {
     const geo = new THREE.PlaneGeometry(1, 1);
     const offs = new Float32Array(list.length * 2);
     list.forEach((s, i) => { offs[i * 2] = (s.cell % COLS) / COLS; offs[i * 2 + 1] = 1 - (Math.floor(s.cell / COLS) + 1) / ROWS; });
     geo.setAttribute('cellOffset', new THREE.InstancedBufferAttribute(offs, 2));
+    if (list.some((s) => s.feat != null)) { // which fixture card (FIX atlas) this screen shows
+      const fo = new Float32Array(list.length * 2);
+      list.forEach((s, i) => { const k = s.feat ?? 0; fo[i * 2] = (k % FIX.COLS) / FIX.COLS; fo[i * 2 + 1] = 1 - (Math.floor(k / FIX.COLS) + 1) / FIX.ROWS; });
+      geo.setAttribute('featOffset', new THREE.InstancedBufferAttribute(fo, 2));
+    }
     const mesh = new THREE.InstancedMesh(geo, bcMaterial, list.length);
     list.forEach((s, i) => { _q.setFromEuler(_e.set(s.tilt || 0, s.yaw, 0, 'YXZ')); _m.compose(_p.set(s.x, s.y, s.z), _q, _s.set(s.w, s.h, 1)); mesh.setMatrixAt(i, _m); });
     mesh.instanceMatrix.needsUpdate = true;

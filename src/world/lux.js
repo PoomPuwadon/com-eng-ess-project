@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { Crowd, crowdInstanced } from '../characters/crowd.js';
 
 // Phase 1 "luxury" kit: physically based materials, procedural textures, a geometry builder that
 // merges everything per material (few draw calls), and instanced low-poly people.
@@ -188,9 +189,10 @@ export class Lux {
   }
   // walk: loop of [x, z] points; fidget: 0..1 (standing people turn and bounce on the spot)
   // sit: seated pose (hips at 0.48 m, knees forward along the facing direction)
-  person(x, z, { yaw = 0, suit = 0x1f2a44, skin = 0xd8a47f, hair = 0x2a1a10, y = 0, walk = null, fidget = 0, speed = 1.25, sit = false } = {}) {
-    this.people.push({ x, z, yaw, suit, skin, hair, y, walk, fidget, speed, sit });
-    return this;
+  person(x, z, { yaw = 0, suit = 0x1f2a44, skin = 0xd8a47f, hair = 0x2a1a10, y = 0, walk = null, fidget = 0, speed = 1.25, sit = false, ...rest } = {}) {
+    // kind / pose / face / hairStyle (optional) pass straight to the crowd (src/characters/crowd.js)
+    this.people.push({ x, z, yaw, suit, skin, hair, y, walk, fidget, speed, sit, ...rest });
+    return this.people.length - 1; // the person's id in this.crowd (after build)
   }
   build() {
     const ctx = this.ctx;
@@ -204,102 +206,23 @@ export class Lux {
       if (transparent) mesh.renderOrder = 5;
       ctx.add(mesh, geo);
     }
-    const sitting = this.people.filter((o) => o.sit), standing = this.people.filter((o) => !o.sit);
-    if (standing.length) buildPeople(ctx, standing);
-    if (sitting.length) buildPeople(ctx, sitting, true);
+    if (this.people.length) {
+      this.crowd = new Crowd(ctx);
+      for (const o of this.people) this.crowd.add(o);
+      this.crowd.build();
+    }
   }
 }
 
-// ---------------------------------------------------------------- low-poly people (3 instanced meshes)
-const PEOPLE_GEO = {};
-function peopleGeo(sit = false) {
-  const key = sit ? 'sit' : 'stand';
-  if (PEOPLE_GEO[key]) return PEOPLE_GEO[key];
-  const dy = sit ? -0.42 : 0; // seated: the upper body drops by the thigh length
-  const part = (g, x, y, z) => { g.translate(x, y, z); const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); return n; };
-  const legs = sit
-    ? [part(new THREE.BoxGeometry(0.15, 0.16, 0.46), -0.1, 0.48, 0.2), part(new THREE.BoxGeometry(0.15, 0.16, 0.46), 0.1, 0.48, 0.2), // thighs
-      part(new THREE.BoxGeometry(0.14, 0.44, 0.15), -0.1, 0.24, 0.4), part(new THREE.BoxGeometry(0.14, 0.44, 0.15), 0.1, 0.24, 0.4)] // shins
-    : [part(new THREE.BoxGeometry(0.15, 0.84, 0.17), -0.1, 0.5, 0), part(new THREE.BoxGeometry(0.15, 0.84, 0.17), 0.1, 0.5, 0)];
-  const body = mergeGeometries([
-    ...legs,
-    part(new THREE.CylinderGeometry(0.2, 0.17, 0.62, 6), 0, 1.22 + dy, 0), // torso
-    part(new THREE.CylinderGeometry(0.235, 0.2, 0.12, 6), 0, 1.5 + dy, 0), // shoulders
-    // arms (seated: reaching forward to the desk)
-    ...(sit ? [part(new THREE.BoxGeometry(0.1, 0.12, 0.42), -0.27, 1.06 + dy + 0.05, 0.16), part(new THREE.BoxGeometry(0.1, 0.12, 0.42), 0.27, 1.06 + dy + 0.05, 0.16),
-      part(new THREE.BoxGeometry(0.1, 0.32, 0.12), -0.27, 1.32 + dy, 0), part(new THREE.BoxGeometry(0.1, 0.32, 0.12), 0.27, 1.32 + dy, 0)]
-      : [part(new THREE.BoxGeometry(0.1, 0.6, 0.12), -0.27, 1.18, 0), part(new THREE.BoxGeometry(0.1, 0.6, 0.12), 0.27, 1.18, 0)]),
-  ]);
-  const skin = mergeGeometries([
-    part(new THREE.IcosahedronGeometry(0.115, 1), 0, 1.69 + dy, 0), part(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 6), 0, 1.57 + dy, 0),
-    ...(sit ? [part(new THREE.BoxGeometry(0.08, 0.08, 0.1), -0.27, 1.11 + dy, 0.42), part(new THREE.BoxGeometry(0.08, 0.08, 0.1), 0.27, 1.11 + dy, 0.42)]
-      : [part(new THREE.BoxGeometry(0.08, 0.1, 0.09), -0.27, 0.84, 0), part(new THREE.BoxGeometry(0.08, 0.1, 0.09), 0.27, 0.84, 0)]),
-  ]);
-  const dark = mergeGeometries([
-    part(new THREE.SphereGeometry(0.122, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.5), 0, 1.72 + dy, -0.01), // hair
-    part(new THREE.BoxGeometry(0.16, 0.08, 0.27), -0.1, 0.04, sit ? 0.48 : 0.04), part(new THREE.BoxGeometry(0.16, 0.08, 0.27), 0.1, 0.04, sit ? 0.48 : 0.04), // shoes
-  ]);
-  PEOPLE_GEO[key] = { body, skin, dark };
-  return PEOPLE_GEO[key];
-}
-
-// Low-poly people driven by capsule-style matrices (centre at +0.85 m), for floors that animate
-// their own figures. set(i, m4) takes the matrix a 1.7 m capsule would have.
+// ---------------------------------------------------------------- people: the approved caricature characters
+// (src/characters/crowd.js — GPU-skinned crowds, a few draw calls per floor). The old API stays:
+// L.person(...) for figures the crowd animates itself, peopleInstanced(...) for floors that drive
+// each figure's root matrix (capsule-centre convention, +0.85 m) and call commit().
 export function peopleInstanced(ctx, n, sit = false) { // sit: seated pose
   initMaterials();
-  const G = peopleGeo(sit), off = new THREE.Matrix4().makeTranslation(0, -0.85, 0), t = new THREE.Matrix4(), c = new THREE.Color();
-  const meshes = ['body', 'skin', 'dark'].map((k) => { const m = new THREE.InstancedMesh(G[k], LM.people, n); m.frustumCulled = false; m.castShadow = true; ctx.add(m); return m; });
-  return {
-    meshes,
-    color(i, suit, skin = 0xc68c62, hair = 0x1a1410) { [suit, skin, hair].forEach((col, k) => meshes[k].setColorAt(i, c.set(col))); },
-    set(i, m4) { t.multiplyMatrices(m4, off); for (const m of meshes) m.setMatrixAt(i, t); },
-    commit() { for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } },
-  };
+  return crowdInstanced(ctx, n, sit);
 }
-function buildPeople(ctx, list, sit = false) {
-  const G = peopleGeo(sit), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1), c = new THREE.Color();
-  const meshes = [['body', 'suit'], ['skin', 'skin'], ['dark', 'hair']].map(([k, col]) => {
-    const m = new THREE.InstancedMesh(G[k], LM.people, list.length);
-    list.forEach((o, i) => m.setColorAt(i, c.set(o[col])));
-    m.castShadow = true; m.receiveShadow = true;
-    ctx.add(m);
-    return m;
-  });
-  const place = (o, i, bob = 0) => {
-    q.setFromAxisAngle(up, o.yaw);
-    m4.compose(p.set(o.x, ctx.e + o.y + bob, o.z), q, s);
-    for (const m of meshes) m.setMatrixAt(i, m4);
-  };
-  list.forEach((o, i) => place(o, i));
-  for (const m of meshes) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
-  // walkers: loop along their path at a steady pace
-  const walkers = list.map((o, i) => [o, i]).filter(([o]) => o.walk);
-  const fidgeters = list.map((o, i) => [o, i]).filter(([o]) => !o.walk && o.fidget > 0);
-  for (const [o] of fidgeters) { o.yaw0 = o.yaw; o.ph = Math.random() * 100; o.rate = 0.6 + Math.random() * 1.4; o.hop = 1.6 + Math.random() * 1.6; }
-  if (walkers.length || fidgeters.length) {
-    for (const [o] of walkers) { o.seg = Math.floor(Math.random() * o.walk.length); o.t = Math.random(); }
-    let clock = 0;
-    ctx.onUpdate((dt) => {
-      if (!ctx.group.visible) return;
-      clock += dt;
-      for (const [o, i] of fidgeters) { // turn to shout at a neighbour, bounce while shouting
-        o.yaw = o.yaw0 + Math.sin(clock * o.rate + o.ph) * 0.45 * o.fidget;
-        const shout = Math.max(0, Math.sin(clock * 0.7 + o.ph * 1.3));
-        place(o, i, Math.abs(Math.sin(clock * o.hop * Math.PI + o.ph)) * 0.07 * o.fidget * shout);
-      }
-      for (const [o, i] of walkers) {
-        const pts = o.walk, a = pts[o.seg % pts.length], b = pts[(o.seg + 1) % pts.length];
-        const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-        o.t += (dt * o.speed) / len;
-        if (o.t >= 1) { o.t = 0; o.seg = (o.seg + 1) % pts.length; continue; }
-        o.x = a[0] + (b[0] - a[0]) * o.t; o.z = a[1] + (b[1] - a[1]) * o.t;
-        o.yaw = Math.atan2(b[0] - a[0], b[1] - a[1]);
-        place(o, i, Math.abs(Math.sin(o.t * len * 3.2)) * 0.03);
-      }
-      for (const m of meshes) m.instanceMatrix.needsUpdate = true;
-    });
-  }
-}
+
 
 // Wall-mounted sign as a real plane (not a floating sprite): gold letters on a dark or clear ground.
 export function plaque(ctx, text, x, y, z, yaw, { h = 0.8, color = '#e3c27a', bg = null, font = '600 72px Georgia, serif', sub = null } = {}) {

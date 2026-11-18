@@ -143,40 +143,27 @@ function ribbons(ctx) {
 }
 
 // ---------------------------------------------------------------- operators on calls: a handset raised to the ear
+// (the seated operators are crowd characters: switching their pose raises the phone)
 function onCalls(ctx, seats) {
-  const live = seats.filter((s) => !s.empty && s.sector !== 'sup');
+  const live = seats.filter((s) => !s.empty && s.sector !== 'sup' && s.pid != null);
   const share = { police: 0.38, tech: 0.28, romance: 0.12 };
-  const armGeo = new THREE.BoxGeometry(0.09, 0.36, 0.1).translate(0, 0.18, 0), phoneGeo = new THREE.BoxGeometry(0.03, 0.15, 0.075);
-  const arm = new THREE.InstancedMesh(armGeo, LM.people, live.length), ph = new THREE.InstancedMesh(phoneGeo, new THREE.MeshBasicMaterial({ color: 0xcfe8ff, toneMapped: false }), live.length);
-  arm.frustumCulled = ph.frustumCulled = false;
-  const c = new THREE.Color(); live.forEach((s, i) => arm.setColorAt(i, c.set(SKIN[i % SKIN.length])));
-  ctx.add(arm, armGeo); ctx.add(ph, phoneGeo, ph.material);
   const r = rng(31), on = live.map((s) => r() < (share[s.sector] || 0));
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), zero = new THREE.Vector3(0, 0, 0);
-  const place = (i) => {
-    const s = live[i], d = s.dir, sideZ = -d * 0.25; // the operator's right hand side
-    if (!on[i]) { m4.compose(p.set(s.x, ctx.e + s.y, s.z), q.identity(), zero); arm.setMatrixAt(i, m4); ph.setMatrixAt(i, m4); return; }
-    // forearm from the shoulder up to the ear (seated shoulder ~1.1 m, ear ~1.28 m)
-    q.setFromEuler(e.set(d * 0.5, 0, 0.0)); m4.compose(p.set(s.x + d * 0.04, ctx.e + s.y + 0.98, s.z + sideZ), q, one); arm.setMatrixAt(i, m4);
-    q.identity(); m4.compose(p.set(s.x + d * 0.03, ctx.e + s.y + 1.3, s.z + sideZ * 0.6), q, one); ph.setMatrixAt(i, m4);
-  };
-  live.forEach((_, i) => place(i));
-  arm.instanceMatrix.needsUpdate = ph.instanceMatrix.needsUpdate = true;
-  if (arm.instanceColor) arm.instanceColor.needsUpdate = true;
+  const apply = (i) => { const s = live[i]; s.L.crowd?.pose(s.pid, on[i] ? 'phoneSit' : 'sit'); };
+  live.forEach((_, i) => apply(i));
   let acc = 0;
   return {
     update(dt) {
-      acc += dt; if (acc < 0.4) return; acc = 0;
-      for (let k = 0; k < 6; k++) { const i = Math.floor(r() * live.length); on[i] = r() < (share[live[i].sector] || 0) * 1.1; place(i); }
-      arm.instanceMatrix.needsUpdate = ph.instanceMatrix.needsUpdate = true;
+      acc += dt; if (acc < 0.4 || !live.length) return; acc = 0;
+      for (let k = 0; k < 6; k++) { const i = Math.floor(r() * live.length); on[i] = r() < (share[live[i].sector] || 0) * 1.1; apply(i); }
     },
   };
 }
 
+
 // ---------------------------------------------------------------- "client onboarded": a row stands and cheers
 function celebrations(ctx, seats, onEvent) {
   const N = 8, P = peopleInstanced(ctx, N), r = rng(77);
-  for (let i = 0; i < N; i++) P.color(i, [0x1f2f5a, 0x2b2f38, 0x3a3f47, 0x5a3a2a][i % 4], SKIN[i % 6], HAIR[i % 6]);
+  for (let i = 0; i < N; i++) { P.color(i, [0x1f2f5a, 0x2b2f38, 0x3a3f47, 0x5a3a2a][i % 4], SKIN[i % 6], HAIR[i % 6], 'casual'); P.pose(i, 'cheer'); }
   const rows = new Map(); // seats grouped by row (same hall, same x)
   for (const s of seats) if (s.sector !== 'sup' && !s.empty) { const k = `${s.sector}:${s.x.toFixed(2)}`; if (!rows.has(k)) rows.set(k, []); rows.get(k).push(s); }
   const keys = [...rows.keys()];
@@ -212,7 +199,8 @@ const ROUTE = [[-66, -15, -24], [-87.5, -15, -24], [-89.6, -15, -30], [-95.6, -1
   [-68.6, -5, -35.5], [-68.6, -5, -3], [-72.6, -5, -1], [-65.0, 0, -1], [-58.0, 0, -1], [-51.5, 0, -1], [-47.0, 0, 21], [-41.0, 0, 21], [-36.2, 0, 23.4]];
 function offboarding(ctx) {
   const P = peopleInstanced(ctx, 3);
-  P.color(0, 0x111418, SKIN[2], 0x111111); P.color(1, 0x2b2f38, SKIN[0], HAIR[2]); P.color(2, 0x111418, SKIN[4], 0x111111);
+  P.color(0, 0x111418, SKIN[2], 0x111111); P.color(1, 0x2b2f38, SKIN[0], HAIR[2], 'casual'); P.color(2, 0x111418, SKIN[4], 0x111111);
+  P.pose(1, 'carry'); P.expr(1, 'cry'); // the associate carries a box of belongings, in tears
   const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.4), new THREE.MeshStandardMaterial({ color: 0xa07a4a, roughness: 0.8 }));
   ctx.add(box, box.geometry, box.material);
   const seg = ROUTE.slice(1).map((b, i) => { const a = ROUTE[i]; return { a, b, len: Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) }; });
