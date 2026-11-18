@@ -31,6 +31,20 @@ export async function connect(url, log = console, { pool: injected } = {}) {
   const have = await pool.query("SELECT to_regclass('public.lottery_tickets') AS t, to_regclass('public.users') AS u");
   if (!have.rows[0]?.t || !have.rows[0]?.u) await pool.query(readFileSync(join(HERE, 'schema.pg.sql'), 'utf8'));
 
+  // Uploaded files (Arena highlight videos) outlive redeploys here. A separate schema, NOT public: loadAll()
+  // reads every public table into memory at boot and must never pull video bytes with it.
+  let blobs = null;
+  try {
+    const haveBlobs = await pool.query("SELECT to_regclass('blobs.media') AS t");
+    if (!haveBlobs.rows[0]?.t) await pool.query('CREATE SCHEMA IF NOT EXISTS blobs; CREATE TABLE IF NOT EXISTS blobs.media (name TEXT PRIMARY KEY, mime TEXT, data BYTEA NOT NULL, created_at BIGINT)');
+    blobs = {
+      put: (name, mime, buf) => pool.query('INSERT INTO blobs.media (name, mime, data, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET mime = EXCLUDED.mime, data = EXCLUDED.data', [name, mime, buf, Date.now()]),
+      get: async (name) => (await pool.query('SELECT data FROM blobs.media WHERE name = $1', [name])).rows[0]?.data || null,
+      del: (name) => pool.query('DELETE FROM blobs.media WHERE name = $1', [name]),
+      names: async () => (await pool.query('SELECT name FROM blobs.media')).rows.map((r) => r.name),
+    };
+  } catch (e) { log.warn('[store] durable file storage unavailable (uploads stay on local disk only):', e.message); } // never block boot over this
+
   let db = null, timer = null, flushing = null, lastError = null, flushed = 0;
 
   /** Every table's rows, read from Postgres: { table: [row, ...] }. */
@@ -122,5 +136,5 @@ export async function connect(url, log = console, { pool: injected } = {}) {
   }
 
   const status = () => ({ backend: 'supabase-postgres', pending: db ? db.get('SELECT COUNT(*) AS n FROM _changes').n : 0, flushed, lastError });
-  return { loadAll, attach, flush, close, status, pool };
+  return { loadAll, attach, flush, close, status, pool, blobs };
 }

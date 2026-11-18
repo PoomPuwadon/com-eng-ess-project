@@ -9,7 +9,7 @@
 //   data/arena-media/ (gitignored) and streamed from the game server with HTTP Range support.
 // - Everything persists in the kv table (`arena:media:v1`) and is pushed to every client via the hub.
 //   Every write is staff-only (Admin or Chief Executive), checked on the server, and lands in an audit list.
-import { createWriteStream, existsSync, mkdirSync, statSync, unlinkSync, readdirSync, createReadStream, renameSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, statSync, unlinkSync, readdirSync, createReadStream, renameSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
@@ -63,7 +63,7 @@ export function parseH2H(j) {
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, MAX_ROWS);
 }
 
-export function createArenaMedia({ db, football, dir, offline = false, log = console, fetchImpl = globalThis.fetch, now = () => Date.now() }) {
+export function createArenaMedia({ db, football, dir, blobs = null, offline = false, log = console, fetchImpl = globalThis.fetch, now = () => Date.now() }) {
   mkdirSync(dir, { recursive: true });
   const state = db.kvGet(KEY, { fixtures: {}, onScreens: null, audit: [], v: 1 });
   const h2hCache = db.kvGet(H2H_KEY, {}); // matchId -> { at, rows }
@@ -73,7 +73,9 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
 
   // Uploads live on this server's disk; on a host with an ephemeral disk (a redeploy wipes it) the saved list
   // would still name clips whose files are gone, and every viewer's screen went black. Drop such entries.
+  let restored = !blobs; // with a durable blob store, files are restored from it first; only then is anything 'missing'
   function pruneMissing() {
+    if (!restored) return 0;
     let n = 0;
     for (const f of Object.values(state.fixtures)) {
       const keep = f.videos.filter((v) => v.kind !== 'file' || existsSync(join(dir, v.file)));
@@ -82,7 +84,6 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
     if (n) { state.audit.unshift({ at: now(), by: 'system', what: `dropped ${n} uploaded highlight(s) whose file is no longer on the server` }); state.audit.length = Math.min(state.audit.length, 40); db.kvSet(KEY, state); log.warn?.(`[media] dropped ${n} uploaded highlight(s) with no file on disk`); }
     return n;
   }
-  pruneMissing();
   const save = () => db.kvSet(KEY, state);
   const changed = () => { save(); const v = view(); for (const fn of listeners) { try { fn(v); } catch (e) { log.warn?.('[media]', e.message); } } };
   const audit = (by, what) => { state.audit.unshift({ at: now(), by, what }); state.audit.length = Math.min(state.audit.length, 40); };
@@ -99,6 +100,26 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
   }
   const touch = (f, by) => { f.updatedAt = now(); f.updatedBy = by; if (state.onScreens == null) state.onScreens = f.matchId; };
   const empty = (f) => !f.h2h.length && !f.videos.length;
+
+  /** boot: copy every stored upload that is not on disk back from the durable store, drop orphans, then prune */
+  async function restore() {
+    if (blobs) {
+      try {
+        const keep = new Set(Object.values(state.fixtures).flatMap((f) => f.videos.filter((v) => v.kind === 'file').map((v) => v.file)));
+        for (const name of await blobs.names()) {
+          if (!FILE_RE.test(name)) continue;
+          if (!keep.has(name)) { await blobs.del(name).catch(() => {}); continue; } // orphan: its highlight was removed
+          if (existsSync(join(dir, name))) continue;
+          const data = await blobs.get(name);
+          if (data) writeFileSync(join(dir, name), data);
+        }
+      } catch (e) { log.warn?.('[media] could not restore uploads from the durable store:', e.message); }
+      restored = true;
+    }
+    if (pruneMissing()) changed();
+    return view();
+  }
+  if (!blobs) pruneMissing();
 
   // ---------------------------------------------------------------- head-to-head
   /** fetch (or serve from cache) the provider's previous meetings for a fixture; does not save them */
@@ -214,9 +235,13 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
           const g = entry(matchId);
           if (g.videos.length >= MAX_VIDEOS) { try { unlinkSync(join(dir, name)); } catch { /* gone */ } reject(err(409, `At most ${MAX_VIDEOS} highlights per fixture.`)); return; }
           const v = { id, kind: 'file', file: name, mime: kind === 'mp4' ? 'video/mp4' : 'video/webm', size, title: clip(title, 90) || 'Match highlights', at: now(), by };
-          g.videos.push(v); touch(g, by); audit(by, `uploaded highlights "${v.title}" (${(size / 1024 / 1024).toFixed(1)} MB) to ${g.label}`);
-          changed();
-          resolve(v);
+          const finish = () => {
+            g.videos.push(v); touch(g, by); audit(by, `uploaded highlights "${v.title}" (${(size / 1024 / 1024).toFixed(1)} MB) to ${g.label}`);
+            changed();
+            resolve(v);
+          };
+          if (blobs) blobs.put(name, v.mime, readFileSync(join(dir, name))).catch((e) => log.warn?.('[media] upload kept on disk only (durable store failed):', e.message)).finally(finish);
+          else finish();
         });
       });
     });
@@ -231,7 +256,7 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
     changed();
     return { removed: v.id };
   }
-  function dropFile(name) { if (FILE_RE.test(name) && !Object.values(state.fixtures).some((f) => f.videos.some((v) => v.file === name))) { try { unlinkSync(join(dir, name)); } catch { /* gone */ } } }
+  function dropFile(name) { if (FILE_RE.test(name) && !Object.values(state.fixtures).some((f) => f.videos.some((v) => v.file === name))) { try { unlinkSync(join(dir, name)); } catch { /* gone */ } blobs?.del(name).catch(() => {}); } }
   function clear(matchId, by) {
     const f = entry(matchId, false);
     if (!f) return { cleared: false };
@@ -311,6 +336,6 @@ export function createArenaMedia({ db, football, dir, offline = false, log = con
     };
   }
 
-  return { view, pruneMissing, fetchH2H, autoFill, setH2H, addYoutube, upload, removeVideo, clear, show, serveFile, thumb, hubOps, onChange: (fn) => listeners.add(fn), dir };
+  return { view, restore, pruneMissing, fetchH2H, autoFill, setH2H, addYoutube, upload, removeVideo, clear, show, serveFile, thumb, hubOps, onChange: (fn) => listeners.add(fn), dir };
 }
 

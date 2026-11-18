@@ -175,3 +175,26 @@ test('arena media: after a redeploy wipes the disk, uploaded clips with no file 
   assert.ok(v.audit.some((a) => a.by === 'system' && /no longer on the server/.test(a.what)), 'and the audit log says so');
   cleanup(dir);
 });
+
+test('arena media: with a durable blob store, uploads survive a disk wipe; removed highlights and orphans leave the store', async () => {
+  const store = new Map(); // fake Supabase blob store
+  const blobs = { put: async (n, mime, buf) => { store.set(n, { mime, buf }); }, get: async (n) => store.get(n)?.buf || null, del: async (n) => { store.delete(n); }, names: async () => [...store.keys()] };
+  const dir = tmp(), dbFile = join(dir, 'firm.db'), mdir = join(dir, 'media');
+  const m1 = createArenaMedia({ db: openDb(dbFile), football: fakeFootball(), dir: mdir, blobs, offline: true, log: quiet });
+  await m1.restore();
+  const up = await m1.upload(MATCH.id, Readable.from([mp4(4096), Buffer.alloc(4096, 1)]), { title: 'Goals', length: 8192, by: 'ceo:Bo' });
+  const up2 = await m1.upload(MATCH.id, Readable.from([mp4(2048), Buffer.alloc(2048, 2)]), { title: 'Skills', length: 4096, by: 'ceo:Bo' });
+  assert.equal(store.size, 2, 'each upload is also stored durably');
+  for (const n of readdirSync(mdir)) rmSync(join(mdir, n)); // redeploy: the disk is wiped
+  store.set('0123456789abcdef.mp4', { mime: 'video/mp4', buf: mp4(64) }); // an orphan nobody references
+  const m2 = createArenaMedia({ db: openDb(dbFile), football: fakeFootball(), dir: mdir, blobs, offline: true, log: quiet });
+  assert.equal(m2.view().fixtures[MATCH.id].videos.length, 2, 'nothing is pruned while the restore is pending');
+  await m2.restore();
+  const v = m2.view().fixtures[MATCH.id].videos;
+  assert.deepEqual(v.map((x) => x.title), ['Goals', 'Skills'], 'both clips are still advertised');
+  assert.ok(existsSync(join(mdir, up.file)) && existsSync(join(mdir, up2.file)), 'and their files are back on disk');
+  assert.ok(!store.has('0123456789abcdef.mp4'), 'orphans are removed from the store');
+  m2.removeVideo(MATCH.id, up.id, 'ceo:Bo');
+  assert.ok(!store.has(up.file) && store.has(up2.file), 'removing a highlight removes its stored copy');
+  cleanup(dir);
+});

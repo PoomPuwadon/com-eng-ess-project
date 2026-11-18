@@ -57,7 +57,8 @@ export function createApp(config, log = console, extra = {}) {
   const league = createLeague({ db, market, desk });
   const chartDesk = createChartAnalyst({ llm, log });
   const football = createFootball({ db, ledger, treasury, llm, config, log });
-  const media = createArenaMedia({ db, football, dir: config.mediaDir || join(ROOT, 'data', 'arena-media'), offline: Boolean(config.offline), log });
+  const media = createArenaMedia({ db, football, dir: config.mediaDir || join(ROOT, 'data', 'arena-media'), blobs: extra.store?.blobs || null, offline: Boolean(config.offline), log });
+  media.restore().catch((e) => log.warn?.('[media] restore failed:', e.message)); // uploads come back from Supabase after a redeploy
   hub.extend(media.hubOps(hub));
   media.onChange((v) => hub.broadcast({ t: 'arenaMedia', media: v })); // live to every connected client
   const lotto = createLotteryData(db, bus, config, log);
