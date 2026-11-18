@@ -152,7 +152,7 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
   const getRun = (id) => { const r = id ? db.get('SELECT id, json FROM lottery_runs WHERE id = ?', id) : db.get('SELECT id, json FROM lottery_runs ORDER BY id DESC LIMIT 1'); return r ? { ...JSON.parse(r.json), id: r.id } : null; };
 
   // ---------------------------------------------------------------- Head of Thai Markets: the decision
-  const BLIND_NOTE = '\nThis round is a BLIND TEST: the target draw has already been held, but its result has been withheld from you and from every model input. Guess as if the draw were still in the future. Never claim to know the result.';
+  const BLIND_NOTE = '\nThis round is a BLIND TEST: the target draw has already been held, but its result has been withheld from you and from every model input. Guess as if the draw were still in the future. Never claim to know the result. You MUST commit to a guess: choose at least 3 certificates (abstaining is not allowed in a blind test).';
 
   /** Lottery Quant ranks the candidates, the Head of Thai Markets picks 0-8; always falls back to the rule book. */
   async function pick(run, budget, { blind = false } = {}) {
@@ -222,11 +222,16 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     if (all.length < 41) return null;
     const actual = all[all.length - 1];
     const rounds = db.kvGet(BLIND_KEY, []);
-    if (rounds.some((r) => r.date === actual.date)) return null; // once per draw
+    const prior = rounds.find((r) => r.date === actual.date);
+    if (prior && (prior.tickets.length || prior.rejected)) return null; // once per draw (an empty round is replayed)
     if (ledger.balance(DEPT.thai) < 16 * TICKET_PRICE) return null; // always leave enough for the real purchase
     const run = runPipeline('blind', { draws: all.slice(0, -1), target: actual.date });
     if (!run) return null;
     const p = await pick(run, ledger.balance(DEPT.thai), { blind: true });
+    if (p.chosen.length < 3) { // a blind round is only a test if the desk commits: top up from the rule book's ranking
+      const have = new Set(p.chosen.map((t) => t.number));
+      for (const c of p.cands) { if (p.chosen.length >= 5) break; if (!have.has(c.number)) p.chosen.push({ number: c.number, rationale: `Rule-book fill: highest model-implied value (¤${c.modelValue}).` }); }
+    }
     const tickets = [];
     let rejected = null;
     try {
@@ -252,7 +257,7 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
       last2Hit: guessL2.slice(0, 5).includes(actual.last2), last2Rank: guessL2.indexOf(actual.last2) + 1 || null,
       tickets, cost, payout, net: payout - cost, rejected,
     };
-    db.kvSet(BLIND_KEY, [rec, ...rounds].slice(0, 20));
+    db.kvSet(BLIND_KEY, [rec, ...rounds.filter((r) => r.date !== actual.date)].slice(0, 20));
     gateway.report('thai_head', `Blind test for the ${actual.date} draw (result withheld): ${tickets.length} certificates, cost ¤${(cost / 100).toFixed(2)}, returned ¤${(payout / 100).toFixed(2)}, net ${rec.net >= 0 ? '+' : '−'}¤${(Math.abs(rec.net) / 100).toFixed(2)}. Last-2 shortlist ${rec.last2Hit ? 'HIT' : 'missed'} (actual ${actual.last2}).`, { blind: true, date: actual.date, net: rec.net }, p.model || false);
     bus.emit('lottery', { type: 'blind', date: actual.date });
     return rec;

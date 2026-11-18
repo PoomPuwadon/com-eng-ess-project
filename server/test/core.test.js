@@ -304,3 +304,21 @@ test('blind round: the desk guesses the latest official draw without seeing it; 
   const rec2 = await app.institute.blindRound();
   assert.equal(rec2.date, '2027-01-17'); assert.equal(rec2.through, lastDraw.date);
 });
+
+test('blind round: an empty earlier round is replayed; a round with certificates is never repeated', async () => {
+  const app = mkApp();
+  const r = rng(21);
+  const mk = (i) => ({ ...DRAW, date: `${2020 + Math.floor(i / 24)}-${String(1 + Math.floor(i / 2) % 12).padStart(2, '0')}-${i % 2 ? '16' : '01'}`,
+    first: String(Math.floor(r() * 1e6)).padStart(6, '0'), last2: String(Math.floor(r() * 100)).padStart(2, '0'),
+    last3f: [String(Math.floor(r() * 1000)).padStart(3, '0'), String(Math.floor(r() * 1000)).padStart(3, '0')], last3b: [String(Math.floor(r() * 1000)).padStart(3, '0'), String(Math.floor(r() * 1000)).padStart(3, '0')] });
+  const hist = Array.from({ length: 60 }, (_, i) => mk(i));
+  for (const d of hist) app.lotto.store(d, { confirmed: true });
+  app.db.run('UPDATE cash_trips SET eta = 0'); app.treasury.deliverDue();
+  const date = hist[hist.length - 1].date;
+  // the old behaviour: the model abstained, so the round bought nothing and recorded zero
+  app.db.kvSet('lottery:blind:v1', [{ date, through: hist[hist.length - 2].date, tickets: [], cost: 0, payout: 0, net: 0, rejected: null, guess: { last2: [], front3: [], back3: [] }, actual: {} }]);
+  const rec = await app.institute.blindRound();
+  assert.ok(rec && rec.tickets.length >= 3, 'the empty round is replayed and now commits to certificates');
+  assert.equal(app.institute.blindRounds().filter((x) => x.date === date).length, 1, 'the empty record is replaced, not duplicated');
+  assert.equal(await app.institute.blindRound(), null, 'a round that bought certificates is final');
+});
