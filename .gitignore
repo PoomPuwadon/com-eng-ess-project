@@ -4,3 +4,6 @@ dist/
 .env*
 !.env.example
 data/
+
+# browser profile from screenshot runs (holds cookies): never commit
+docs/screenshots/chrome-profile/
