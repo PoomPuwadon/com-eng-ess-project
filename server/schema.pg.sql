@@ -47,7 +47,10 @@ CREATE TABLE IF NOT EXISTS agent_usage (agent TEXT NOT NULL, day TEXT NOT NULL, 
 CREATE TABLE IF NOT EXISTS agent_rejections (id BIGINT PRIMARY KEY, agent TEXT NOT NULL, created_at BIGINT NOT NULL, action TEXT, reason TEXT);
 CREATE TABLE IF NOT EXISTS llm_spend (id BIGINT PRIMARY KEY, created_at BIGINT NOT NULL, job TEXT NOT NULL, agent TEXT, model TEXT NOT NULL, input_tokens BIGINT, cache_write BIGINT, cache_read BIGINT, output_tokens BIGINT, usd DOUBLE PRECISION NOT NULL);
 
-CREATE TABLE IF NOT EXISTS lottery_draws (date TEXT PRIMARY KEY, json TEXT NOT NULL, confirmed BIGINT NOT NULL, first_seen BIGINT NOT NULL, fetched_at BIGINT NOT NULL, source TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS agent_events (id BIGINT PRIMARY KEY, at BIGINT NOT NULL, room TEXT NOT NULL, agent TEXT, provider TEXT NOT NULL, model TEXT, stage TEXT NOT NULL, text TEXT, data TEXT, outcome TEXT, ref TEXT);
+CREATE INDEX IF NOT EXISTS agent_events_room ON agent_events(room, id);
+
+CREATE TABLE IF NOT EXISTS lottery_draws(date TEXT PRIMARY KEY, json TEXT NOT NULL, confirmed BIGINT NOT NULL, first_seen BIGINT NOT NULL, fetched_at BIGINT NOT NULL, source TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS lottery_probe (date TEXT PRIMARY KEY, found BIGINT NOT NULL, checked_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS lottery_runs (id BIGINT PRIMARY KEY, target_date TEXT NOT NULL, created_at BIGINT NOT NULL, json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS lottery_tickets (id BIGINT PRIMARY KEY, owner TEXT NOT NULL, number TEXT NOT NULL, target_date TEXT NOT NULL, sale_day TEXT NOT NULL, price BIGINT NOT NULL, status TEXT NOT NULL,

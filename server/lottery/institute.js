@@ -4,6 +4,7 @@ import { DEPT, VAULT, EXT_LOTTERY, player as playerAcct } from '../ledger.js';
 import { bkkDate, bkkTime, addDays } from '../time.js';
 import { TARGETS, MODELS, evaluate, audit, monteCarlo, beam, positionalDigits, markovDigits, topK } from './models.js';
 import { ATTRIBUTION } from './data.js';
+import { nullFeed } from '../agents/feed.js';
 
 export const TICKET_PRICE = 8_000; // ¤ 80.00 (leisure-rules §7)
 const PRIZES = { first: 600_000_000, near1: 10_000_000, second: 20_000_000, third: 8_000_000, fourth: 4_000_000, fifth: 2_000_000, last3f: 400_000, last3b: 400_000, last2: 200_000 };
@@ -63,8 +64,12 @@ const QUANT_SCHEMA = {
   properties: { shortlist: { type: 'array', items: { type: 'string' } }, note: { type: 'string' } },
 };
 
-export function createInstitute({ db, ledger, data, gateway, llm, bus, players, log = console }) {
+export function createInstitute({ db, ledger, data, gateway, llm, bus, players, feed = nullFeed, log = console }) {
   let running = false;
+  const ROOM = 'OT-02';
+  const say = (agent, stage, text, o = {}) => feed.emit({ room: ROOM, agent, stage, text, ...o });
+  /** ~14:30 Bangkok on the draw day (the sales window closes at 13:30) */
+  const drawAt = (date) => Date.parse(`${date}T14:30:00+07:00`);
 
   // ---------------------------------------------------------------- calendar / sales window
   function calendar(now = Date.now()) {
@@ -84,7 +89,12 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     if (draws.length < 40) return null;
     const cal = calendar();
     const stages = [];
-    const stage = (id, name, agent, fn) => { const t0 = performance.now(); const out = fn(); stages.push({ id, name, agent, ms: Math.round(performance.now() - t0), ...out }); return out; };
+    const stage = (id, name, agent, fn) => {
+      const t0 = performance.now(); const out = fn(); const ms = Math.round(performance.now() - t0);
+      stages.push({ id, name, agent, ms, ...out });
+      if (!blind) say('lottery_quant', 'research', `${name}: ${out.summary}`, { model: null, ref: `stage:${id}`, data: { stage: id, name, ms, n: stages.length, of: 7 } }); // code stage, not an LLM: rule book
+      return out;
+    };
 
     stage('ingest', 'Data ingestion', 'Lottery Quant', () => ({
       summary: `${draws.length} confirmed official draws, ${draws[0].date} → ${draws[draws.length - 1].date}.${blind ? ' BLIND TEST: the most recent official result is withheld from every model.' : ''}`,
@@ -145,6 +155,8 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     const { lastInsertRowid } = db.run('INSERT INTO lottery_runs(target_date, created_at, json) VALUES (?,?,?)', cal.next, run.createdAt, JSON.stringify(run));
     run.id = Number(lastInsertRowid);
     bus.emit('lottery', { type: 'run', id: run.id, target: cal.next });
+    say('lottery_quant', 'research', `Pipeline complete for the ${cal.next} draw (${stages.length} stages, ${stages.reduce((a, s) => a + s.ms, 0)} ms).`, { ref: `run:${run.id}`, outcome: 'done', data: { runId: run.id, target: cal.next, trigger } });
+    feed.status(ROOM, { nextDraw: cal.next, nextAt: drawAt(cal.next), label: 'Next official draw', runId: run.id, runAt: run.createdAt });
     return run;
   }
 
@@ -162,21 +174,22 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     const exercise = blind ? 'BLIND TEST: this draw has already happened; its result is withheld. Guess it.' : undefined;
     // Lottery Quant (its own model, llm.js ROUTES): ranks the candidates and writes the research note
     const backtest = { hits: e.hits, draws: e.draws, hitRate: e.hitRate, nullRate: e.baselineRate, lift: e.lift, ci95: e.ci95, pValue: e.pValue, logLossBits: e.logLossBits, nullBits: e.baselineBits };
-    const lq = await llm.ask({ job: 'lottery_research', agent: 'lottery_quant', system: QUANT_SYSTEM + (blind ? BLIND_NOTE : ''), schema: QUANT_SCHEMA, maxTokens: 900, user: JSON.stringify({
-      targetDraw: run.target, exercise, stages: run.stages.map((s) => ({ stage: s.name, summary: s.summary })), candidates: cands, backtestLast2: backtest, monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, certificatePrice: TICKET_PRICE / 100 }) });
+    const lq = await feed.think({ room: ROOM, agent: 'lottery_quant', text: 'Ranking candidates' }, () => llm.ask({ job: 'lottery_research', agent: 'lottery_quant', system: QUANT_SYSTEM + (blind ? BLIND_NOTE : ''), schema: QUANT_SCHEMA, maxTokens: 900, user: JSON.stringify({
+      targetDraw: run.target, exercise, stages: run.stages.map((s) => ({ stage: s.name, summary: s.summary })), candidates: cands, backtestLast2: backtest, monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, certificatePrice: TICKET_PRICE / 100 }) }));
     let quantModel = null, quantNote = null;
     if (lq && Array.isArray(lq.data.shortlist)) {
       const byNum = new Map(cands.map((c) => [c.number, c]));
       const ranked = [...new Set(lq.data.shortlist.map(String))].filter((n) => byNum.has(n)).map((n) => byNum.get(n));
       if (ranked.length) { cands = [...ranked, ...cands.filter((c) => !ranked.includes(c))]; quantModel = lq.model; quantNote = lq.data.note; }
     }
+    say('lottery_quant', 'shortlist', `${blind ? 'BLIND TEST. ' : ''}${quantNote || 'Rule-book ranking by model-implied value.'}`, { model: quantModel, ref: `${blind ? 'blind' : 'run'}:${run.id || run.target}`, data: { blind, target: run.target, shortlist: cands.slice(0, 8).map((c) => ({ number: c.number, value: c.modelValue })) } });
     let chosen = cands.slice(0, 5).map((c) => ({ number: c.number, rationale: quantModel ? `Lottery Quant shortlist (model-implied ¤${c.modelValue}).` : `Highest model-implied value (¤${c.modelValue}).` }));
     let note = null, usedLLM = false, model = null;
-    const out = await llm.ask({ job: 'lottery_decision', agent: 'thai_head', system: SYSTEM + (blind ? BLIND_NOTE : ''), maxTokens: 2000, user: JSON.stringify({
+    const out = await feed.think({ room: ROOM, agent: 'thai_head', text: 'Choosing certificates' }, () => llm.ask({ job: 'lottery_decision', agent: 'thai_head', system: SYSTEM + (blind ? BLIND_NOTE : ''), maxTokens: 2000, user: JSON.stringify({
       targetDraw: run.target, exercise, budget: budget / 100, certificatePrice: TICKET_PRICE / 100, candidates: cands, lotteryQuantNote: quantNote,
       backtestLast2: backtest,
       monteCarloEmpiricalP: mc.empiricalP, fairValuePerCertificate: 48, modelWeights: run.stages.find((s) => s.id === 'ensemble').data.L2.weights,
-    }), schema: SCHEMA });
+    }), schema: SCHEMA }));
     if (out && Array.isArray(out.data.tickets)) {
       const valid = new Set(cands.map((c) => c.number));
       chosen = out.data.tickets.filter((t) => valid.has(t.number)).slice(0, 8);
@@ -205,6 +218,8 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
     run.decision = { agent: 'Head of Thai Markets', at: Date.now(), usedLLM, model, quantModel, quantNote, note, tickets: chosen.map((t) => ({ ...t, bought: bought.some((b) => b.number === t.number) })), spend: bought.length * TICKET_PRICE, rejected };
     saveRun(run);
     gateway.report('thai_head', note, { target: run.target, tickets: run.decision.tickets, spend: run.decision.spend }, model || false);
+    for (const t of run.decision.tickets) say('thai_head', 'decision', `${t.bought ? 'BOUGHT' : 'REJECTED'} ${t.number} — ${t.rationale || 'rule book pick'}`, { model: model || null, outcome: t.bought ? 'bought' : 'rejected', ref: `ticket:${t.number}`, data: { number: t.number, target: run.target, runId: run.id, rationale: String(t.rationale || '').slice(0, 300), reason: t.bought ? null : rejected[0] || null } });
+    say('thai_head', 'decision', note, { model: model || null, ref: `run:${run.id}`, outcome: bought.length ? 'bought' : 'rejected', data: { kind: 'note', target: run.target, runId: run.id, bought: bought.length, spend: run.decision.spend } });
     gateway.report('lottery_quant', quantNote || run.stages.map((s) => s.summary).slice(1, 6).join(' '), { runId: run.id, shortlist: cands.slice(0, 8).map((c) => c.number) }, quantModel || false);
     bus.emit('lottery', { type: 'decision', id: run.id });
     return run.decision;
@@ -325,6 +340,8 @@ export function createInstitute({ db, ledger, data, gateway, llm, bus, players, 
           agentTickets: agentT.map((t) => ({ ...t, prizes: JSON.parse(t.prizes || '[]') })), agentReturn: agentT.reduce((s, t) => s + (t.payout || 0), 0), agentCost: agentT.length * TICKET_PRICE };
         saveRun(run);
       }
+      const done = db.all("SELECT run_id, SUM(payout) AS back, COUNT(*) AS n FROM lottery_tickets WHERE owner = ? AND status = 'settled' AND run_id IS NOT NULL GROUP BY run_id ORDER BY run_id DESC LIMIT 1", DEPT.thai)[0];
+      if (done) { const cost = done.n * TICKET_PRICE, back = done.back || 0; say('thai_head', 'settle', `Settled ${done.n} certificates: cost ¤${(cost / 100).toFixed(2)}, returned ¤${(back / 100).toFixed(2)}.`, { model: db.get('SELECT model FROM lottery_tickets WHERE run_id = ? AND owner = ? LIMIT 1', done.run_id, DEPT.thai)?.model || null, outcome: back >= cost ? 'won' : 'lost', ref: `run:${done.run_id}`, data: { runId: done.run_id, cost, back } }); }
       bus.emit('lottery', { type: 'settled', count: n });
     }
     return n;

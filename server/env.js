@@ -49,4 +49,7 @@ export const CONFIG = {
   startingBalance: num('STARTING_BALANCE_MINOR', 1_000_000), // ¤ 10,000.00
   lotteryBackfillFrom: process.env.LOTTERY_BACKFILL_FROM || '2016-01-01',
   offline: bool('OFFLINE', false), // no outbound fetches (tests)
+  // OT-01 off-hours research (agents/research.js): one cycle every N minutes while the US market is closed, inside its own monthly sub-budget
+  researchEveryMin: num('RESEARCH_EVERY_MIN', 150),
+  researchBudgetUsd: num('RESEARCH_BUDGET_USD', 2),
 };

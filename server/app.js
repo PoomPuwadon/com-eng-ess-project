@@ -15,6 +15,9 @@ import { createGateway, AGENTS } from './agents/gateway.js';
 import { createTradingDesk } from './agents/tradingDesk.js';
 import { createChartAnalyst } from './agents/chartAnalyst.js';
 import { createLeague } from './agents/league.js';
+import { createFeed } from './agents/feed.js';
+import { createResearch } from './agents/research.js';
+import { createNews } from './market/news.js';
 import { createFootball } from './football/service.js';
 import { createArenaMedia } from './football/arenaMedia.js';
 import { createLotteryData, ATTRIBUTION } from './lottery/data.js';
@@ -22,6 +25,7 @@ import { createInstitute, TICKET_PRICE } from './lottery/institute.js';
 import { TARGETS, MODELS } from './lottery/models.js';
 import { createAuth, dbStore, memoryStore } from './auth.js';
 import { createHub } from './realtime/hub.js';
+import { marketStatus } from './time.js';
 import { attachWs } from './realtime/ws.js';
 
 function createBus() {
@@ -53,18 +57,28 @@ export function createApp(config, log = console, extra = {}) {
   const trading = createTrading(db, ledger, market, bus, config);
   const llm = createLLM(db, config, log);
   const gateway = createGateway(db);
-  const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log });
+  const feed = createFeed({ db, bus, routeOf: llm.route }); // AI visuals: one attributed event stream for OT-01 / OT-02 / VT-02
+  const news = createNews({ config, log });
+  const research = createResearch({ db, llm, market, gateway, feed, news, config, log });
+  const desk = createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, feed, research, log });
   const league = createLeague({ db, market, desk });
   const chartDesk = createChartAnalyst({ llm, log });
-  const football = createFootball({ db, ledger, treasury, llm, config, log });
+  const football = createFootball({ db, ledger, treasury, llm, config, feed, log });
   const media = createArenaMedia({ db, football, dir: config.mediaDir || join(ROOT, 'data', 'arena-media'), blobs: extra.store?.blobs || null, offline: Boolean(config.offline), log });
   media.restore().catch((e) => log.warn?.('[media] restore failed:', e.message)); // uploads come back from Supabase after a redeploy
   hub.extend(media.hubOps(hub));
   media.onChange((v) => hub.broadcast({ t: 'arenaMedia', media: v })); // live to every connected client
   const lotto = createLotteryData(db, bus, config, log);
-  const institute = createInstitute({ db, ledger, data: lotto, gateway, llm, bus, players, log });
+  const institute = createInstitute({ db, ledger, data: lotto, gateway, llm, bus, players, feed, log });
   let reconcile = ledger.reconcile();
   treasury.genesis();
+
+  // a desk order that fills is the end of the story the room has been following: idea -> proposal -> cleared -> FILLED
+  bus.on('trade', (t) => {
+    if (t.owner !== DEPT.trading || !t.agent) return;
+    feed.emit({ room: 'OT-01', agent: t.agent, model: t.model, stage: 'result', outcome: 'filled', ref: t.order_id ? `order:${t.order_id}` : null,
+      text: `FILLED ${String(t.side).toUpperCase()} ${t.qty} ${t.symbol} @ ${(t.price / 100).toFixed(2)}${t.rationale ? ` — ${t.rationale}` : ''}`, data: { symbol: t.symbol, side: t.side, qty: t.qty, price: t.price, realized: t.realized, rationale: String(t.rationale || '').slice(0, 300) } });
+  });
 
   // ---------------------------------------------------------------- schedulers (the firm runs 24/7, players or not)
   const timers = [];
@@ -76,16 +90,24 @@ export function createApp(config, log = console, extra = {}) {
     // trading desk: first tick once data and budget are in, then every 15 min (open) / 60 min (closed)
     const deskLoop = async () => {
       let delay = 60_000;
-      try { const r = await desk.tick(); if (r.ok) delay = desk.intervalMs(); else delay = 60_000; if (r.ok) log.log(`[desk] tick: ${r.placed} placed, ${r.rejected} rejected, llm=${r.usedLLM}`); } catch (e) { log.warn('[desk]', e.message); }
+      try { const r = await desk.tick(); if (r.ok) delay = desk.intervalMs(); else delay = 60_000; if (!r.ok) feed.status('OT-01', { nextAt: Date.now() + delay, market: marketStatus().open ? 'open' : 'closed', label: r.skipped ? `Waiting: ${r.skipped}` : 'Next desk decision' }); if (r.ok) log.log(`[desk] tick: ${r.placed} placed, ${r.rejected} rejected, llm=${r.usedLLM}`); } catch (e) { log.warn('[desk]', e.message); }
       timers.push(setTimeout(deskLoop, delay));
     };
     timers.push(setTimeout(deskLoop, 30_000));
+    feed.status('OT-01', { nextAt: Date.now() + 30_000, market: marketStatus().open ? 'open' : 'closed', mode: marketStatus().open ? 'trading' : 'research', label: 'Next desk decision' });
+    // OT-01 off-hours research: market + news research while the market is closed (tiny capped budget, see agents/research.js)
+    timers.push(setTimeout(() => research.tick().catch(() => {}), 45_000));
+    timers.push(setInterval(() => research.tick().catch(() => {}), 5 * 60_000));
+    // keep the real countdown to the next open fresh for the research-mode board
+    timers.push(setInterval(() => { const ms = marketStatus(); feed.status('OT-01', { market: ms.open ? 'open' : 'closed', mode: ms.open ? 'trading' : 'research', nextOpenAt: ms.open ? null : ms.nextOpen || null }); }, 60_000));
     // lottery: backfill history, poll results, run the pipeline, settle
     const lottoLoop = async () => {
       try { await lotto.pollLatest(); await institute.cycle('scheduled'); } catch (e) { log.warn('[lottery]', e.message); }
       const run = institute.getRun(), cal = institute.calendar();
       const waiting = run && !run.decision && run.target === cal.next && cal.salesOpen; // e.g. budget still with the courier
-      timers.push(setTimeout(lottoLoop, Math.min(lotto.nextPollDelay(cal.next), waiting ? 10 * 60_000 : Infinity)));
+      const delay = Math.min(lotto.nextPollDelay(cal.next), waiting ? 10 * 60_000 : Infinity);
+      feed.status('OT-02', { nextCycleAt: Date.now() + delay, nextDraw: cal.next });
+      timers.push(setTimeout(lottoLoop, delay));
     };
     if (!config.offline) {
       lotto.backfill().then(() => institute.cycle('backfill')).catch((e) => log.warn('[lottery backfill]', e.message));
@@ -120,6 +142,8 @@ export function createApp(config, log = console, extra = {}) {
 
   function firmBook() {
     const book = trading.portfolio(DEPT.trading);
+    const sleeves = desk.sleeves(); // which desk owns each line (pit boards stripe it in the desk's colour)
+    for (const p of book.positions) p.owners = sleeves.filter((s) => s.positions.some((x) => x.symbol === p.symbol)).map((s) => s.agent);
     return {
       book, navHistory: trading.navHistory(DEPT.trading), trades: trading.trades(DEPT.trading, 60), orders: trading.orders(DEPT.trading, 30),
       agents: gateway.latestReports('trading_floor', 3), desks: desk.sleeves(), league: league.table(), budget: { inTransit: treasury.inTransit(DEPT.trading) }, llm: llm.status(),
@@ -179,6 +203,14 @@ export function createApp(config, log = console, extra = {}) {
     'POST /api/market/cancel': async (req) => { const p = need(req); return { order: trading.cancelOrder(p.account, Number((await readBody(req)).id)), portfolio: trading.portfolio(p.account) }; },
     'GET /api/market/leaderboard': () => ({ leaders: trading.leaderboard(players, config.startingBalance), firm: { nav: trading.portfolio(DEPT.trading).nav, start: 100_000_000 } }),
     'GET /api/firm/book': () => firmBook(),
+    // AI visuals feed: backfill for the three rooms (SSE 'agent' events carry the live ones)
+    'GET /api/ai/feed': (req, url) => {
+      const room = url.searchParams.get('room') || undefined;
+      if (room && !['OT-01', 'OT-02', 'VT-02'].includes(room)) throw Object.assign(new Error('Unknown room'), { status: 400 });
+      const st = llm.status();
+      return { room: room || null, events: feed.list({ room, limit: url.searchParams.get('limit') || 40, agent: url.searchParams.get('agent') || undefined }).reverse(), status: feed.getStatus(room),
+        research: room === 'OT-01' || !room ? research.latest() : undefined, now: Date.now(), llm: { enabled: st.enabled, routes: st.routes } };
+    },
     'GET /api/ai/league': () => ({ league: league.table(), llm: llm.status() }),
     'GET /api/football/state': (req) => { const p = authOf(req); return { ...football.snapshot(p ? p.account : null), league: league.table(), llm: llm.status() }; },
     'GET /api/arena-media': () => media.view(),
@@ -263,5 +295,5 @@ export function createApp(config, log = console, extra = {}) {
   const start0 = start, stop0 = stop;
   start = () => { ws = attachWs(server, hub, log); start0(); football.start(); };
   stop = () => { ws?.stop(); football.stop(); stop0(); };
-  return { store: extra.store, auth, hub, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
+  return { store: extra.store, auth, hub, feed, research, news, league, football, media, db, ledger, treasury, players, roulette, market, trading, llm, gateway, desk, lotto, institute, bus, server, start, stop, routes };
 }

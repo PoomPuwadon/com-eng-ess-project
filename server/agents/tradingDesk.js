@@ -12,6 +12,7 @@ import { DEPT } from '../ledger.js';
 import { SYMBOLS, NAME } from '../market/data.js';
 import { features, zscore, covariance, logReturns } from '../market/indicators.js';
 import { marketStatus } from '../time.js';
+import { nullFeed } from './feed.js';
 
 const OWNER = DEPT.trading;
 export const TRADERS = ['head_trader', 'co_head_trader'];
@@ -79,8 +80,11 @@ const RISK_SCHEMA = {
   },
 };
 
-export function createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, log = console }) {
+export function createTradingDesk({ db, ledger, market, trading, gateway, llm, bus, feed = nullFeed, research = null, log = console }) {
   let lastTick = 0, running = false;
+  const ROOM = 'OT-01';
+  const say = (agent, stage, text, o = {}) => feed.emit({ room: ROOM, agent, stage, text, ...o });
+  const ordText = (a) => `${String(a.side).toUpperCase()} ${a.qty} ${String(a.symbol).toUpperCase()}`;
 
   // ---------------------------------------------------------------- Quant (code)
   function quant() {
@@ -252,7 +256,7 @@ export function createTradingDesk({ db, ledger, market, trading, gateway, llm, b
       signals: sig.rows.slice(0, 18).map((r) => ({ symbol: r.symbol, price: +r.price.toFixed(2), momentum: r.score, defensive: r.scoreB, ret1m: +(r.ret1m * 100).toFixed(1), ret6m: +(r.ret6m * 100).toFixed(1), trend50: +(r.trend50 * 100).toFixed(1), rsi14: +(r.rsi14 || 0).toFixed(0), vol20: +(r.vol20 * 100).toFixed(0), quantTilt: r.tilt || 0 })),
       baseline: proposal, rejectedSinceLastTick: rejections.map((r) => ({ ...r.action, reason: r.reason })),
     };
-    const out = await llm.ask({ job: 'tick', agent, system: traderSystem(agent), user: JSON.stringify(state), schema: TRADER_SCHEMA, maxTokens: 2500, minBreaker });
+    const out = await feed.think({ room: ROOM, agent, text: 'Drafting orders' }, () => llm.ask({ job: 'tick', agent, system: traderSystem(agent), user: JSON.stringify(state), schema: TRADER_SCHEMA, maxTokens: 2500, minBreaker }));
     if (out && Array.isArray(out.data.actions)) return { agent, actions: out.data.actions.slice(0, LIMITS.maxOrders), memo: out.data.memo, conviction: out.data.conviction, model: out.model, sl };
     return { agent, actions: proposal, memo: null, conviction: 'high', model: null, sl };
   }
@@ -270,8 +274,8 @@ export function createTradingDesk({ db, ledger, market, trading, gateway, llm, b
       const minBreaker = ms.open ? 2 : 1;
 
       // 1. Quant: code signals, LLM tilts + note
-      const q = await llm.ask({ job: 'quant_note', agent: 'quant', system: QUANT_SYSTEM, schema: QUANT_SCHEMA, maxTokens: 900, minBreaker,
-        user: JSON.stringify({ regime: sig.regime, spyTrend50: sig.spy?.trend50, signals: sig.rows.slice(0, 20).map((r) => ({ symbol: r.symbol, momentum: r.score, defensive: r.scoreB, ret6m: +(r.ret6m * 100).toFixed(1), trend50: +(r.trend50 * 100).toFixed(1), rsi14: +(r.rsi14 || 0).toFixed(0), vol20: +(r.vol20 * 100).toFixed(0), above200: r.above200 })) }) });
+      const q = await feed.think({ room: ROOM, agent: 'quant', text: 'Reading the signal table' }, () => llm.ask({ job: 'quant_note', agent: 'quant', system: QUANT_SYSTEM, schema: QUANT_SCHEMA, maxTokens: 900, minBreaker,
+        user: JSON.stringify({ regime: sig.regime, spyTrend50: sig.spy?.trend50, signals: sig.rows.slice(0, 20).map((r) => ({ symbol: r.symbol, momentum: r.score, defensive: r.scoreB, ret6m: +(r.ret6m * 100).toFixed(1), trend50: +(r.trend50 * 100).toFixed(1), rsi14: +(r.rsi14 || 0).toFixed(0), vol20: +(r.vol20 * 100).toFixed(0), above200: r.above200 })) }) }));
       const tilts = [];
       for (const t of (q?.data.tilts || []).slice(0, 5)) {
         const r = sig.rows.find((x) => x.symbol === String(t.symbol).toUpperCase());
@@ -280,7 +284,18 @@ export function createTradingDesk({ db, ledger, market, trading, gateway, llm, b
         r.tilt = tilt; r.score = +(r.score + tilt).toFixed(3); r.scoreB = +(r.scoreB + tilt).toFixed(3);
         tilts.push({ symbol: r.symbol, tilt, reason: String(t.reason || '').slice(0, 200) });
       }
+      // off-hours research may nudge the NEXT-OPEN signals through the same clamped tilt (agents propose, the server disposes)
+      for (const t of research?.openTilts() || []) {
+        const r = sig.rows.find((x) => x.symbol === t.symbol);
+        if (!r) continue;
+        const total = Math.max(-0.5, Math.min(0.5, (r.tilt || 0) + t.tilt)), add = total - (r.tilt || 0);
+        if (!add) continue;
+        r.tilt = total; r.score = +(r.score + add).toFixed(3); r.scoreB = +(r.scoreB + add).toFixed(3);
+        tilts.push({ symbol: r.symbol, tilt: add, reason: `Overnight research: ${t.reason}`.slice(0, 200), source: 'research' });
+      }
       sig.rows.sort((a, b) => b.score - a.score);
+      for (const t of tilts) say('quant', 'signal', `${t.symbol} ${t.tilt > 0 ? '+' : ''}${t.tilt.toFixed(2)} tilt: ${t.reason}`, { model: q?.model || null, ref: `tilt:${t.symbol}`, data: { symbol: t.symbol, tilt: t.tilt } });
+      say('quant', 'signal', q?.data.note || `Signal refresh: ${sig.regime.toUpperCase()}, ${sig.rows.length} names scored.`, { model: q?.model || null, ref: 'note', data: { regime: sig.regime, top: sig.rows.slice(0, 5).map((r) => ({ symbol: r.symbol, score: r.score })) } });
       const top = sig.rows.slice(0, 5).map((r) => `${r.symbol} ${r.score}`).join(', ');
       gateway.report('quant', q?.data.note || `Signal refresh across ${sig.rows.length} names. Regime: ${sig.regime.toUpperCase()} (SPY ${pct(sig.spy?.trend50 || 0)} vs 50-day). Top momentum scores: ${top}. The model has never been more certain, which is also what it said last time.`,
         { regime: sig.regime, tilts, signals: sig.rows.slice(0, 30).map(({ symbol, name, price, day, score, scoreB, tilt, ret1m, ret3m, ret6m, trend50, rsi14, vol20, z20 }) => ({ symbol, name, price, day, score, scoreB, tilt: tilt || 0, ret1m, ret3m, ret6m, trend50, rsi14, vol20, z20 })) },
@@ -289,35 +304,40 @@ export function createTradingDesk({ db, ledger, market, trading, gateway, llm, b
       // 2. both desks decide in parallel
       const desks = await Promise.all(TRADERS.map((a) => decideDesk(a, sig, book, ms, minBreaker)));
 
+      for (const d of desks) {
+        d.actions.forEach((a, i) => say(d.agent, 'proposal', `${ordText(a)} — ${a.rationale || 'no reason given'}`, { model: d.model, ref: `${d.agent}:${i}`, data: { desk: STYLE[d.agent].desk, symbol: String(a.symbol).toUpperCase(), side: a.side, qty: a.qty, rationale: String(a.rationale || '').slice(0, 400) } }));
+        say(d.agent, 'proposal', d.memo || `${STYLE[d.agent].desk}: ${d.actions.length ? d.actions.length + ' order(s) proposed' : 'no orders this tick'}.`, { model: d.model, ref: 'memo', data: { desk: STYLE[d.agent].desk, kind: 'memo', conviction: d.conviction, orders: d.actions.length } });
+      }
       // 3a. hard limits (code)
       const results = Object.fromEntries(TRADERS.map((a) => [a, []]));
       const survivors = [];
       for (const d of desks) {
         d.actions.forEach((a, i) => {
           try { const v = validate(d.agent, a, book, d.sl); survivors.push({ id: `${d.agent}:${i}`, agent: d.agent, desk: STYLE[d.agent].desk, a, v }); }
-          catch (e) { gateway.reject(d.agent, a, e.message); results[d.agent].push({ ...a, ok: false, reason: e.message }); }
+          catch (e) { gateway.reject(d.agent, a, e.message); results[d.agent].push({ ...a, ok: false, reason: e.message }); say('risk_officer', 'result', `REJECTED ${ordText(a)}: ${e.message}`, { model: null, outcome: 'rejected', ref: `${d.agent}:${i}`, data: { desk: STYLE[d.agent].desk, symbol: String(a.symbol).toUpperCase(), side: a.side, qty: a.qty, reason: e.message } }); }
         });
       }
       // 3b. Risk Officer LLM review: veto only
       const riskBefore = var95(book);
       let vetoes = new Map(), riskMemo = null, riskModel = false;
       if (survivors.length || llm.enabled()) {
-        const r = await llm.ask({ job: 'risk_review', agent: 'risk_officer', system: RISK_SYSTEM, schema: RISK_SCHEMA, maxTokens: 900, minBreaker,
+        const r = await feed.think({ room: ROOM, agent: 'risk_officer', text: 'Reviewing orders' }, () => llm.ask({ job: 'risk_review', agent: 'risk_officer', system: RISK_SYSTEM, schema: RISK_SCHEMA, maxTokens: 900, minBreaker,
           user: JSON.stringify({ firm: { nav: book.nav / 100, cash: book.cash / 100, investedPct: +((book.invested / book.nav) * 100).toFixed(1), var95: riskBefore.var95 / 100, annualVolPct: +(riskBefore.vol * 100).toFixed(1),
             positions: book.positions.map((p) => ({ symbol: p.symbol, weightPct: +((p.value / book.nav) * 100).toFixed(1) })) },
-            orders: survivors.map((s) => ({ id: s.id, desk: s.desk, symbol: s.v.symbol, side: s.v.side, qty: s.v.qty, value: s.v.value / 100, rationale: s.a.rationale })) }) });
+            orders: survivors.map((s) => ({ id: s.id, desk: s.desk, symbol: s.v.symbol, side: s.v.side, qty: s.v.qty, value: s.v.value / 100, rationale: s.a.rationale })) }) }));
         if (r) {
           riskMemo = r.data.memo; riskModel = r.model;
           for (const v of r.data.vetoes || []) if (survivors.some((s) => s.id === v.id)) vetoes.set(v.id, String(v.reason || 'vetoed').slice(0, 200));
         }
       }
+      say('risk_officer', 'review', riskMemo || `${survivors.length} order(s) within hard limits${llm.enabled() ? '' : '; rule book review, nothing to veto'}.`, { model: riskModel || null, ref: 'memo', data: { reviewed: survivors.length, vetoes: vetoes.size } });
       // 3c. execute survivors (sells first so freed cash is visible), re-checked against the live book
       survivors.sort((x, y) => (x.v.side === 'sell' ? 0 : 1) - (y.v.side === 'sell' ? 0 : 1));
       for (const s of survivors) {
         const d = desks.find((x) => x.agent === s.agent);
-        if (vetoes.has(s.id)) { const reason2 = `Risk Officer veto: ${vetoes.get(s.id)}`; gateway.reject(s.agent, s.a, reason2); results[s.agent].push({ ...s.a, ok: false, reason: reason2 }); continue; }
-        try { const o = execute(s.agent, s.a, d.model || 'rules'); results[s.agent].push({ ...s.a, ok: true, orderId: o.id }); }
-        catch (e) { gateway.reject(s.agent, s.a, e.message); results[s.agent].push({ ...s.a, ok: false, reason: e.message }); }
+        if (vetoes.has(s.id)) { const reason2 = `Risk Officer veto: ${vetoes.get(s.id)}`; gateway.reject(s.agent, s.a, reason2); results[s.agent].push({ ...s.a, ok: false, reason: reason2 }); say('risk_officer', 'veto', `VETO ${ordText(s.a)}: ${vetoes.get(s.id)}`, { model: riskModel || null, outcome: 'vetoed', ref: s.id, data: { desk: s.desk, deskAgent: s.agent, symbol: s.v.symbol, side: s.v.side, qty: s.v.qty, reason: vetoes.get(s.id) } }); continue; }
+        try { const o = execute(s.agent, s.a, d.model || 'rules'); results[s.agent].push({ ...s.a, ok: true, orderId: o.id }); say('risk_officer', 'execute', `CLEARED ${ordText(s.a)} (order #${o.id})`, { model: riskModel || null, outcome: 'cleared', ref: s.id, data: { desk: s.desk, deskAgent: s.agent, symbol: s.v.symbol, side: s.v.side, qty: s.v.qty, orderId: o.id } }); }
+        catch (e) { gateway.reject(s.agent, s.a, e.message); results[s.agent].push({ ...s.a, ok: false, reason: e.message }); say('risk_officer', 'result', `REJECTED ${ordText(s.a)}: ${e.message}`, { outcome: 'rejected', ref: s.id, data: { desk: s.desk, symbol: s.v.symbol, side: s.v.side, qty: s.v.qty, reason: e.message } }); }
       }
       book = trading.portfolio(OWNER);
 
@@ -338,6 +358,7 @@ export function createTradingDesk({ db, ledger, market, trading, gateway, llm, b
       lastTick = Date.now();
       const placedN = Object.values(results).flat().filter((r) => r.ok).length;
       bus.emit('firm', { type: 'tick', placed: placedN, at: lastTick });
+      feed.status(ROOM, { nextAt: lastTick + intervalMs(), mode: ms.open ? 'trading' : 'research', market: ms.open ? 'open' : 'closed', lastTickAt: lastTick, label: 'Next desk decision' });
       return { ok: true, usedLLM: desks.some((d) => d.model), placed: placedN, rejected: rejected.length, desks: desks.map((d) => ({ agent: d.agent, model: d.model || 'rules' })) };
     } finally { running = false; }
   }

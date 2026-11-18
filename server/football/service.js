@@ -11,6 +11,7 @@ import { expectedGoals, priceFixture, pickWins, MARKETS } from './pricing.js';
 import { payoutFor } from '../realtime/pricing.js';
 import { readFileSync } from 'node:fs';
 import { createFollowing, statureOf } from './following.js';
+import { nullFeed } from '../agents/feed.js';
 
 // The scout's briefing on what makes a marquee match (club stature, rivalry, prestige, stakes, timing).
 // General judgement only: it names no club and no fixture.
@@ -71,8 +72,12 @@ export function scoreFixture(m, standings, now = Date.now(), following = () => n
   return (WEIGHT[comp] || 1) * 1.2 + knockout + stature + derby + top * 0.2 + soon + prime;
 }
 
-export function createFootball({ db, ledger, treasury, llm, config, log = console }) {
+export function createFootball({ db, ledger, treasury, llm, config, feed = nullFeed, log = console }) {
   const reqLog = [];
+  const ROOM = 'VT-02';
+  const say = (agent, stage, text, o = {}) => feed.emit({ room: ROOM, agent, stage, text, ...o });
+  const teams = (m) => `${m.homeTeam.shortName || m.homeTeam.name} v ${m.awayTeam.shortName || m.awayTeam.name}`;
+  const SCOUT_EVERY = 3 * 3600_000;
   const state = { lastFetch: null, lastError: null, source: config.footballKey && !config.offline ? 'football-data.org' : 'simulated', requestsLastMinute: 0 };
   let matches = db.kvGet('football:matches', []);
   const standings = db.kvGet('football:standings', {});
@@ -144,7 +149,7 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
       home: { name: m.homeTeam.name, position: rowOf(m, m.homeTeam)?.position ?? null, points: rowOf(m, m.homeTeam)?.points ?? null, following: follow.views(m.homeTeam.id) },
       away: { name: m.awayTeam.name, position: rowOf(m, m.awayTeam)?.position ?? null, points: rowOf(m, m.awayTeam)?.points ?? null, following: follow.views(m.awayTeam.id) },
     }));
-    const res = await llm.ask({ job: 'fixture_scout', agent: 'fixture_scout', system: SCOUT_SYSTEM, user: JSON.stringify({ now: new Date().toISOString(), note: 'following = last month of encyclopedia readership for the club (null = unknown)', candidates: cands }), schema: SCOUT_SCHEMA, maxTokens: 700, minBreaker: 1 });
+    const res = await feed.think({ room: ROOM, agent: 'fixture_scout', text: 'Scouting the fixture list' }, () => llm.ask({ job: 'fixture_scout', agent: 'fixture_scout', system: SCOUT_SYSTEM, user: JSON.stringify({ now: new Date().toISOString(), note: 'following = last month of encyclopedia readership for the club (null = unknown)', candidates: cands }), schema: SCOUT_SCHEMA, maxTokens: 700, minBreaker: 1 }));
     const out = res?.data;
     let model = null;
     if (out && list.some((m) => m.id === out.id)) { pick = list.find((m) => m.id === out.id); preview = out.preview; points = (out.points || []).slice(0, 3); by = 'llm'; model = res.model; }
@@ -156,6 +161,11 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
     marquee = { id: pick.id, by, model, preview, points, at: Date.now(), reason, v: MARQUEE_V };
     db.kvSet('football:marquee', marquee);
     log.log?.(`[football] marquee (${by}): ${pick.homeTeam.name} v ${pick.awayTeam.name}`);
+    const byId = new Map(list.map((m) => [m.id, m]));
+    say('fixture_scout', 'scout', `MARQUEE LOCKED: ${teams(pick)}. ${preview}`, { model, ref: `match:${pick.id}`, outcome: 'locked', data: {
+      matchId: pick.id, home: pick.homeTeam.shortName || pick.homeTeam.name, away: pick.awayTeam.shortName || pick.awayTeam.name, comp: pick.competition.name, by, points,
+      candidates: cands.map((c) => byId.get(c.id)).filter(Boolean).slice(0, 16).map((m) => ({ id: m.id, label: teams(m) })), reason } });
+    feed.status(ROOM, { nextScoutAt: marquee.at + SCOUT_EVERY, label: 'Next scout' });
     return marquee;
   }
 
@@ -196,6 +206,7 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
       const s = m.score.duration && m.score.duration !== 'REGULAR' && m.score.regularTime ? m.score.regularTime : m.score.fullTime;
       if (s?.home == null || s?.away == null) continue;
       const win = pickWins(p.pick, s.home, s.away), esc = `ESCROW:BET:fx${p.id}`, agent = p.owner.startsWith('DEPT:');
+      if (agent) say('sports_desk', 'settle', `${win ? 'WON' : 'LOST'} ${p.label} (full time ${s.home}-${s.away})`, { model: null, outcome: win ? 'won' : 'lost', ref: `fx${p.id}`, data: { id: p.id, matchId: p.match_id, label: p.label, stake: p.stake, price: p.price, score: [s.home, s.away], payout: win ? payoutFor(p.stake, p.price) : 0 } });
       const payer = agent ? EXT_BOOK : VAULT; // agents trade against the outside world (money-ledger §4)
       db.tx(() => {
         if (win) {
@@ -222,7 +233,11 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
     const pr = pricing(m), p = pr.probs;
     const pick = p.H >= p.A ? (p.H > 0.45 ? 'H' : 'O25') : (p.A > 0.45 ? 'A' : 'O25'), market = pick === 'O25' ? 'OU25' : '1X2';
     const stake = Math.min(MAX_STAKE, Math.max(MIN_STAKE, Math.floor(bal * 0.02 / 100) * 100));
-    try { return open({ owner: DEPT_SPORTS, matchId: m.id, market, pick, stake, actor: 'agent:sports_desk' }); } catch (e) { log.warn?.('[football agent]', e.message); return null; }
+    try {
+      const pos = open({ owner: DEPT_SPORTS, matchId: m.id, market, pick, stake, actor: 'agent:sports_desk' });
+      say('sports_desk', 'stake', `STAKE ¤${(stake / 100).toFixed(2)} on ${pos.label} at ${pos.price}`, { model: null, outcome: 'open', ref: `fx${pos.id}`, data: { id: pos.id, matchId: m.id, label: pos.label, market, pick, stake, price: pos.price, probs: p, liquidity: bal } });
+      return pos;
+    } catch (e) { log.warn?.('[football agent]', e.message); return null; }
   }
 
   // ---------------------------------------------------------------- crests (proxied so the 3D canvas stays same-origin; cached)
@@ -266,6 +281,7 @@ export function createFootball({ db, ledger, treasury, llm, config, log = consol
     settle();
     if (!marquee || marquee.v !== MARQUEE_V || fresh > 0 || !upcoming().some((m) => m.id === marquee.id) || Date.now() - marquee.at > 3 * 3600_000) await scout(reason);
     agentTick();
+    feed.status(ROOM, { nextScoutAt: (marquee?.at || Date.now()) + SCOUT_EVERY, nextCycleAt: Date.now() + 30 * 60_000, source: state.source, label: 'Next scout' });
   }
   function start() {
     cycle('boot').catch(() => {});

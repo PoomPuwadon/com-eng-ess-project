@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS llm_spend (
   id INTEGER PRIMARY KEY AUTOINCREMENT, created_at INTEGER NOT NULL, job TEXT NOT NULL, agent TEXT, model TEXT NOT NULL,
   input_tokens INTEGER, cache_write INTEGER, cache_read INTEGER, output_tokens INTEGER, usd REAL NOT NULL);
 
+-- AI visuals feed (docs/ai-visuals-plan.md): short attributed agent events, last ~500 kept
+CREATE TABLE IF NOT EXISTS agent_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, room TEXT NOT NULL, agent TEXT, provider TEXT NOT NULL, model TEXT,
+  stage TEXT NOT NULL, text TEXT, data TEXT, outcome TEXT, ref TEXT);
+CREATE INDEX IF NOT EXISTS agent_events_room ON agent_events(room, id);
+
 -- ---------------------------------------------------------------- Thai lottery
 CREATE TABLE IF NOT EXISTS lottery_draws (date TEXT PRIMARY KEY, json TEXT NOT NULL, confirmed INTEGER NOT NULL, first_seen INTEGER NOT NULL, fetched_at INTEGER NOT NULL, source TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS lottery_probe (date TEXT PRIMARY KEY, found INTEGER NOT NULL, checked_at INTEGER NOT NULL);
