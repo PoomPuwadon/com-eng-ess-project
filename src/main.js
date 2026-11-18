@@ -28,6 +28,7 @@ import { avatarFor } from './characters/roster.js';
 import { CeoPresence } from './characters/ceoMarker.js';
 import { Crowd } from './characters/crowd.js';
 import { Realtime } from './net/realtime.js';
+import { startTouchControls } from './touchControls.js';
 import { savedAccount, signIn, setBalance, onMe } from './net/api.js';
 import { RemotePlayers } from './multiplayer/remotes.js';
 import { ExecConsole, showSignIn } from './multiplayer/console.js';
@@ -234,6 +235,7 @@ const rt = new Realtime();
 bindArenaMedia(rt); // VT-02 Arena Media: head-to-head + highlights on the side screens, live from the hub
 const remotes = new RemotePlayers(scene, camera);
 const isMobile = () => rt.device === 'mobile';
+if (isMobile()) startTouchControls({ player, canvas }); // phones: joystick, drag-to-look, Use/Run buttons
 let reviewTools = new URLSearchParams(location.search).has('review');
 const paintStaffTools = () => document.body.classList.toggle('staff-tools', reviewTools || rt.isStaff);
 paintStaffTools();

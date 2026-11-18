@@ -30,6 +30,7 @@ export class Player {
     this.grounded = true;
     this.groundY = this.pos.y;
     this.blockInput = () => false; // set by main: true while an application owns the keyboard
+    this.stick = { x: 0, y: 0, run: false }; // touch joystick (x right, y forward, -1..1), set by touchControls
     this.t = 0;
     const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable;
     addEventListener('keydown', (e) => {
@@ -108,12 +109,12 @@ export class Player {
       fx = this.auto.dx; fz = this.auto.dz; speed = this.auto.speed;
     } else if (this.enabled) {
       const k = this.keys;
-      const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-      const s = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+      const f = Math.max(-1, Math.min(1, (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.stick.y));
+      const s = Math.max(-1, Math.min(1, (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + this.stick.x));
       // forward = -Z rotated by yaw
       fx = -Math.sin(this.yaw) * f + Math.cos(this.yaw) * s;
       fz = -Math.cos(this.yaw) * f - Math.sin(this.yaw) * s;
-      if (k.has('ShiftLeft') || k.has('ShiftRight')) speed = SPRINT;
+      if (k.has('ShiftLeft') || k.has('ShiftRight') || this.stick.run) speed = SPRINT;
     }
     const len = Math.hypot(fx, fz);
     const before = this.pos.clone();

@@ -59,13 +59,22 @@ export class HUD {
     this.toastTimer = setTimeout(() => t.classList.add('hidden'), secs * 1000);
   }
 
-  prompt(text) { const p = $('prompt'); p.textContent = text || ''; p.classList.toggle('hidden', !text); }
+  prompt(text) {
+    const p = $('prompt');
+    let shown = text || '', act = false;
+    if (shown && document.body.classList.contains('touch')) { // phones: "E — Markets terminal" becomes a tappable "Tap · Markets terminal"
+      const m = /^E\s*[—-]\s*(.*)$/.exec(shown), car = /· E: (.*)$/.exec(shown);
+      const label = m ? m[1].split(/ \(| · |: | — /)[0] : car ? car[1] : null;
+      if (label) { shown = `Tap · ${label.charAt(0).toUpperCase()}${label.slice(1)}`; act = true; }
+    }
+    p.textContent = shown; p.classList.toggle('hidden', !shown); p.classList.toggle('tap', act);
+  }
 
   // Destination dispatch kiosk (at a landing) or the in-car panel.
   openElevator(bank, fromFloor, role, { car = null } = {}) {
     const panel = $('elevator');
     const b = BANKS[bank];
-    panel.innerHTML = `<h3>${car ? `Car ${car.label}` : b.name}</h3><div class="sub">${car ? 'Select your floor' : `${b.label} · select your destination, a car will be assigned`} · Esc to close</div>`;
+    panel.innerHTML = `<h3>${car ? `Car ${car.label}` : b.name}</h3><div class="sub">${car ? 'Select your floor' : `${b.label} · select your destination, a car will be assigned`}${document.body.classList.contains('touch') ? '' : ' · Esc to close'}</div>`;
     const list = document.createElement('div');
     list.className = 'stops';
     for (const stop of [...b.stops].reverse()) {
@@ -78,6 +87,10 @@ export class HUD {
       list.appendChild(btn);
     }
     panel.appendChild(list);
+    if (document.body.classList.contains('touch')) { // no Esc key on a phone
+      const x = document.createElement('button'); x.textContent = 'Close'; x.style.cssText = 'margin-top:8px;width:100%';
+      x.onclick = () => this.closeElevator(); panel.appendChild(x);
+    }
     panel.classList.remove('hidden');
     this.elevatorOpen = true;
   }
