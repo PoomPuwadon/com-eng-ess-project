@@ -61,7 +61,7 @@ export function createTableSeat({ scene, camera, player }) {
   // ---- cards: a rounded face, a navy back and a thin cream edge; rotation = table yaw + spot yaw, flipped about the long axis
   function makeCard(label) {
     const g = geos(), m = new THREE.Group();
-    const face = new THREE.Mesh(g.face, new THREE.MeshStandardMaterial({ map: label ? cardTex(label) : backTex(), roughness: 0.42 }));
+    const face = new THREE.Mesh(g.face, new THREE.MeshStandardMaterial({ map: label ? cardTex(label) : backTex(), roughness: 0.42, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     m.add(face, new THREE.Mesh(g.back, mats.back), new THREE.Mesh(g.edge, mats.edge)); m.userData.face = face; group.add(m); return m;
   }
   const setFace = (c, label) => { c.userData.face.material.map = label ? cardTex(label) : backTex(); c.userData.face.material.needsUpdate = true; };

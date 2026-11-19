@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LM, addLuxMaterials } from './lux.js';
 import { CHIPS, chipsFor } from '../apps/rouletteBoard.js';
+import { QUALITY } from '../quality.js';
 
 // VT-01 Leisure Suite: the fully modelled card and dice tables (everything except the roulette, which has
 // its own live model in rouletteTable.js and is the quality bar for this kit).
@@ -459,7 +460,7 @@ function collideLocal(ctx, T, x0, x1, z0, z1, y1) {
 export function blackjackTable(L, ctx, r, T, people, life) {
   initKit();
   const R = 1.84, Y = FELT_Y.table;
-  put(L, slab(halfDisc(R), Y - 0.13, Y - 0.006, 32), 'lkMahogany', T);
+  put(L, slab(halfDisc(R), Y - 0.13, Y - 0.015, 32), 'lkMahogany', T);
   put(L, new THREE.TorusGeometry(R, 0.012, 5, 40, Math.PI).rotateX(Math.PI / 2).translate(0, Y - 0.12, 0), 'lsGold', T);
   put(L, feltUV(flat(halfDisc(1.78), Y, 64), -1.78, 1.78, 0, 1.78), 'lkFeltBJ', T);
   put(L, new THREE.TorusGeometry(R, 0.072, 8, 32, Math.PI).rotateX(Math.PI / 2).translate(0, Y + 0.035, 0), 'lkLeather', T);
@@ -496,7 +497,7 @@ export function blackjackTable(L, ctx, r, T, people, life) {
 export function baccaratTable(L, ctx, r, T, people, life) {
   initKit();
   const rx = 2.1, rz = 1.05, Y = FELT_Y.table;
-  put(L, slab(ellipseShape(rx - 0.02, rz - 0.02), Y - 0.13, Y - 0.006, 40), 'lkMahogany', T);
+  put(L, slab(ellipseShape(rx - 0.02, rz - 0.02), Y - 0.13, Y - 0.015, 40), 'lkMahogany', T);
   put(L, tube(ellipseFn(rx - 0.02, rz - 0.02), Y - 0.12, 0.012, 48, 3), 'lsGold', T);
   put(L, feltUV(flat(ellipseShape(rx - 0.12, rz - 0.12), Y, 64), -(rx - 0.12), rx - 0.12, -(rz - 0.12), rz - 0.12), 'lkFeltBac', T);
   put(L, tube(ellipseFn(rx - 0.05, rz - 0.05), Y + 0.035, 0.07, 72, 8), 'lkLeather', T);
@@ -534,7 +535,7 @@ export function baccaratTable(L, ctx, r, T, people, life) {
 export function pokerTable(L, ctx, r, T, people, life, { high = false } = {}) {
   initKit();
   const a = high ? 1.0 : 0.85, R = high ? 1.2 : 1.05, Y = FELT_Y.table;
-  put(L, slab(stadiumShape(a, R - 0.02), Y - 0.13, Y - 0.006, 24), 'lkMahogany', T);
+  put(L, slab(stadiumShape(a, R - 0.02), Y - 0.13, Y - 0.015, 24), 'lkMahogany', T);
   put(L, tube(stadiumFn(a, R - 0.02), Y - 0.12, 0.012, 48, 3), 'lsGold', T);
   put(L, feltUV(flat(stadiumShape(a, R - 0.12), Y, 32), -(a + R - 0.12), a + R - 0.12, -(R - 0.12), R - 0.12), high ? 'lkFeltHigh' : 'lkFeltPoker', T);
   put(L, tube(stadiumFn(a, R - 0.05), Y + 0.035, 0.072, 72, 8), 'lkLeather', T);
@@ -572,7 +573,7 @@ export function pokerTable(L, ctx, r, T, people, life, { high = false } = {}) {
 export function crapsTable(L, ctx, r, T, people, life) {
   initKit();
   const X = 2.8, Z = 1.2, Y = FELT_Y.craps, WALL = 0.98, RAIL = 1.05;
-  put(L, rbox(-X, X, 0.08, Y - 0.005, -Z, Z, 0.05), 'lkMahogany', T);
+  put(L, rbox(-X, X, 0.08, Y - 0.02, -Z, Z, 0.05), 'lkMahogany', T);
   put(L, box(-X + 0.12, X - 0.12, 0, 0.08, -Z + 0.12, Z - 0.12), 'lkLacquer', T); // recessed toe kick
   put(L, box(-X - 0.005, X + 0.005, 0.5, 0.52, -Z - 0.005, Z + 0.005), 'lsGold', T);
   put(L, feltUV(box(-2.6, 2.6, Y - 0.01, Y, -1.0, 1.0), -2.6, 2.6, -1.0, 1.0), 'lkFeltCraps', T);
@@ -636,7 +637,7 @@ export class TableLife {
     const g = mergeGeometries([face, back]);
     const isBack = new Float32Array(g.attributes.position.count); isBack.fill(1, face.attributes.position.count); g.setAttribute('back', new THREE.BufferAttribute(isBack, 1));
     this.cells = new Float32Array(capacity * 2); g.setAttribute('cellOffset', new THREE.InstancedBufferAttribute(this.cells, 2));
-    const m = new THREE.MeshStandardMaterial({ map: cardAtlas(), roughness: 0.5, alphaTest: 0.5 });
+    const m = new THREE.MeshStandardMaterial({ map: cardAtlas(), roughness: 0.5, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     m.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 cellOffset;\nattribute float back;')
         .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = uv * vec2(0.125, 0.25) + (back > 0.5 ? vec2(0.875, 0.0) : cellOffset);\n#endif');
@@ -710,7 +711,7 @@ export class TableLife {
       t.slots.forEach((slot, i) => {
         const c = ev[i];
         if (!c || busy || u < c.t || u > sweep + 0.55) { this.cards.setMatrixAt(slot, this.zero); return; }
-        let x = c.to.x, z = c.to.z, y = Y + i * 0.00025, yaw = c.to.yaw, flip = c.down ? Math.PI : 0;
+        let x = c.to.x, z = c.to.z, y = Y + i * 0.0005, yaw = c.to.yaw, flip = c.down ? Math.PI : 0;
         const k = (u - c.t) / 0.42;
         if (k < 1) { const q3 = ease3(k); x = L.shoe[0] + (x - L.shoe[0]) * q3; z = L.shoe[1] + (z - L.shoe[1]) * q3; y += Math.sin(Math.PI * q3) * 0.05 + (1 - q3) * 0.05; yaw += (1 - q3) * 1.1; }
         if (c.flip != null && u > c.flip) { const f = Math.min(1, (u - c.flip) / 0.35); flip = c.down ? Math.PI * (1 - f) : 0; y += Math.sin(Math.PI * f) * 0.035; }
@@ -776,6 +777,7 @@ function slotAtlas() { // 4 x 2 cells of 256 x 512: screen (title, 3 reels, cred
   });
 }
 // local-cell geometry of the reels (cell uv: u 0..1 across 256 px, v 0..1 up 512 px)
+const LOW_SKIP = new Set(['trim', 'chrome', 'stoolBase']); // slot parts left out in Low graphics
 const RB0 = 1 - 196 / 512, RB1 = 1 - 52 / 512, REELS = [[14 / 256, 86 / 256], [92 / 256, 164 / 256], [170 / 256, 242 / 256]];
 
 /** list: [{ x, z, yaw, cell, color, tall, active }]. Returns a controller; slots are split north / south so each half can be culled. */
@@ -851,7 +853,7 @@ diffuseColor *= tc;`);
     h.forEach((s, i) => { offs[i * 2] = (s.cell % 4) * 0.25; offs[i * 2 + 1] = 1 - (Math.floor(s.cell / 4) + 1) * 0.5; ph[i * 2] = Math.random(); ph[i * 2 + 1] = s.active ? 1 : 0; });
     scr.setAttribute('cellOffset', new THREE.InstancedBufferAttribute(offs, 2)); scr.setAttribute('phase', new THREE.InstancedBufferAttribute(ph, 2));
     const meshes = { screen: new THREE.InstancedMesh(scr, scrMat, n) };
-    for (const k of Object.keys(parts)) meshes[k] = new THREE.InstancedMesh(parts[k], mats[k], n);
+    for (const k of Object.keys(parts)) if (!(QUALITY.low && LOW_SKIP.has(k))) meshes[k] = new THREE.InstancedMesh(parts[k], mats[k], n);
     h.forEach((s, i) => {
       q.setFromAxisAngle(up, s.yaw); m4.compose(p.set(s.x, ctx.e, s.z), q, sc.set(1, s.tall || 1, 1));
       for (const me of Object.values(meshes)) me.setMatrixAt(i, m4);

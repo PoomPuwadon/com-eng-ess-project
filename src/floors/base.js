@@ -185,7 +185,9 @@ export function buildBase(floor) {
     });
     const open = rm.open || [];
     const wallC = rm.color ?? floor.wallColor ?? P.wall; // a room may set its own wall / floor colour (e.g. VT-03's black focus room)
-    if (!rm.hall) ctx.deco(rm.x0, rm.x1, 0, 0.015, rm.z0, rm.z1, rm.floorColor ?? P.room); // lift halls lay their own themed floor
+    // lift halls lay their own themed floor. Lux floors lay carpets / marble at 1.2 cm and up, so their grey base stays
+    // 3 mm high: at 1.5 cm it sat ABOVE the carpet and z-fought through it (flickering blotches at a distance, worst on phones)
+    if (!rm.hall) ctx.deco(rm.x0, rm.x1, 0, floor.lux ? 0.003 : 0.015, rm.z0, rm.z1, rm.floorColor ?? P.room);
     if (!open.includes('n')) ctx.wallX(rm.x0, rm.x1, rm.z0, rm.z0 + INT, h, wallC, gapsFor('n', rm.x0, rm.x1));
     if (!open.includes('s')) ctx.wallX(rm.x0, rm.x1, rm.z1 - INT, rm.z1, h, wallC, gapsFor('s', rm.x0, rm.x1));
     if (!open.includes('w')) ctx.wallZ(rm.z0 + INT, rm.z1 - INT, rm.x0, rm.x0 + INT, h, wallC, gapsFor('w', rm.z0, rm.z1));
