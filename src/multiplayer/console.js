@@ -227,7 +227,7 @@ export class ExecConsole {
     if (t.dataset.pick) { const s = this.sel[t.dataset.pick]; t.checked ? s.add(t.value) : s.delete(t.value); }
     if (t.dataset.count) this.raceCount = Math.max(2, Math.min(6, Number(t.value) || 4));
     if (t.dataset.amt) this.amt[t.dataset.amt] = t.value;
-    if (t.dataset.mfx) { this.md.fx = Number(t.value) || null; this.md.draft = null; this.md.dirty = false; this.render(true); }
+    if (t.dataset.mfx != null) { this.md.fx = Number(t.value) || null; this.md.draft = null; this.md.dirty = false; this.render(true); }
   }
 
   render(force = false) {
