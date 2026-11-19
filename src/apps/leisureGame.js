@@ -9,13 +9,13 @@ export const setSeat = (s) => { seat = s; };
 const STAKES = { default: [100, 500, 2500, 10000], poker: [100, 250, 500, 1000, 5000] };
 let el = null, state = null; // state: { kind, x, z }
 const css = () => {
-  if (document.getElementById('lg-css')) return;
-  const s = document.createElement('style'); s.id = 'lg-css';
-  s.textContent = `.lg{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);width:min(520px,calc(100vw - 24px));background:rgba(8,10,16,.9);border:2px solid #e3c27a;border-radius:16px;color:#eef1f8;font:600 14px/1.4 "Segoe UI",Inter,Arial,sans-serif;padding:12px 16px;z-index:55;box-shadow:0 10px 40px rgba(0,0,0,.6)}
-  .lg h3{margin:0 0 2px;font-size:17px;color:#e3c27a}.lg .sub{color:#9aa3b2;font-size:12px;margin-bottom:4px}.lg .x{float:right;cursor:pointer;color:#9aa3b2;font-size:12px}
-  .lg .row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.lg button{background:#1b2230;color:#eef1f8;border:1px solid #3a4256;border-radius:8px;padding:7px 12px;font:700 13px inherit;cursor:pointer}
-  .lg button.on{border-color:#e3c27a;background:#3a2f12}.lg button.go{background:#e3c27a;color:#1a1305}.lg button:disabled{opacity:.4}
-  .lg .out{min-height:40px;font-size:15px}.lg .win{color:#5dff9a}.lg .lose{color:#ff7a7a}`;
+  if (document.getElementById('lsg-css')) return;
+  const s = document.createElement('style'); s.id = 'lsg-css';
+  s.textContent = `.lsg{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);width:min(520px,calc(100vw - 24px));background:rgba(8,10,16,.9);border:2px solid #e3c27a;border-radius:16px;color:#eef1f8;font:600 14px/1.4 "Segoe UI",Inter,Arial,sans-serif;padding:12px 16px;z-index:55;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+  .lsg h3{margin:0 0 2px;font-size:17px;color:#e3c27a}.lsg .sub{color:#9aa3b2;font-size:12px;margin-bottom:4px}.lsg .x{float:right;cursor:pointer;color:#9aa3b2;font-size:12px}
+  .lsg .row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.lsg button{background:#1b2230;color:#eef1f8;border:1px solid #3a4256;border-radius:8px;padding:7px 12px;font:700 13px inherit;cursor:pointer}
+  .lsg button.on{border-color:#e3c27a;background:#3a2f12}.lsg button.go{background:#e3c27a;color:#1a1305}.lsg button:disabled{opacity:.4}
+  .lsg .out{min-height:40px;font-size:15px}.lsg .win{color:#5dff9a}.lsg .lose{color:#ff7a7a}`;
   document.head.appendChild(s);
 };
 const dollars = (m) => fmt(m);
@@ -32,7 +32,7 @@ export function openGame(kind, at) {
   state = { kind, x: at.x, z: at.z };
   const stakes = kind === 'poker' ? STAKES.poker : STAKES.default;
   let stake = kind === 'poker' ? 250 : 500, side = null, busy = false, hand = null, out = '';
-  el = document.createElement('div'); el.className = 'lg'; document.body.appendChild(el);
+  el = document.createElement('div'); el.className = 'lsg'; document.body.appendChild(el);
   document.exitPointerLock?.();
   seat?.begin(kind, at); seat?.setChips(stake, kind);
   const T = {

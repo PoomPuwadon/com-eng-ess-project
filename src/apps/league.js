@@ -26,7 +26,7 @@ export function leagueCard(league, llm, focus = 'all') {
   const top = ai[0], tied = ai.length > 1 && keyFor(ai[0]) === keyFor(ai[1]);
   const pill = !leader ? '<span class="pill warn">awaiting first AI decisions</span>'
     : tied ? '<span class="pill">level on P&amp;L</span>' : `<span class="pill ${top.id}">leader: ${esc(top.label)}</span>`;
-  return `<div class="card lg"><h3>Model League · Claude v Gemini ${pill}</h3>
+  return `<div class="card model-league"><h3>Model League · Claude v Gemini ${pill}</h3>
     <div class="scroll"><table class="t"><tr><th>#</th><th>Model</th><th></th>
       <th class="r">Trading P&amp;L</th><th class="r">Fills</th><th class="r">Win rate</th>
       <th class="r">Thai desk net</th><th class="r">Certificates</th>
