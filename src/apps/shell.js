@@ -65,13 +65,13 @@ addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- wallet bar
 // Liquidity + your name only (user, 2026-11-18): no app buttons on the bar. The applications are reached
 // in the building (E at a roulette table, M markets, L research); signing in is on the welcome screen,
-// and clicking your name switches account / signs in.
+// and clicking your name signs in (guests) or opens your account panel with Sign out.
 export function buildWallet({ onOpen }) {
   const w = document.createElement('div');
   w.id = 'wallet';
   w.innerHTML = `<span class="dot" title="Server connection"></span>
     <div class="who"><small>Liquidity</small><span class="bal">—</span></div>
-    <div class="who acct" role="button" tabindex="0" data-app="signin" title="Sign in, sign up or switch account"><small>Associate <i>· switch</i></small><span class="nm">connecting…</span></div>`;
+    <div class="who acct" role="button" tabindex="0" data-app="signin" title="Sign in or sign up"><small>Associate <i>· sign in</i></small><span class="nm">connecting…</span></div>`;
   document.body.appendChild(w);
   const act = (e) => { const a = e.target.closest('[data-app]')?.dataset.app; if (a) { e.stopPropagation(); onOpen(a); } };
   w.addEventListener('click', act);
@@ -84,10 +84,10 @@ export function buildWallet({ onOpen }) {
     last = me.balance;
     w.querySelector('.nm').textContent = me.name;
     w.querySelector('.dot').classList.add('on');
-    // guests are invited to sign in / up; account holders can switch accounts
+    // guests are invited to sign in / up; account holders open their account panel (sign out)
     const acct = savedAccount() === me.name, el = w.querySelector('.acct');
-    el.querySelector('i').textContent = acct ? '· switch' : '· sign in';
-    el.title = acct ? `Signed in as ${me.name}. Click to sign in to another account, or open a new one.` : 'Guest session. Click to sign in, or sign up for an account.';
+    el.querySelector('i').textContent = acct ? '· account' : '· sign in';
+    el.title = acct ? `Signed in as ${me.name}. Click to view your account or sign out.` : 'Guest session. Click to sign in, or sign up for an account.';
   });
   startSession().catch(() => { w.querySelector('.nm').textContent = 'server offline — retrying'; });
   void online;

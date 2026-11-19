@@ -138,6 +138,11 @@ export function createApp(config, log = console, extra = {}) {
   });
   const authOf = (req) => players.auth((req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
   const need = (req) => { const p = authOf(req); if (!p) throw Object.assign(new Error('Session required'), { status: 401 }); return p; };
+  // one account per session: a signed-in member must sign out before opening another account
+  const noAccountYet = (req) => {
+    const p = authOf(req), acc = p && auth.accountOf(p.id);
+    if (acc) throw Object.assign(new Error(`You are signed in as ${acc.name}. Sign out first to open a new account.`), { status: 409 });
+  };
   const rate = new Map(); // token bucket per player for write endpoints
   const limit = (pid, perSec = 4) => {
     const now = Date.now(), b = rate.get(pid) || { t: now, n: perSec };
@@ -184,9 +189,11 @@ export function createApp(config, log = console, extra = {}) {
     },
     'GET /api/me': (req) => ({ player: need(req) }),
     // name + password: unknown names open an account (Visitor), known names must match
-    'POST /api/auth/enter': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.enter(b.name, b.password); },
+    'POST /api/auth/enter': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); if (!auth.known(b.name)) noAccountYet(req); return auth.enter(b.name, b.password); },
     'POST /api/auth/login': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.login(b.name, b.password); },
-    'POST /api/auth/register': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); return auth.register(b.name, b.password); },
+    'POST /api/auth/register': async (req) => { const b = await readBody(req); limit(`auth:${req.socket.remoteAddress}`, 1); noAccountYet(req); return auth.register(b.name, b.password); },
+    // sign out: this browser's token stops working; the account and its balance are untouched
+    'POST /api/auth/logout': (req) => { players.revoke((req.headers.authorization || '').replace(/^Bearer\s+/i, '')); return { ok: true }; },
     'GET /api/presence': () => ({ players: hub.snapshot().length, meta: hub.meta() }),
     'POST /api/me/name': async (req) => ({ player: players.rename(need(req).id, (await readBody(req)).name) }),
 

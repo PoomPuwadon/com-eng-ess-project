@@ -2,7 +2,8 @@
 // with the console password, then Overview · Guests (kick) · Tour · Combat (VT-03) · Equine (VT-04) ·
 // Arena Media (VT-02: head-to-head results and highlight videos on the Sports Analytics Arena's side screens).
 import './console.css';
-import { signIn, savedAccount, esc, fmt, api, getToken } from '../net/api.js';
+import { signIn, signOut, signedIn, savedAccount, lastAccountName, esc, fmt, api, getToken, getMe } from '../net/api.js';
+import { zoomOf } from '../uiScale.js';
 import { arenaMediaState, onArenaMedia, refreshArenaMedia } from '../world/arenaMedia.js';
 import { FLOOR_BY_ID, findRoom } from '../layout/building.js';
 import { AI_AGENTS as TRADERS } from '../characters/aiTraders.js';
@@ -20,7 +21,9 @@ const ROLE_LABEL ={ player: 'Guest', admin: 'Staff (Admin)', ceo: 'Chief Executi
 // Two tabs: Sign in (existing account) and Sign up (new account: name, password, confirm).
 // New accounts are Visitors with the notional starting allocation (server: POST /api/auth/register).
 export function showSignIn({ onDone, mode: startMode } = {}) {
-  const prev = savedAccount() || '';
+  // already signed in: no second account on top of this one, only the account panel (sign out)
+  if (signedIn()) return showAccount({ onDone });
+  const prev = lastAccountName() || '';
   let mode = startMode || (prev ? 'login' : 'register');
   const m = h(`<div class="mp-modal"><form class="card" autocomplete="on" novalidate>
     <h2>Welcome to FINANCIAL FIRM</h2>
@@ -71,6 +74,26 @@ export function showSignIn({ onDone, mode: startMode } = {}) {
   return m;
 }
 
+/** Signed-in account panel: who you are, and Sign out (back to the welcome screen as a guest). */
+export function showAccount({ onDone } = {}) {
+  const me = getMe();
+  const m = h(`<div class="mp-modal"><div class="card">
+    <h2>Your account</h2>
+    <div class="sub">Signed in as <b>${esc(me?.name || savedAccount() || '')}</b>${me ? ` · Liquidity ${esc(fmt(me.balance))}` : ''}.<br>To use another account, sign out first. Your balance stays on this account.</div>
+    <div class="err" role="alert"></div>
+    <div class="row"><button type="button" class="mp-btn" data-close>Close</button><button type="button" class="mp-btn primary" data-out>Sign out</button></div>
+  </div></div>`);
+  document.body.append(m);
+  const close = () => { m.remove(); onDone?.(null); };
+  m.querySelector('[data-close]').onclick = close;
+  m.addEventListener('pointerdown', (ev) => { if (ev.target === m) close(); });
+  m.addEventListener('keydown', (ev) => { ev.stopPropagation(); if (ev.key === 'Escape') close(); });
+  const out = m.querySelector('[data-out]');
+  out.onclick = async () => { out.disabled = true; out.textContent = 'Signing out…'; await signOut(); };
+  out.focus();
+  return m;
+}
+
 // ---------------------------------------------------------------- executive console
 export class ExecConsole {
   /** ctx: { rt, toast(text), selfPose() -> {floor, room} } */
@@ -108,14 +131,15 @@ export class ExecConsole {
   /** drag the console by its header (mouse or touch); kept on screen, position remembered per browser */
   makeDraggable(handle) {
     const KEY = 'firm.console.pos.v1', el = this.el;
+    // x / y are screen px; the panel's own left/top are in its zoomed px (small-monitor HUD scale)
     const place = (x, y) => {
-      const r = el.getBoundingClientRect();
+      const r = el.getBoundingClientRect(), z = zoomOf(el);
       x = Math.max(0, Math.min(innerWidth - Math.min(r.width, innerWidth), x));
       y = Math.max(0, Math.min(innerHeight - 40, y)); // the header always stays reachable
-      el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.right = 'auto';
+      el.style.left = `${x / z}px`; el.style.top = `${y / z}px`; el.style.right = 'auto';
       return { x, y };
     };
-    this.reclamp = () => { if (el.style.left) place(parseFloat(el.style.left), parseFloat(el.style.top)); };
+    this.reclamp = () => { if (el.style.left) { const z = zoomOf(el); place(parseFloat(el.style.left) * z, parseFloat(el.style.top) * z); } };
     try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) { el.style.left = `${s.x}px`; el.style.top = `${s.y}px`; el.style.right = 'auto'; } } catch { /* storage blocked */ }
     addEventListener('resize', () => this.reclamp());
     let drag = null;

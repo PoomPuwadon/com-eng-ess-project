@@ -40,21 +40,61 @@ export class Player {
     addEventListener('keyup', (e) => { this.keys.delete(e.code); });
     addEventListener('blur', () => { this.keys.clear(); this.drag = false; });
     dom.addEventListener('contextmenu', (e) => e.preventDefault());
+    // turning: hold the RIGHT button and drag, or press-and-drag with the LEFT button / trackpad click
+    // (a left press only starts turning after a few pixels, so plain left clicks still reach the arena HUD)
+    let press = null; // pending left press: { x, y, id }
     dom.addEventListener('pointerdown', (e) => {
-      if (e.button !== 2 || !this.enabled) return;
-      this.drag = true;
-      try { dom.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      if (!this.enabled || e.pointerType === 'touch') return; // touch look lives in touchControls
+      if (e.button === 2) {
+        this.drag = true;
+        try { dom.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      } else if (e.button === 0) press = { x: e.clientX, y: e.clientY, id: e.pointerId };
     });
-    const end = (e) => { if (e.button === 2 || e.type === 'pointercancel') this.drag = false; };
+    const end = (e) => {
+      if (e.button === 2 || e.type === 'pointercancel') this.drag = false;
+      if (e.button === 0 || e.type === 'pointercancel') { if (this.drag === 'left') this.drag = false; press = null; }
+    };
     dom.addEventListener('pointerup', end);
     dom.addEventListener('pointercancel', end);
     dom.addEventListener('pointermove', (e) => {
-      if (!this.drag) return;
-      this.yaw -= e.movementX * 0.005;
-      this.pitch = Math.max(-1.05, Math.min(0.55, this.pitch - e.movementY * 0.004));
+      if (press && !this.drag && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) {
+        this.drag = 'left';
+        try { dom.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      }
+      if (!this.drag || !this.enabled) return;
+      this.turn(e.movementX, e.movementY);
     });
-    dom.addEventListener('wheel', (e) => { if (this.enabled) this.camDist = Math.max(1.6, Math.min(12, this.camDist * (e.deltaY > 0 ? 1.1 : 0.9))); }, { passive: true });
+    // wheel: a mouse wheel zooms; a trackpad's two-finger swipe turns the camera and its pinch zooms.
+    // Pinch arrives as a ctrl+wheel event, which the browser would otherwise use to zoom the whole page.
+    let padUntil = 0;
+    const isPad = (e) => {
+      if (e.deltaMode !== 0) return false; // line/page steps: a notched mouse wheel (Firefox)
+      const wy = e.wheelDeltaY; // Chromium / Safari: a trackpad reports wheelDeltaY = -3 × deltaY
+      if (e.deltaX !== 0 || (wy && wy === -3 * e.deltaY) || !Number.isInteger(e.deltaY)) return true;
+      return performance.now() < padUntil; // keep the same reading for the rest of a swipe
+    };
+    dom.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (!this.enabled) return;
+      if (e.ctrlKey) { this.zoom(Math.exp(Math.max(-0.25, Math.min(0.25, e.deltaY * 0.01)))); return; } // pinch
+      if (isPad(e)) { padUntil = performance.now() + 250; this.turn(-e.deltaX * 0.8, -e.deltaY * 0.6); return; }
+      this.zoom(e.deltaY > 0 ? 1.1 : 0.9);
+    }, { passive: false });
+    // Safari's own pinch gesture events (it also zooms the page without this)
+    let gScale = 1;
+    dom.addEventListener('gesturestart', (e) => { e.preventDefault(); gScale = e.scale || 1; });
+    dom.addEventListener('gesturechange', (e) => { e.preventDefault(); if (this.enabled && e.scale) { this.zoom(gScale / e.scale); gScale = e.scale; } });
+    dom.addEventListener('gestureend', (e) => e.preventDefault());
   }
+
+  /** turn the orbit camera by a pointer movement in pixels */
+  turn(dx, dy) {
+    this.yaw -= dx * 0.005;
+    this.pitch = Math.max(-1.05, Math.min(0.55, this.pitch - dy * 0.004));
+  }
+
+  /** multiply the camera distance (1 = no change), clamped to the orbit range */
+  zoom(f) { this.camDist = Math.max(1.6, Math.min(12, this.camDist * f)); }
 
   /** Swap the avatar (kit Character) — the look follows the role. */
   setAvatar(scene, char) {

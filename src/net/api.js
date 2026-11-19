@@ -83,13 +83,28 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 
 // ---------------------------------------------------------------- name + password sign-in
 export const getToken = () => token;
-const ACCOUNT_KEY = 'firm.account.v1';
+const ACCOUNT_KEY = 'firm.account.v1'; // the account this browser is signed in to (cleared on sign out)
+const LAST_NAME_KEY = 'firm.lastName.v1'; // pre-fills the Sign in form after a sign out
 export const savedAccount = () => { try { return localStorage.getItem(ACCOUNT_KEY); } catch { return null; } };
+export const lastAccountName = () => { try { return localStorage.getItem(LAST_NAME_KEY) || localStorage.getItem(ACCOUNT_KEY); } catch { return null; } };
+/** true while this tab is signed in to a name + password account (not a guest session) */
+export const signedIn = () => Boolean(me && savedAccount() && savedAccount() === me.name);
+
+/** Sign out: the server revokes this token, the browser forgets it, and the page reloads as a guest. */
+export async function signOut() {
+  try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* offline: forgetting the token locally is enough */ }
+  try {
+    const name = savedAccount(); if (name) localStorage.setItem(LAST_NAME_KEY, name);
+    localStorage.removeItem(ACCOUNT_KEY); localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY);
+  } catch { /* storage blocked */ }
+  token = null;
+  location.reload();
+}
 /** mode: 'enter' (sign in, or open an account if the name is new) | 'login' | 'register' */
 export async function signIn(name, password, mode = 'enter') {
   const out = await api(`/api/auth/${mode}`, { method: 'POST', body: { name, password } });
   token = out.token; store.set(token);
-  try { localStorage.setItem(ACCOUNT_KEY, out.player.name); } catch { /* private mode */ }
+  try { localStorage.setItem(ACCOUNT_KEY, out.player.name); localStorage.setItem(LAST_NAME_KEY, out.player.name); } catch { /* private mode */ }
   me = null; setMe(out.player);
   online = true;
   connectStream();

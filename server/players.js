@@ -44,5 +44,12 @@ export function createPlayers(db, ledger, config) {
     db.run('INSERT INTO sessions(token_hash, player_id, created_at) VALUES (?, ?, ?)', hash(token), id, Date.now());
     return token;
   }
-  return { create, get, auth, rename, nameOf, issueToken };
+  /** Sign out: the token stops authenticating (its session row goes; a player's original token is replaced). */
+  function revoke(token) {
+    if (!token) return;
+    const h = hash(token);
+    db.run('DELETE FROM sessions WHERE token_hash = ?', h);
+    db.run('UPDATE players SET token_hash = ? WHERE token_hash = ?', hash(randomBytes(24).toString('base64url')), h);
+  }
+  return { create, get, auth, rename, nameOf, issueToken, revoke };
 }

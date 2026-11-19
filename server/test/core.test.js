@@ -322,3 +322,35 @@ test('blind round: an empty earlier round is replayed; a round with certificates
   assert.equal(app.institute.blindRounds().filter((x) => x.date === date).length, 1, 'the empty record is replaced, not duplicated');
   assert.equal(await app.institute.blindRound(), null, 'a round that bought certificates is final');
 });
+
+// ---------------------------------------------------------------- accounts: one per session, sign out
+import { EventEmitter } from 'node:events';
+const fakeReq = (body, token, ip) => {
+  const req = Object.assign(new EventEmitter(), { headers: token ? { authorization: `Bearer ${token}` } : {}, socket: { remoteAddress: ip } });
+  setImmediate(() => { req.emit('data', JSON.stringify(body)); req.emit('end'); });
+  return req;
+};
+
+test('a signed-in account cannot open a second account until it signs out', async () => {
+  const app = mkApp(), r = app.routes;
+  const a = await r['POST /api/auth/register'](fakeReq({ name: 'Alice', password: 'pass1' }, null, 'ip1'));
+  // same name again (any case) is refused
+  await assert.rejects(r['POST /api/auth/register'](fakeReq({ name: 'alice', password: 'x1234' }, null, 'ip2')), /already on the register/);
+  // signed in as Alice: no new account on top of it, through either route
+  await assert.rejects(r['POST /api/auth/register'](fakeReq({ name: 'Bob', password: 'pass2' }, a.token, 'ip3')), /signed in as Alice/);
+  await assert.rejects(r['POST /api/auth/enter'](fakeReq({ name: 'Bob', password: 'pass2' }, a.token, 'ip4')), /signed in as Alice/);
+  // signing in to an existing account is still allowed
+  const again = await r['POST /api/auth/login'](fakeReq({ name: 'Alice', password: 'pass1' }, a.token, 'ip5'));
+  assert.equal(again.player.id, a.player.id);
+  // sign out: both tokens stop working, then a new account can be opened
+  r['POST /api/auth/logout']({ headers: { authorization: `Bearer ${a.token}` } });
+  r['POST /api/auth/logout']({ headers: { authorization: `Bearer ${again.token}` } });
+  assert.equal(app.players.auth(a.token), null);
+  assert.equal(app.players.auth(again.token), null);
+  const b = await r['POST /api/auth/register'](fakeReq({ name: 'Bob', password: 'pass2' }, a.token, 'ip6'));
+  assert.equal(b.player.name, 'Bob');
+  // Alice's account and balance survive the sign out
+  const back = app.auth.login('Alice', 'pass1');
+  assert.equal(back.player.id, a.player.id);
+  assert.equal(back.player.balance, 1_000_000);
+});

@@ -96,5 +96,7 @@ export function createAuth({ store, players, adminPassword }) {
   const verifyAdmin = (pw) => typeof pw === 'string' && pw.length > 0 && same(hashPw(pw, 'console'), hashPw(adminPassword, 'console'));
   const accountOf = (playerId) => store.all().find((r) => r.playerId === playerId) || null;
 
-  return { register, login, enter, verifyAdmin, accountOf };
+  const known = (name) => Boolean(store.find(nameKey(name)));
+
+  return { register, login, enter, known, verifyAdmin, accountOf };
 }

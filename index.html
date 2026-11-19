@@ -39,11 +39,16 @@
     .lock { display: block; font-size: 11px; color: #ff8a8a; margin-left: 58px; }
     #help { left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 520px; line-height: 1.5; }
     #help h3 { margin-top: 0; color: #c9a23a; }
-    #help-btn { position: fixed; top: 12px; left: 290px; background: #1e2330; color: #ddd; border: 1px solid #c9a23a; border-radius: 4px; cursor: pointer; padding: 4px 8px; }
+    #help-btn { position: fixed; top: 12px; left: 306px; background: #1e2330; color: #ddd; border: 1px solid #c9a23a; border-radius: 4px; cursor: pointer; padding: 4px 8px; }
     #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .3s; }
     #fade.on { opacity: 1; }
     #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; }
     #notice { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #bbb; text-shadow: 0 1px 2px #000; }
+    /* small monitors: the HUD, dialogs and terminals shrink with the window (--ui is set by src/uiScale.js).
+       Full-screen layers (#c, name tags, backdrops) are never zoomed: only the boxes drawn on them. */
+    #loc, #help-btn, #minimap, #floors, #roles, #prompt, #toast, #elevator, #help, #perf, #notice,
+    .perf-btn, #perf-box, #q-btn, #wallet, #mp-console, #mp-console-btn, .mp-modal > .card, #app .frame,
+    #rt .rt-top, #rt .rt-side, #rt .rt-rail, .aic, .aip > div, .lsg, #mp-book, #mp-board, #mp-race, .mp-actbtn { zoom: var(--ui, 1); }
     .hidden { display: none !important; }
     body:not(.staff-tools) #roles, body:not(.staff-tools) #floors { display: none !important; }
     body.nohud .panel, body.nohud #minimap, body.nohud #help-btn, body.nohud #cross, body.nohud #notice { display: none !important; }
@@ -68,12 +73,12 @@
   <div id="elevator" class="panel hidden"></div>
   <div id="help" class="panel hidden">
     <h3>Phase 0 — Greybox layout review</h3>
-    <b>Hold right-click and drag</b> to turn the camera · <b>mouse wheel</b> zoom.<br />
+    <b>Click and drag</b> (either button) to turn the camera · <b>mouse wheel</b> zoom · trackpad: <b>two-finger swipe</b> turns, <b>pinch</b> zooms.<br />
     <b>W A S D</b> move · <b>Shift</b> run · <b>E</b> on a yellow landing pad = choose your floor, a car is assigned and comes to you · <b>E</b> inside a car = floor panel (lifts are for staff: Admin / CEO; guests travel with their host)<br />
     <b>Alt+F6</b> executive console (CEO / Admin) · <b>1–5</b> review role switch (staff only) — gates turn green when you may pass<br />
     <b>Floor list</b> (top right) = review teleport to any floor · <b>F3</b> frame-rate overlay · <b>G</b> Low / High graphics · <b>H</b> this help<br />
     <b>E</b> at a roulette table (VT-01) = Rotational Variance Instrument · <b>M</b> = Markets terminal (the firm's live AI book, your portfolio) · <b>L</b> = Probability Research Institute (lottery models) · <b>Esc</b> closes a terminal<br />
-    <b>Your name</b> on the liquidity bar = sign in, sign up or switch account · staff: the <b>Console</b> button (or <b>Alt+F6</b>) reopens the executive console<br /><br />
+    <b>Your name</b> on the liquidity bar = sign in / sign up (guests) or your account and <b>Sign out</b> · staff: the <b>Console</b> button (or <b>Alt+F6</b>) reopens the executive console<br /><br />
     Live: real delayed US stock prices, real official Thai lottery results, AI desks trading and researching 24/7 with notional capital. Your balance is kept by the server. Sign in with a name and password on the welcome screen to keep it; other guests appear live around you.
     <br /><br /><i>Press H to close.</i>
   </div>

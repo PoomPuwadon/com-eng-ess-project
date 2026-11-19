@@ -44,6 +44,9 @@ import { TourGuides } from './multiplayer/tourGuides.js';
 import { ArenaHud } from './multiplayer/arenaHud.js';
 import { withVeil } from './multiplayer/teleportVeil.js';
 import { memberPose } from '../server/realtime/basket.js';
+import { installUiScale } from './uiScale.js';
+
+installUiScale(); // smaller HUD on small monitors; pinch never zooms the page
 
 
 // ---------------------------------------------------------------- renderer / scene
@@ -562,7 +565,7 @@ const perfPanel = (() => {
   btn.className = 'perf-btn';
   btn.textContent = 'Perf tests (F4)';
   btn.style.cssText = 'position:fixed;left:16px;top:104px;z-index:30;font:600 12px system-ui;padding:5px 10px;border-radius:6px;border:1px solid #b8924a;background:#14110dcc;color:#e3c27a;cursor:pointer';
-  const box = document.createElement('div');
+  const box = document.createElement('div'); box.id = 'perf-box';
   box.style.cssText = 'position:fixed;left:16px;top:138px;z-index:30;display:none;width:236px;padding:12px 14px;border-radius:10px;border:1px solid #b8924a;background:#14110de6;color:#eee;font:13px system-ui;line-height:1.5';
   const opt = PERF_OPT;
   const row = (label, html) => `<div style="margin:6px 0"><div style="color:#b8a27a;font-size:11px;text-transform:uppercase;letter-spacing:.06em">${label}</div>${html}</div>`;
