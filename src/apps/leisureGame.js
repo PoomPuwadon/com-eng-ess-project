@@ -78,7 +78,7 @@ export function openGame(kind, at) {
     seat?.clearHands();
     if (kind === 'slots') {
       out = ''; draw();
-      const r = await post('/api/leisure/slots', { stake }); await seat?.playSlots(r.reels);
+      const r = await post('/api/leisure/slots', { stake }); await seat?.playSlots(r.reels, Math.floor(stake * (r.mult || 0)));
       out = `<div>${net(r.net)} · balance ${dollars(r.balance)}</div>`; done(r);
     } else if (kind === 'baccarat') {
       if (!side) throw new Error('Choose player, banker or tie.');

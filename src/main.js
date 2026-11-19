@@ -28,6 +28,7 @@ import { updateArenaMedia, bindArenaMedia, arenaMediaDebug } from './world/arena
 import { hotspotAt, nearestTable } from './interact.js';
 import { openGame, closeGame, gameWatch, setSeat } from './apps/leisureGame.js';
 import { createTableSeat } from './apps/tableSeat.js';
+import { createChartKiosk, nearKiosk } from './apps/chartKiosk.js';
 import { updateCards, nearest as nearestAgent, openHistory, historyOpen } from './ai/agentCard.js';
 import { createRouletteSeat } from './apps/rouletteSeat.js';
 import { startLiveData } from './liveData.js';
@@ -311,6 +312,7 @@ function placeAt(floorId, x, y, z, yaw = player.yaw) {
 function closeOpenThings() {
   closeGame(); // slots / blackjack / baccarat / craps panel: being moved (CEO teleport, basket) ends it
   if (rouletteSeat.active()) rouletteSeat.stand();
+  chartKiosk.close();
   closeApp();
   if (hud.elevatorOpen) hud.closeElevator();
   if (execConsole.open) execConsole.toggle(false);
@@ -344,6 +346,7 @@ setInterval(sendPose, 100);
 // ---------------------------------------------------------------- roulette: sit at a real 3D table
 const leisureCtx = () => floors.loaded.get('VT-01');
 const rouletteSeat = createRouletteSeat({ camera, canvas, player, getLeisureCtx: leisureCtx, hud });
+const chartKiosk = createChartKiosk({ camera, canvas, player, hud }); // OT-01: the Chart Desk terminal, its interface on the kiosk's own monitor
 const tourGuides = new TourGuides({ scene, camera, rt, remotes, player, leisureCtx, seated: () => rouletteSeat.active() }); // Tour Mode: CEO trackers + Leisure Suite arrows
 function sitAtTable(table) {
   if (rouletteSeat.active()) return true;
@@ -500,6 +503,8 @@ window.__debug = {
   place: (x, z, yaw, pitch = 0, y = 0) => { placeOn(player.floor.id, x, z, yaw); player.pos.y += y; player.pitch = pitch; player.update(0, allColliders()); hud.update(player, perf.stats, uiState()); return state(); },
   robots: () => life.status(),
   aiTraders: () => aiTraders.status(),
+  chartKiosk, // dev: the OT-01 Chart Desk terminal (open / take(file) / state)
+  tableSeat, // dev: drive the seated table scenes (src/apps/tableSeat.js) without the game server
   ai: { seatCam: () => tableSeat.camPose(), seat: (n = 60) => { for (let i = 0; i < n; i++) tableSeat.update(1 / 60); }, punish: (list) => ot04Ai.set(list), inject: (ev) => globalThis.__aiFeed?.inject(ev), feed: () => globalThis.__aiFeed?.state, fx: () => ({ ot01: aiTraders.fx.active, ot02: lotteryAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), ot02replay: lotteryAi.rp, vt02: arenaAi.boards?.map((b) => ({ name: b.name, redraws: b.redraws })), pods: arenaAi.pods.map((p) => ({ key: p.key, n: p.pts.length, text: p.text })), boards: aiTraders.boards?.map((b) => ({ name: b.name, redraws: b.redraws })) }) },
   floors: () => ALL_FLOOR_IDS,
   buildTimes: () => Object.fromEntries([...floors.loaded].map(([id, c]) => [id, Math.round(c.buildMs)])),
@@ -607,17 +612,17 @@ addEventListener('keydown', (e) => {
   if (appOpen() || e.target.closest?.('input, textarea, select')) return; // applications own the keyboard
   if (e.code === 'KeyM' && !hud.elevatorOpen) { openApp('markets'); return; }
   if (e.code === 'KeyL' && !hud.elevatorOpen) { openApp('research'); return; }
-  if (e.code === 'KeyC' && !hud.elevatorOpen && player.floor?.id === 'OT-01') { openApp('chartdesk'); return; } // OT-01 Chart Desk
+  if (e.code === 'KeyC' && !hud.elevatorOpen && player.floor?.id === 'OT-01' && !rouletteSeat.active()) { chartKiosk.open(); return; } // OT-01 Chart Desk terminal (walks you to it)
   if (e.code === 'F4') { e.preventDefault(); perfPanel.toggle(); return; }
   if (e.code === 'KeyG' && !hud.elevatorOpen) { setQuality(!QUALITY.low); return; }
   if (e.code === 'Escape' && hud.elevatorOpen) { hud.closeElevator(); return; }
-  if (e.code === 'KeyE' && !hud.elevatorOpen && nearestAgent() && !historyOpen()) { openHistory(); return; } // read-only decision history of the agent in front of you
+  if (e.code === 'KeyE' && !hud.elevatorOpen && nearestAgent() && !historyOpen() && !nearKiosk(player)) { openHistory(undefined, { staff: rt.isStaff || player.role === 'ceo' || player.role === 'admin' }); return; } // read-only decision history of the agent in front of you
   if (e.code === 'KeyE' && !hud.elevatorOpen) {
     const { car, zone } = uiState();
     if ((car || zone) && !canUseLifts(player.role, (car || zone).bank)) { hud.toast(LIFT_REFUSAL, 2.5); return; } // visitors never get the lift panel
     if (car) { document.exitPointerLock?.(); hud.openElevator(car.bank, car.at || player.floor.id, player.role, { car }); }
     else if (zone) { document.exitPointerLock?.(); hud.openElevator(zone.bank, player.floor.id, player.role); }
-    else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : h.app === 'game' ? openGame(h.kind, h.at) : openApp(h.app); }
+    else { const h = hotspotAt(player, leisureCtx()); if (h) h.app === 'roulette' ? sitAtTable(h.table) : h.app === 'game' ? openGame(h.kind, h.at) : h.app === 'chartkiosk' ? chartKiosk.open() : openApp(h.app); }
   }
   if (e.code === 'F3') { e.preventDefault(); document.getElementById('perf').classList.toggle('hidden'); }
   if (e.code === 'KeyH') document.getElementById('help').classList.toggle('hidden');
@@ -662,6 +667,7 @@ function frame(now) {
   remotes.update(dt, { visibleIds: floors.visibleIds(), viewer: player.pos, selfPose: { pos: player.pos, floor: player.floor?.id }, overrides });
   rouletteSeat.update(dt);
   tableSeat.update(dt);
+  chartKiosk.update(dt);
   tourGuides.update(dt);
   updateArenaFeed(dt, floors.visibleIds().includes('VT-02'));
   updateArenaMedia(dt, floors.visibleIds().includes('VT-02'), camera, scene);
@@ -679,7 +685,7 @@ function frame(now) {
     const b = BANKS[ui.zone.bank];
     const a = assigned && assigned.car.bank === ui.zone.bank && assigned.from === player.floor.id ? ` · your car: ${assigned.car.label} (${assigned.car.at === assigned.from ? 'doors open' : 'arriving'})` : '';
     hud.prompt(`E — ${b.name} (${b.label})${a}`);
-  } else if (!appOpen() && !rouletteSeat.active()) { const h = hotspotAt(player, leisureCtx()); hud.prompt(h ? h.label : ''); }
+  } else if (!appOpen() && !rouletteSeat.active() && !chartKiosk.active()) { const h = hotspotAt(player, leisureCtx()); hud.prompt(h ? h.label : ''); }
   else hud.prompt('');
   const stats = perf.tick(now, rawMs, performance.now() - t0);
   adaptDpr(dt, stats.fps);

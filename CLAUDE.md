@@ -284,7 +284,9 @@ the gateway.
 The desk's stake is still the rule book.
 
 **Chart Desk** (`server/agents/chartAnalyst.js`): visitor-uploaded chart → UP/DOWN verdict (default
-provider), labelled demo without a key.
+provider), labelled demo without a key. In the world it is a physical terminal by the OT-01 portal
+(`src/apps/chartKiosk.js`): the UI is drawn on the kiosk's own monitor (ray-cast clicks / taps), charts arrive by paste,
+drag and drop or upload (the photo picker on phones).
 
 ### The walking AI desk (client only) — `src/characters/aiTraders.js`
 - Four live agents stand at PCs just inside the OT-01 entrance and stroll the aisle: Head Trader (Claude),

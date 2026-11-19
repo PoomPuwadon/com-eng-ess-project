@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Lux, LM, plaque } from '../world/lux.js';
 import { luxLiftHall } from './luxHall.js';
+import { blackjackTable, baccaratTable, pokerTable, crapsTable, TableLife, buildSlotCabinets } from '../world/leisureKit.js';
 
 // ================================================================= PHASE 1 — VT-01 EXECUTIVE LEISURE SUITE
 // Built to the user's reference image: a long promenade of red carpet with a gold dragon motif and
@@ -10,6 +11,7 @@ import { luxLiftHall } from './luxHall.js';
 // Floor games (Phase 1 = visual only; rules come in Phase 4, `leisure-rules`):
 //   north front: Rotational Variance Instruments (roulette, top priority: 34 tables, wheels spinning)
 //   north back:  Automated Yield Terminals (banks + two Mega Reserve Progressive carousels)
+// Everything except the roulette is modelled in src/world/leisureKit.js (tables, chips, cards, dice, slot cabinets, dealers).
 //   south front: Twenty-One Advisory Tables, Private Banking Tables, Kinetic Probability Pit
 //   south back:  more terminals + a third progressive carousel
 //   south-east:  Private Card Salon (Strategic Negotiation) + High-Conviction Salon, glass partition
@@ -95,25 +97,6 @@ function initMaterials() {
     g.fillStyle = '#d9a441'; for (let k = 0; k < 4; k++) { g.save(); g.translate(cx, cy); g.rotate((k * Math.PI) / 2); g.fillRect(-10, -130, 20, 260); g.restore(); }
     g.beginPath(); g.arc(cx, cy, 40, 0, Math.PI * 2); g.fill();
   }, { repeat: false });
-  // slot screens: 8 reel games (made-up names), 4 x 2 atlas
-  const slots = canvasTex(1024, 512, (g) => {
-    const games = [['LIQUIDITY 7s', '#1d4fd6', '#7a3cff'], ['DIAMOND DIVIDEND', '#7a1fd1', '#ff3cac'], ['BULL RUN', '#0f7a6a', '#2dd4bf'], ['GOLDEN HEDGE', '#a5550a', '#ffc94a'],
-      ['MEGA RESERVE', '#5b0f8a', '#ff9f1c'], ['TRIPLE ALPHA', '#0b3c91', '#3db7ff'], ['YIELD STARS', '#8a0f3c', '#ff5a7a'], ['DELTA DELUXE', '#1b5e20', '#a3e635']];
-    const SYM = [['7', '#ff3b3b'], ['BAR', '#111111'], ['◆', '#3db7ff'], ['★', '#ffd23f'], ['♣', '#2dbf5a'], ['7', '#ffd23f']];
-    games.forEach(([name, c0, c1], i) => {
-      const x = (i % 4) * 256, y = Math.floor(i / 4) * 256;
-      g.save(); g.beginPath(); g.rect(x, y, 256, 256); g.clip();
-      const grd = g.createLinearGradient(x, y, x, y + 256); grd.addColorStop(0, c1); grd.addColorStop(1, c0); g.fillStyle = grd; g.fillRect(x, y, 256, 256);
-      g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle'; fitFont(g, name, 230, 30, '800'); g.fillText(name, x + 128, y + 30);
-      for (let k = 0; k < 3; k++) {
-        const rx = x + 16 + k * 76; g.fillStyle = '#fbf6e8'; g.fillRect(rx, y + 64, 70, 130);
-        for (let j = 0; j < 3; j++) { const [sy, col] = SYM[(i * 2 + k * 3 + j) % SYM.length]; g.fillStyle = col; fitFont(g, sy, 60, 34, '900'); g.fillText(sy, rx + 35, y + 86 + j * 43); }
-      }
-      g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(x + 12, y + 128, 232, 3);
-      g.fillStyle = '#ffd23f'; fitFont(g, 'CREDITS 1,000', 230, 22, '700', 'monospace'); g.fillText('CREDITS 1,000', x + 128, y + 222);
-      g.restore();
-    });
-  }, { repeat: false });
   Object.assign(LM, {
     lsCarpet: std({ map: carpet, roughness: 0.95, envMapIntensity: 0.15 }),
     lsProm: std({ map: prom, roughness: 0.95, envMapIntensity: 0.15 }),
@@ -136,10 +119,6 @@ function initMaterials() {
   MATS = {
     facetOrange: facet(0x7a2a08, 0.55), facetPurple: facet(0x3c1468, 0.6),
     wheel: new THREE.MeshStandardMaterial({ map: wheel, roughness: 0.35, metalness: 0.2 }),
-    cabinet: new THREE.MeshStandardMaterial({ color: 0x1c1530, roughness: 0.35, metalness: 0.5 }),
-    topper: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
-    stool: new THREE.MeshStandardMaterial({ color: 0xb3172a, roughness: 0.6 }),
-    slots,
   };
   return MATS;
 }
@@ -216,74 +195,6 @@ function roulette(L, ctx, r, wheels, x, z, flip) { // long side faces the player
   }
   for (let k = 0; k < 3; k++) if (r() < 0.55) standing(L, r, x - 1 + k * 1.1 + (r() - 0.5) * 0.4, z + s * (1.9 + r() * 0.5), s > 0 ? Math.PI : 0, 0.9);
 }
-function blackjack(L, ctx, r, x, z, s) { // half-moon: dealer on the flat side (toward the promenade if s = -1 for north)
-  const yawT = s > 0 ? 0 : Math.PI; // the arc opens towards +z*s
-  const body = new THREE.CylinderGeometry(1.9, 1.9, 0.78, 24, 1, false, -Math.PI / 2, Math.PI).rotateY(yawT).translate(x, 0.39, z); L.geo(body, 'lsMahogany');
-  const felt = new THREE.CylinderGeometry(1.8, 1.8, 0.06, 24, 1, false, -Math.PI / 2, Math.PI).rotateY(yawT).translate(x, 0.81, z); L.geo(felt, 'lsFelt');
-  const arc = new THREE.TorusGeometry(1.2, 0.02, 3, 24, Math.PI).rotateX(Math.PI / 2).rotateY(yawT + Math.PI / 2).translate(x, 0.85, z); L.geo(arc, 'lsGold');
-  ctx.colliders.push({ x0: x - 1.95, x1: x + 1.95, z0: Math.min(z, z + s * 1.95), z1: Math.max(z, z + s * 1.95), y0: ctx.e, y1: ctx.e + 0.9 });
-  L.person(x, z - s * 0.45, { ...DEALER, yaw: s > 0 ? 0 : Math.PI, skin: pick(SKIN, r() * 9) });
-  for (let k = 0; k < 6; k++) {
-    const a = ((k + 0.5) / 6) * Math.PI, cx = x + Math.cos(a) * 2.45, cz = z + s * Math.sin(a) * 2.45;
-    const yaw = faceTo(cx, cz, x, z); chair(L, cx, cz, yaw);
-    if (r() < 0.7) seated(L, r, cx, cz, yaw);
-  }
-}
-function ovalTable(L, ctx, r, x, z, rx, rz, seats, feltKey = 'lsFelt') {
-  const body = new THREE.CylinderGeometry(1, 1, 0.78, 28).scale(rx, 1, rz).translate(x, 0.39, z); L.geo(body, 'lsMahogany');
-  const rail = new THREE.CylinderGeometry(1, 1, 0.08, 28).scale(rx + 0.08, 1, rz + 0.08).translate(x, 0.82, z); L.geo(rail, 'lsLeather');
-  const felt = new THREE.CylinderGeometry(1, 1, 0.02, 28).scale(rx - 0.2, 1, rz - 0.2).translate(x, 0.87, z); L.geo(felt, feltKey);
-  ctx.colliders.push({ x0: x - rx, x1: x + rx, z0: z - rz, z1: z + rz, y0: ctx.e, y1: ctx.e + 0.9 });
-  L.person(x, z - rz - 0.35, { ...DEALER, yaw: 0, skin: pick(SKIN, r() * 9) });
-  for (let k = 0; k < seats; k++) { // round the ellipse, leaving the dealer's place (-z) free
-    const ang = -Math.PI / 2 + ((k + 1) / (seats + 1)) * Math.PI * 2;
-    const cx = x + Math.cos(ang) * (rx + 0.55), cz = z + Math.sin(ang) * (rz + 0.55);
-    const yaw = faceTo(cx, cz, x, z); chair(L, cx, cz, yaw);
-    if (r() < 0.75) seated(L, r, cx, cz, yaw);
-  }
-}
-function craps(L, ctx, r, x, z) {
-  L.box(x - 2.8, x + 2.8, 0, 0.75, z - 1.2, z + 1.2, 'lsMahogany', { collide: true });
-  L.box(x - 2.6, x + 2.6, 0.72, 0.76, z - 1.0, z + 1.0, 'lsFelt');
-  for (const sz of [-1, 1]) L.box(x - 2.8, x + 2.8, 0.75, 1.05, z + sz * 1.2 - 0.12, z + sz * 1.2 + 0.12, 'lsLeather');
-  for (const sx of [-1, 1]) L.box(x + sx * 2.8 - 0.12, x + sx * 2.8 + 0.12, 0.75, 1.05, z - 1.2, z + 1.2, 'lsLeather');
-  for (const sx of [-1, 1]) L.person(x + sx * 0.8, z - 1.6, { ...DEALER, yaw: 0, skin: pick(SKIN, r() * 9) });
-  L.person(x, z + 1.6, { ...DEALER, yaw: Math.PI, skin: pick(SKIN, r() * 9) }); // stickman
-  for (let k = 0; k < 14; k++) { // a crowd crammed round the rail, bouncing
-    const t = k / 14, side = k % 2 ? 1 : -1;
-    const px = x + (t - 0.5) * 6.4, pz = z + side * (1.65 + r() * 0.35);
-    if (Math.abs(px - x) < 1.2 && side < 0) continue;
-    standing(L, r, px, pz, side > 0 ? Math.PI : 0, 1);
-  }
-  for (const sx of [-1, 1]) { standing(L, r, x + sx * 3.4, z + (r() - 0.5), sx > 0 ? -Math.PI / 2 : Math.PI / 2, 1); }
-}
-
-// slot cabinets: instanced (body, screen from the slot atlas, glowing topper, stool), toppers chase-light
-function buildSlots(ctx, M, list, r) {
-  const n = list.length; if (!n) return;
-  const body = new THREE.BoxGeometry(0.7, 1.45, 0.62).translate(0, 0.725, 0);
-  const top = new THREE.BoxGeometry(0.72, 0.34, 0.5).translate(0, 1.66, -0.04);
-  const scr = new THREE.PlaneGeometry(0.56, 0.5).rotateX(-0.22).translate(0, 1.12, 0.33);
-  const stool = new THREE.CylinderGeometry(0.22, 0.12, 0.62, 10).translate(0, 0.31, 0.78);
-  const offs = new Float32Array(n * 2); list.forEach((s, i) => { offs[i * 2] = (s.cell % 4) * 0.25; offs[i * 2 + 1] = 1 - (Math.floor(s.cell / 4) + 1) * 0.5; });
-  scr.setAttribute('cellOffset', new THREE.InstancedBufferAttribute(offs, 2));
-  const scrMat = new THREE.MeshBasicMaterial({ map: M.slots, toneMapped: false });
-  scrMat.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 cellOffset;').replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vMapUv * vec2(0.25, 0.5) + cellOffset;\n#endif'); };
-  scrMat.customProgramCacheKey = () => 'slotAtlas';
-  const meshes = [[body, M.cabinet], [top, M.topper], [scr, scrMat], [stool, M.stool]].map(([g, m]) => new THREE.InstancedMesh(g, m, n));
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
-  list.forEach((s, i) => { q.setFromAxisAngle(up, s.yaw); m4.compose(p.set(s.x, ctx.e, s.z), q, sc.set(1, s.tall || 1, 1)); for (const me of meshes) me.setMatrixAt(i, m4); meshes[1].setColorAt(i, c.set(s.color)); });
-  for (const me of meshes) { me.instanceMatrix.needsUpdate = true; me.computeBoundingSphere(); ctx.add(me, me.geometry); }
-  ctx.disposables.push(scrMat);
-  const base = list.map((s) => new THREE.Color(s.color));
-  let acc = 0, step = 0;
-  ctx.onUpdate((dt) => { // chase lights on the toppers
-    if (!ctx.group.visible) return; acc += dt; if (acc < 0.16) return; acc = 0; step++;
-    for (let i = 0; i < n; i++) meshes[1].setColorAt(i, c.copy(base[i]).multiplyScalar((i + step) % 4 === 0 ? 1.0 : 0.62));
-    meshes[1].instanceColor.needsUpdate = true;
-  });
-}
-
 // ================================================================= VT-01
 export function leisure(ctx) {
   const M = initMaterials();
@@ -383,8 +294,9 @@ export function leisure(ctx) {
   // ---- north back: terminal banks + two progressive carousels
   const bank = (x0, x1, z, tall = 1) => { // back-to-back double row along x
     for (let x = x0 + 0.55; x < x1; x += 1.05) for (const s of [-1, 1]) {
-      slots.push({ x, z: z + s * 0.4, yaw: s > 0 ? 0 : Math.PI, cell: Math.floor(r() * 8), color: pick(SLOT_COL, r() * 9), tall });
-      if (r() < 0.32) seated(L, r, x, z + s * 1.18, s > 0 ? Math.PI : 0);
+      const active = r() < 0.32; // a seated member keeps the reels turning
+      slots.push({ x, z: z + s * 0.4, yaw: s > 0 ? 0 : Math.PI, cell: Math.floor(r() * 8), color: pick(SLOT_COL, r() * 9), tall, active });
+      if (active) seated(L, r, x, z + s * 1.18, s > 0 ? Math.PI : 0);
     }
     ctx.colliders.push({ x0, x1, z0: z - 0.75, z1: z + 0.75, y0: ctx.e, y1: ctx.e + 1.8 });
     for (const [a, b] of [[x0 - 0.25, x0], [x1, x1 + 0.25]]) { L.box(a, b, 0, 2.0, z - 0.7, z + 0.7, 'lsPurple'); L.box(a - 0.02, b + 0.02, 2.0, 2.1, z - 0.72, z + 0.72, 'lsGold'); } // bank end caps
@@ -392,9 +304,10 @@ export function leisure(ctx) {
   const carousel = (cx, cz) => {
     for (let k = 0; k < 18; k++) {
       const a = (k / 18) * Math.PI * 2, x = cx + Math.cos(a) * 3.6, z = cz + Math.sin(a) * 3.6, yaw = Math.atan2(Math.cos(a), Math.sin(a));
-      slots.push({ x, z, yaw, cell: 4, color: 0xff9f1c, tall: 1.25 });
+      const active = r() < 0.6;
+      slots.push({ x, z, yaw, cell: 4, color: 0xff9f1c, tall: 1.25, active });
       ctx.colliders.push({ x0: x - 0.4, x1: x + 0.4, z0: z - 0.4, z1: z + 0.4, y0: ctx.e, y1: ctx.e + 1.8 });
-      if (r() < 0.6) seated(L, r, x + Math.cos(a) * 0.95, z + Math.sin(a) * 0.95, yaw + Math.PI);
+      if (active) seated(L, r, x + Math.cos(a) * 0.95, z + Math.sin(a) * 0.95, yaw + Math.PI);
     }
     L.cyl(cx, cz, 3.2, 0, 0.3, 'lsGold', { seg: 24 }); L.cyl(cx, cz, 0.7, 0.3, 7.2, 'lsGold', { seg: 12, collide: true });
     { const ring = new THREE.TorusGeometry(3.0, 0.07, 4, 40).rotateX(Math.PI / 2).translate(cx, 7.0, cz); L.geo(ring, 'lsCove'); }
@@ -409,14 +322,17 @@ export function leisure(ctx) {
   // ---- walkway-edge showcase terminals (as in the reference: machines right at the walkway)
 
   // ---- south front: twenty-one, private banking, kinetic pit
-  ctx.games = { slots, blackjack: [], baccarat: [], craps: [], poker: [] }; // positions for the E-to-play hotspots (src/interact.js)
-  for (let i = 0; i < 5; i++) for (const z of [14.4, 21.0, 27.6]) { blackjack(L, ctx, r, 58 + i * 9, z, -1); ctx.games.blackjack.push({ x: 58 + i * 9, z }); }
+  ctx.games = { slots, blackjack: [], baccarat: [], craps: [], poker: [] }; // E-to-play hotspots (src/interact.js); each entry also carries its table layout
+  const life = new TableLife(ctx); // the dealers: cards dealt and swept, dice thrown, at every table
+  const people = { seated: (x, z, yaw) => seated(L, r, x, z, yaw), standing: (x, z, yaw) => standing(L, r, x, z, yaw, 1), dealer: (x, z, yaw) => L.person(x, z, { ...DEALER, yaw, skin: pick(SKIN, r() * 9) }) };
+  const table = (kind, fn, T, opt) => { fn(L, ctx, r, T, people, life, opt); ctx.games[kind].push(T); };
+  for (let i = 0; i < 5; i++) for (const z of [14.4, 21.0, 27.6]) table('blackjack', blackjackTable, { x: 58 + i * 9, z, yaw: Math.PI }); // dealer towards +z, players face the promenade
   for (const bxx of [106.5, 121.5]) for (const z of [16.5, 24.6]) { // private banking: ovals inside velvet ropes
-    ovalTable(L, ctx, r, bxx, z, 2.1, 1.05, 7); ctx.games.baccarat.push({ x: bxx, z });
+    table('baccarat', baccaratTable, { x: bxx, z, yaw: 0 });
     for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, px = bxx + Math.cos(a) * 3.6, pz = z + Math.sin(a) * 2.4; L.cyl(px, pz, 0.06, 0, 1.0, 'lsGold', { seg: 6 }); L.cyl(px, pz, 0.12, 1.0, 1.12, 'lsGold', { seg: 8 }); }
     const rope = new THREE.TorusGeometry(1, 0.035, 4, 32).rotateX(Math.PI / 2).scale(3.6, 1, 2.4).translate(bxx, 0.9, z); L.geo(rope, 'lsVelvet');
   }
-  for (const cxx of [133, 145]) for (const z of [16.6, 25.0]) { craps(L, ctx, r, cxx, z); ctx.games.craps.push({ x: cxx, z }); }
+  for (const cxx of [133, 145]) for (const z of [16.6, 25.0]) table('craps', crapsTable, { x: cxx, z, yaw: 0 });
 
   // ---- south back: terminals + a third progressive carousel
   for (const z of [35, 45, 55]) for (const [a, b] of [[54, 90], [110, 148]]) bank(a, b, z);
@@ -438,10 +354,10 @@ export function leisure(ctx) {
   part(SAL.x0, SAL.x1, SAL.z1 - 0.08, SAL.z1 + 0.08);
   for (const [x, z] of [[176, SAL.z0], [182, SAL.z0], [SAL.x0, 22], [SAL.x0, 27]]) L.box(x - 0.25, x + 0.25, 0, 3.4, z - 0.25, z + 0.25, 'lsGold');
   plaque(ctx, 'PRIVATE CARD SALON', 179, 3.25, SAL.z0 - 0.3, Math.PI, { h: 0.42, color: '#ffd877', sub: 'Strategic Negotiation' });
-  for (const x of [163, 175, 187]) for (const z of [21, 32, 43]) { ovalTable(L, ctx, r, x, z, 1.9, 1.05, 8); ctx.games.poker.push({ x, z }); for (let k = 0; k < 2; k++) if (r() < 0.5) standing(L, r, x + (r() - 0.5) * 4, z + 2.3 + r() * 0.6, Math.PI, 0.4); }
+  for (const x of [163, 175, 187]) for (const z of [21, 32, 43]) { table('poker', pokerTable, { x, z, yaw: 0 }); for (let k = 0; k < 2; k++) if (r() < 0.5) standing(L, r, x + (r() - 0.5) * 4, z + 2.3 + r() * 0.6, Math.PI, 0.4); }
   // High-Conviction Salon (corner room, glass)
   part(193, 205.9, 42.9, 43.05); part(192.9, 193.05, 43, 47.5); part(192.9, 193.05, 50.5, 55.9);
-  ovalTable(L, ctx, r, 199.5, 49.5, 2.2, 1.2, 8, 'lsVelvet'); ctx.games.poker.push({ x: 199.5, z: 49.5 });
+  table('poker', pokerTable, { x: 199.5, z: 49.5, yaw: 0 }, { high: true });
   plaque(ctx, 'HIGH-CONVICTION SALON', 199.4, 3.0, 42.85, Math.PI, { h: 0.3, color: '#ffd877' });
   for (const x of [165, 181, 197]) for (const z of [26, 40]) { // salon chandeliers (smaller)
     L.cyl(x, z, 0.04, 9.6, SOFFIT - 0.2, 'lsGold', { seg: 6 });
@@ -474,7 +390,7 @@ export function leisure(ctx) {
   walkers(30, (k) => { const sz = k % 2 ? 1 : -1, ln = LANES[sz], i = Math.floor(r() * (ln.length - 1)), j = i + 1 + Math.floor(r() * (ln.length - 1 - i)); return [[ln[i], sz * 31.2], [ln[j], sz * 31.2], [ln[j], sz * 10.2], [ln[i], sz * 10.2]]; });
   walkers(8, () => { const z = (r() - 0.5) * 60; return [[44, z], [z > -27 && z < -19.5 ? 40.2 : 36.8, z + (r() - 0.5) * 6], [44.5, (r() - 0.5) * 3], [56, (r() - 0.5) * 3], [44.5, (r() - 0.5) * 3]]; });
 
-  buildSlots(ctx, M, slots, r);
+  buildSlotCabinets(ctx, slots); life.build();
   // spinning roulette rotors (instanced)
   const rotor = new THREE.CylinderGeometry(0.52, 0.52, 0.06, 32);
   const rot = new THREE.InstancedMesh(rotor, M.wheel, wheels.length);

@@ -5,6 +5,7 @@ import { marketBoard } from '../world/lobbyScreens.js';
 import { buildTradingScreens, tcell } from '../world/tradingScreens.js';
 import { luxLiftHall, ceiling } from './luxHall.js';
 import { DESK_X, DESK_Z, AI_BOARD } from '../characters/aiTraders.js';
+import { buildChartKiosk } from '../apps/chartKiosk.js';
 
 // ================================================================= PHASE 1 — OT-01 TRADING FLOOR
 // Stylised exchange floor in the tone of the user's reference: warm tan oak floor, cream walls and a
@@ -543,6 +544,7 @@ export function trading(ctx) {
   boothRow(L, scr, ctx, r, { along: 'z', a0: 10, a1: 37.5, wall: -50.4, dir: -1 });
   boothRow(L, scr, ctx, r, { along: 'x', a0: -107.5, a1: -52.5, wall: 38.9, dir: -1 }); // south wall
   aiDesks(L, scr, ctx);
+  buildChartKiosk(L, ctx); // the Chart Desk terminal by the portal: its interface is drawn on its own monitor
   const nPods = pods(L, scr, ctx, r);
   for (const m of buildTradingScreens(scr)) ctx.add(m, m.geometry);
   paper(ctx, r);

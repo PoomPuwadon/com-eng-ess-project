@@ -3,6 +3,8 @@
 //   roulette  -> sit at that exact table (src/apps/rouletteSeat.js)
 //   markets / research -> open the terminal application
 
+import { nearKiosk } from './apps/chartKiosk.js';
+
 /** The roulette table nearest to (x, z) on VT-01, from the floor's own table list. */
 export function nearestTable(leisureCtx, x, z) {
   const wheels = leisureCtx?.roulette?.wheels || [];
@@ -23,7 +25,8 @@ export function hotspotAt(player, leisureCtx) {
     }
     return null;
   }
-  if (f === 'OT-01' && room === 'trading_floor') return { app: 'markets', alt: 'chartdesk', label: 'E — Markets terminal (or M anywhere) · C — Chart Desk: upload a stock graph for an UP / DOWN reading' };
+  if (f === 'OT-01' && nearKiosk(player)) return { app: 'chartkiosk', label: 'E — Chart Desk terminal: paste or upload a stock graph for an UP / DOWN reading' };
+  if (f === 'OT-01' && room === 'trading_floor') return { app: 'markets', label: 'E — Markets terminal (or M anywhere) · C — the Chart Desk terminal by the entrance' };
   if (f === 'VT-02') return { app: 'sports', label: 'E — Sports Analytics terminal: the marquee fixture, real fixtures, house pricing, your positions' };
   if (f === 'OT-02' && room === 'lottery_institute') return { app: 'research', label: 'E — Research workstation: the Institute\'s live lottery models (or press L anywhere)' };
   return null;

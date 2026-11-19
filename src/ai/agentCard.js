@@ -77,11 +77,15 @@ export function updateCards(player, now = performance.now()) {
   card.style.display = 'block';
 }
 export const nearest = () => current;
-export function openHistory(p = current) {
+/** staff = the viewer is the CEO or an admin: they get the executive note, visitors the read-only one */
+export function openHistory(p = current, { staff = false } = {}) {
   ensure(); if (!p) return false;
   const { head, body, color } = draw(p, 40, true);
   panel.firstChild.style.setProperty('--c', color); panel.style.setProperty('--c', color);
-  panel.firstChild.innerHTML = `<span class="x">close · Esc</span>${head.replace('<h3>', '<h2>').replace('</h3>', '</h2>')}<div class="pod" style="margin-top:6px">Read-only. Only the CEO and staff can talk to an agent.</div>${body}`;
+  const note = staff
+    ? 'Executive access. Every decision this agent made is below; call it up for a review from the Executive Console (Asset Protection tab).'
+    : 'Read-only. Only the CEO and staff can talk to an agent.';
+  panel.firstChild.innerHTML = `<span class="x">close · Esc</span>${head.replace('<h3>', '<h2>').replace('</h3>', '</h2>')}<div class="pod" style="margin-top:6px">${note}</div>${body}`;
   panel.style.display = 'flex'; document.exitPointerLock?.();
   return true;
 }

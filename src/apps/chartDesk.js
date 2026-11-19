@@ -30,6 +30,22 @@ function measure(img) {
   return { slope: fit(pts), lateSlope: fit(pts.filter((q) => q[0] > 0.66)), coverage: pts.length / W };
 }
 
+/** Read an image file for the desk: checks type and size, returns { dataUrl, hint } (hint = the measured slope). */
+export function readChart(file) {
+  return new Promise((ok, fail) => {
+    if (!file) return fail(new Error('No image.'));
+    if (!TYPES.includes(file.type)) return fail(new Error('Please choose a PNG, JPG or WebP image.'));
+    if (file.size > MAX) return fail(new Error('That image is over 4 MB.'));
+    const r = new FileReader();
+    r.onerror = () => fail(new Error('Could not read that image.'));
+    r.onload = () => { const img = new Image(); img.onload = () => { let hint = null; try { hint = measure(img); } catch { hint = null; } ok({ dataUrl: r.result, hint }); }; img.onerror = () => fail(new Error('That file is not a readable image.')); img.src = r.result; };
+    r.readAsDataURL(file);
+  });
+}
+/** Ask the desk (server: AI model, or the labelled demo heuristic) for UP / DOWN. */
+export const analyseChart = (image, hint) => api('/api/vision/chart', { method: 'POST', body: { image, hint } });
+
+// The original full-screen version stays registered (the physical terminal by the portal, src/apps/chartKiosk.js, is the main way in).
 registerApp('chartdesk', {
   title: 'Chart Desk · Upload Stock Graph',
   sub: 'OT-01 Trading Floor · AI chart reading · notional analysis, not advice',

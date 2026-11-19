@@ -1,200 +1,260 @@
 // The 3D side of the Leisure Suite machines and tables (the roulette seat's equivalent for slots, blackjack, baccarat, craps and poker).
-// When you press E the camera moves to a seat at the real table, real 3D props appear on the real felt (cards that are dealt and flipped, dice that tumble
-// and land on the exact faces the server rolled, a slot reel window that spins and stops on the server's symbols, chip stacks for your allocation) and
-// every animation shows the result the server already decided. Props are built once, pooled, and only exist while a game is open.
+// When you press E the camera moves to YOUR chair at the real table (src/world/leisureKit.js builds it and hands over its layout):
+// rounded playing cards slide out of the shoe and flip, rounded dice fly off the pyramid wall and land on the exact faces the
+// server rolled, the puck goes ON the point, the slot terminal's three drums spin behind glass and stop on the server's symbols,
+// and your allocation sits on the felt as a real chip stack. Every animation shows the result the server already decided.
+// While you sit, that table's ambient dealer pauses (at.setBusy) so nothing doubles up. Props exist only while a game is open.
 import * as THREE from 'three';
 import { FLOOR_BY_ID } from '../layout/building.js';
+import { LM } from '../world/lux.js';
+import { drawCardFace, drawCardBack, chipStackGeometry, dieAssets, dieQuat, CARD, DIE } from '../world/leisureKit.js';
+import { chipsFor } from './rouletteBoard.js';
 
 const SYM = ['seven', 'bar', 'bell', 'cherry', 'lemon', 'plum'];
 const SYM_CH = { seven: '7', bar: 'BAR', bell: '🔔', cherry: '🍒', lemon: '🍋', plum: '🍇' };
-const SYM_COL = { seven: '#ff3b3b', bar: '#e8e8e8', bell: '#ffd24a', cherry: '#ff5a7a', lemon: '#fff04a', plum: '#a86bff' };
+const SYM_COL = { seven: '#e8202e', bar: '#15171c', bell: '#e0a800', cherry: '#d4204a', lemon: '#e8c800', plum: '#7a3cc8' };
 const e0 = () => FLOOR_BY_ID['VT-01'].elevation;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (u) => 1 - (1 - u) ** 3;
+const backOut = (u) => { const c = 1.4; return 1 + (c + 1) * (u - 1) ** 3 + c * (u - 1) ** 2; };
+const TAU = Math.PI * 2;
+const SCALE = 1.2; // seat cards are a touch larger than the aisle's, so they read from the chair
 
-// ---------------------------------------------------------------- textures (cached)
+// ---------------------------------------------------------------- textures + shared geometry (cached)
 const texCache = new Map();
-const tex = (key, w, h, draw) => { if (!texCache.has(key)) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache.set(key, t); } return texCache.get(key); };
-const RED_SUIT = new Set(['♥', '♦']);
-/** card label like "10♥" or "A♠" (blackjack / baccarat) or "T♥" (poker names use T for ten) */
-const cardTex = (label) => tex(`c:${label}`, 140, 196, (g, w, h) => {
-  g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, w, h); g.strokeStyle = '#c9c3b0'; g.lineWidth = 4; g.strokeRect(2, 2, w - 4, h - 4);
-  const suit = label.slice(-1), rank = label.slice(0, -1).replace('T', '10'); g.fillStyle = RED_SUIT.has(suit) ? '#c8102e' : '#15171c';
-  g.font = '900 44px Georgia, serif'; g.textAlign = 'left'; g.fillText(rank, 10, 46); g.font = '40px Arial'; g.fillText(suit, 12, 88);
-  g.font = '80px Arial'; g.textAlign = 'center'; g.fillText(suit, w / 2, h / 2 + 34);
-  g.save(); g.translate(w, h); g.rotate(Math.PI); g.font = '900 44px Georgia, serif'; g.textAlign = 'left'; g.fillText(rank, 10, 46); g.restore();
+const tex = (key, w, h, draw) => { if (!texCache.has(key)) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; texCache.set(key, t); } return texCache.get(key); };
+const cardTex = (label) => tex(`c:${label}`, 256, 358, (g, w, h) => drawCardFace(g, 0, 0, w, h, label));
+const backTex = () => tex('back', 256, 358, (g, w, h) => drawCardBack(g, 0, 0, w, h));
+const drumTex = () => tex('drum', 768, 160, (g) => { // six symbols round the drum (u = circumference), drawn a quarter turn so they stand upright on the reel
+  SYM.forEach((s, i) => {
+    const x = i * 128; const grd = g.createLinearGradient(x, 0, x + 128, 0); grd.addColorStop(0, '#e9e3d2'); grd.addColorStop(0.5, '#fffdf6'); grd.addColorStop(1, '#e9e3d2');
+    g.fillStyle = grd; g.fillRect(x, 0, 128, 160); g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x, 0, 2, 160);
+    g.save(); g.translate(x + 64, 80); g.rotate(Math.PI / 2); g.fillStyle = SYM_COL[s]; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = s === 'seven' ? '900 92px Georgia, serif' : s === 'bar' ? '900 46px Georgia, serif' : '78px "Segoe UI Emoji", Arial';
+    if (s === 'bar') { g.fillRect(-58, -30, 116, 60); g.fillStyle = '#f7f2e4'; } g.fillText(SYM_CH[s], 0, 4); g.restore();
+  });
 });
-const backTex = () => tex('back', 140, 196, (g, w, h) => { g.fillStyle = '#10234d'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e3c27a'; g.lineWidth = 6; g.strokeRect(8, 8, w - 16, h - 16); g.fillStyle = '#e3c27a'; for (let y = 24; y < h - 20; y += 22) for (let x = 24; x < w - 20; x += 22) { g.beginPath(); g.arc(x, y, 3, 0, 6.3); g.fill(); } });
-const PIPS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
-const dieFace = (n) => tex(`d:${n}`, 128, 128, (g) => { g.fillStyle = '#f6f2e6'; g.fillRect(0, 0, 128, 128); g.fillStyle = n === 1 ? '#c8102e' : '#15171c'; for (const [x, y] of PIPS[n]) { g.beginPath(); g.arc(64 + x * 30, 64 + y * 30, n === 1 ? 17 : 12, 0, 6.3); g.fill(); } });
-const reelStrip = () => tex('reel', 160, 160 * SYM.length, (g, w, h) => { SYM.forEach((s, i) => { g.fillStyle = i % 2 ? '#14161d' : '#1c1f29'; g.fillRect(0, i * 160, w, 160); g.fillStyle = SYM_COL[s]; g.font = s === 'seven' || s === 'bar' ? '900 84px Georgia, serif' : '96px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(SYM_CH[s], w / 2, i * 160 + 84); }); });
+const puckTex = (on) => tex(`puck:${on}`, 128, 128, (g) => { g.fillStyle = on ? '#f6f3ea' : '#15171c'; g.fillRect(0, 0, 128, 128); g.fillStyle = on ? '#15171c' : '#f6f3ea'; g.font = '900 52px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(on ? 'ON' : 'OFF', 64, 68); });
+function cardShape(w, h, r) { const s = new THREE.Shape(), x = -w / 2, y = -h / 2; s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r); s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h); s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r); s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s; }
+let G = null;
+function geos() {
+  if (G) return G;
+  const w = CARD.w * SCALE, h = CARD.h * SCALE, face = new THREE.ShapeGeometry(cardShape(w, h, w * 0.09), 4), uv = face.attributes.uv, p = face.attributes.position;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / w + 0.5, p.getY(i) / h + 0.5);
+  G = {
+    face: face.clone().rotateX(-Math.PI / 2).translate(0, 0.0007, 0), back: face.clone().rotateX(Math.PI / 2),
+    edge: new THREE.BoxGeometry(w * 0.985, 0.0006, h * 0.985).translate(0, 0.00035, 0),
+    drum: new THREE.CylinderGeometry(0.135, 0.135, 0.17, 48, 1, true).rotateZ(Math.PI / 2),
+    puck: new THREE.CylinderGeometry(0.042, 0.042, 0.014, 28),
+  };
+  return G;
+}
 
 export function createTableSeat({ scene, camera, player }) {
+  void player;
   const group = new THREE.Group(); group.name = 'table-seat'; group.visible = false; scene.add(group);
-  const cardGeo = new THREE.PlaneGeometry(0.1, 0.14), diceGeo = new THREE.BoxGeometry(0.055, 0.055, 0.055), chipGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.008, 18);
-  const backMat = new THREE.MeshBasicMaterial({ map: backTex(), side: THREE.FrontSide });
-  let s = null; // { kind, at, n (toward the player, xz), r (right), center, cards[], dice[], chips, reels, camTarget }
-  const frame = (at) => { // local frame: n = unit vector from the table centre towards the player, r = n rotated to the player's right
-    const px = player.pos.x - at.x, pz = player.pos.z - at.z, L = Math.hypot(px, pz) || 1, n = new THREE.Vector2(px / L, pz / L);
-    return { n, r: new THREE.Vector2(-n.y, n.x) };
-  };
-  const at3 = (o, a, b, y = 0.9) => new THREE.Vector3(o.x + s.n.x * a + s.r.x * b, e0() + y, o.z + s.n.y * a + s.r.y * b);
+  const mats = { back: new THREE.MeshStandardMaterial({ map: backTex(), roughness: 0.45 }), edge: new THREE.MeshStandardMaterial({ color: 0xf2ecdc, roughness: 0.7 }) };
+  let s = null; // { kind, at, T, L, cards[], dice[], chips, pot, puck, reels, cam, look, fov }
+  const W = (lx, lz, y, out = new THREE.Vector3()) => { const c = Math.cos(s.T.yaw), n = Math.sin(s.T.yaw); return out.set(s.T.x + lx * c + lz * n, e0() + y, s.T.z - lx * n + lz * c); };
+  const up = new THREE.Vector3(0, 1, 0), zAxis = new THREE.Vector3(0, 0, 1), xAxis = new THREE.Vector3(1, 0, 0), qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
 
-  function makeCard() { // a card = group with a face plane (up) and a back plane (down); rotation.z flips it
-    const m = new THREE.Group(), face = new THREE.Mesh(cardGeo, new THREE.MeshBasicMaterial({ map: backTex() })), back = new THREE.Mesh(cardGeo, backMat);
-    face.rotation.x = -Math.PI / 2; back.rotation.x = Math.PI / 2; back.position.y = -0.002; m.add(face, back); m.userData.face = face; group.add(m); return m;
+  // ---- cards: a rounded face, a navy back and a thin cream edge; rotation = table yaw + spot yaw, flipped about the long axis
+  function makeCard(label) {
+    const g = geos(), m = new THREE.Group();
+    const face = new THREE.Mesh(g.face, new THREE.MeshStandardMaterial({ map: label ? cardTex(label) : backTex(), roughness: 0.42 }));
+    m.add(face, new THREE.Mesh(g.back, mats.back), new THREE.Mesh(g.edge, mats.edge)); m.userData.face = face; group.add(m); return m;
   }
   const setFace = (c, label) => { c.userData.face.material.map = label ? cardTex(label) : backTex(); c.userData.face.material.needsUpdate = true; };
+  /** spot: { x, z, yaw } local. Resolves when the card has landed. */
+  function deal(spot, label, { down = !label, side, idx } = {}) {
+    const c = makeCard(label); s.cards.push(c);
+    Object.assign(c.userData, { side, idx, down, spot, t: 0, layer: s.cards.length * 0.0003 });
+    return new Promise((ok) => { c.userData.done = ok; });
+  }
+  const flip = (c, label, speed = 3) => new Promise((ok) => { setFace(c, label); Object.assign(c.userData, { flip: 0, flipSpeed: speed, flipDone: ok }); });
 
-  // ---- the modelled table: printed felt layout, shoe, discard tray, chip racks (the roulette table's equivalent for the card and dice tables)
-  const FELT = {
-    blackjack: { w: 2.5, h: 1.45, draw: (g, w, h) => { g.strokeStyle = '#e3c27a'; g.fillStyle = '#e3c27a'; g.lineWidth = 6; g.beginPath(); g.arc(w / 2, h * 0.02, h * 0.62, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke(); g.beginPath(); g.arc(w / 2, h * 0.02, h * 0.82, 0.12 * Math.PI, 0.88 * Math.PI); g.stroke();
-      g.font = '800 40px Georgia, serif'; g.textAlign = 'center'; g.fillText('BLACKJACK PAYS 3 TO 2', w / 2, h * 0.45); g.font = '600 26px Georgia, serif'; g.fillText('DEALER MUST STAND ON ALL 17s', w / 2, h * 0.53); g.font = '600 22px Georgia, serif'; g.fillText('INSURANCE IS NOT OFFERED · DOUBLE ON ANY TWO CARDS', w / 2, h * 0.6);
-      g.beginPath(); g.arc(w / 2, h * 0.84, 54, 0, 6.3); g.stroke(); g.font = '700 22px Georgia, serif'; g.fillText('POSITION', w / 2, h * 0.86); } },
-    baccarat: { w: 2.5, h: 1.45, draw: (g, w, h) => { g.strokeStyle = '#e3c27a'; g.fillStyle = '#e3c27a'; g.lineWidth = 6; g.textAlign = 'center';
-      [['PLAYER', '1 TO 1', 0.14], ['BANKER', '0.95 TO 1', 0.5], ['TIE', '8 TO 1', 0.86]].forEach(([t, p, x]) => { g.strokeRect(w * (x - 0.12), h * 0.55, w * 0.24, h * 0.34); g.font = '800 40px Georgia, serif'; g.fillText(t, w * x, h * 0.72); g.font = '600 24px Georgia, serif'; g.fillText(p, w * x, h * 0.82); });
-      g.font = '700 28px Georgia, serif'; g.fillText('PUNTO BANCO · EIGHT DECKS · 5% BANKER COMMISSION', w / 2, h * 0.2); g.beginPath(); g.arc(w * 0.3, h * 0.34, 46, 0, 6.3); g.arc(w * 0.7, h * 0.34, 46, 0, 6.3); g.stroke(); } },
-    craps: { w: 4.6, h: 1.7, draw: (g, w, h) => { g.strokeStyle = '#f2f2f2'; g.fillStyle = '#f2f2f2'; g.lineWidth = 5; g.textAlign = 'center'; g.font = '800 40px Georgia, serif';
-      g.strokeRect(w * 0.04, h * 0.7, w * 0.92, h * 0.2); g.fillText('PASS LINE', w * 0.5, h * 0.84); g.strokeRect(w * 0.04, h * 0.45, w * 0.92, h * 0.17); g.font = '700 30px Georgia, serif'; g.fillText("DON'T PASS BAR", w * 0.5, h * 0.575);
-      ['4', '5', 'SIX', '8', 'NINE', '10'].forEach((n, i) => { const x = w * (0.1 + i * 0.16); g.strokeRect(x - w * 0.06, h * 0.08, w * 0.12, h * 0.3); g.font = '800 44px Georgia, serif'; g.fillText(n, x, h * 0.27); }); g.font = '600 24px Georgia, serif'; g.fillText('FIELD 2 3 4 9 10 11 12', w * 0.5, h * 0.42); } },
-    poker: { w: 2.5, h: 1.45, draw: (g, w, h) => { g.strokeStyle = '#e3c27a'; g.fillStyle = '#e3c27a'; g.lineWidth = 5; g.textAlign = 'center';
-      for (let i = 0; i < 5; i++) g.strokeRect(w * (0.2 + i * 0.14), h * 0.37, w * 0.12, h * 0.26); g.font = '800 34px Georgia, serif'; g.fillText("PRIVATE CARD SALON · TEXAS HOLD'EM", w / 2, h * 0.18); g.font = '600 24px Georgia, serif'; g.fillText('ANTE · BET 2 UNITS · ONE RAISE PER STREET', w / 2, h * 0.27);
-      g.beginPath(); g.arc(w * 0.5, h * 0.78, 50, 0, 6.3); g.stroke(); g.font = '700 22px Georgia, serif'; g.fillText('POT', w * 0.5, h * 0.8); } },
-  };
-  function buildTable(kind, at) {
-    const f = FELT[kind]; if (!f) return;
-    const t = tex(`felt:${kind}`, 1024, Math.round(1024 * f.h / f.w), (g, w, h) => { g.clearRect(0, 0, w, h); f.draw(g, w, h); });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.h), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; const holder = new THREE.Group(); holder.add(m); holder.position.set(at.x, e0() + 0.886, at.z); holder.rotation.y = Math.atan2(s.n.x, s.n.y); group.add(holder);
-    if (kind === 'craps') return;
-    const steel = new THREE.MeshBasicMaterial({ color: 0x15171c }), gold = new THREE.MeshBasicMaterial({ color: 0xd8a62a });
-    const place = (geo, mat, a, b, y, rotY = 0) => { const o = new THREE.Mesh(geo, mat); o.position.copy(at3(at, a, b, y)); o.rotation.y = Math.atan2(s.n.x, s.n.y) + rotY; group.add(o); return o; };
-    if (kind !== 'poker') place(new THREE.BoxGeometry(0.16, 0.1, 0.12), steel, -0.7, 0.9, 0.95); // the shoe
-    place(new THREE.BoxGeometry(0.18, 0.012, 0.1), gold, -0.78, -0.9, 0.89); // discard tray
-    for (let i = 0; i < 5; i++) { const col = [0xc8102e, 0x1f6fe0, 0x1a9a4a, 0x111111, 0xe3c27a][i]; for (let k = 0; k < 6; k++) place(chipGeo, new THREE.MeshBasicMaterial({ color: col }), -0.8, -0.2 + i * 0.07, 0.89 + k * 0.009); } // dealer's chip rack
-    if (kind === 'poker') place(new THREE.CylinderGeometry(0.035, 0.035, 0.008, 16), new THREE.MeshBasicMaterial({ color: 0xf6f2e6 }), 0.15, 0.7, 0.89); // dealer button
+  // ---- chips: your allocation as a real stack on your betting spot
+  function stackMesh(amount, lx, lz) {
+    const g = chipStackGeometry(chipsFor(Math.max(100, amount)).slice(0, 16)); if (!g) return null;
+    const m = new THREE.Mesh(g, LM.lkChip); m.position.copy(W(lx, lz, s.L.feltY + 0.0005)); group.add(m); return m;
+  }
+  function setChips(stake, kind) {
+    if (!s || kind === 'slots' || !s.L) return;
+    if (s.chips) { group.remove(s.chips); s.chips.geometry.dispose(); }
+    s.chips = stackMesh(stake, ...s.L.bet);
+  }
+  function setPot(amount) {
+    if (!s?.L?.pot) return;
+    if (s.pot) { group.remove(s.pot); s.pot.geometry.dispose(); s.pot = null; }
+    if (amount > 0) s.pot = stackMesh(amount, ...s.L.pot);
   }
 
+  // ---- dice + puck
+  function makeDie() { const d = dieAssets(), m = new THREE.Mesh(d.geo, d.mat); m.scale.setScalar(1.25); group.add(m); return m; }
+  function roll(a, b) {
+    const L = s.L, dice = [makeDie(), makeDie()]; s.dice.push(...dice);
+    return Promise.all(dice.map((d, i) => new Promise((ok) => {
+      const from = W(L.throwFrom[0] - i * 0.06, L.throwFrom[2], L.throwFrom[1]);
+      const wall = W(0.35 + i * 0.12 + (Math.random() - 0.5) * 0.3, L.wall + 0.03, L.feltY + 0.05);
+      const rest = W(0.15 + i * 0.16 + (Math.random() - 0.5) * 0.25, -0.42 + (Math.random() - 0.5) * 0.3, L.feltY + DIE * 0.625);
+      d.userData = { from, wall, rest, t: 0, ok, target: dieQuat([a, b][i], Math.random() * TAU), axis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize() };
+    })));
+  }
+  function makePuck() {
+    const g = geos(), side = new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.4 });
+    const m = new THREE.Mesh(g.puck, [side, new THREE.MeshStandardMaterial({ map: puckTex(true), roughness: 0.4 }), new THREE.MeshStandardMaterial({ map: puckTex(false), roughness: 0.4 })]);
+    m.position.copy(W(...s.L.puckOff, s.L.feltY + 0.0155)); m.quaternion.setFromAxisAngle(xAxis, Math.PI); group.add(m);
+    s.puck = { m, from: m.position.clone(), to: m.position.clone(), on: false, t: 1, ok: null };
+  }
+  const movePuck = (lx, lz, on) => new Promise((ok) => { const p = s.puck; p.from.copy(p.m.position); p.to.copy(W(lx, lz, s.L.feltY + 0.0155)); p.on = on; p.t = 0; p.ok = ok; });
+
+  // ---- slots: three real drums behind glass in the terminal's reel window
+  function buildReels(at) {
+    const g = new THREE.Group(), tall = at.tall || 1;
+    g.position.set(at.x, e0(), at.z); g.rotation.y = at.yaw ?? 0; group.add(g);
+    const win = new THREE.Group(); win.position.set(0, 1.16 * tall, 0.2); win.rotation.x = -0.1; g.add(win);
+    const dark = new THREE.MeshStandardMaterial({ color: 0x07070b, roughness: 0.6 }), gold = LM.lsGold || new THREE.MeshStandardMaterial({ color: 0xd9a441, metalness: 0.9, roughness: 0.3 });
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); win.add(m); return m; };
+    add(new THREE.BoxGeometry(0.62, 0.36, 0.03), dark, 0, 0, -0.21);
+    for (const [w, h, x, y] of [[0.64, 0.025, 0, 0.19], [0.64, 0.025, 0, -0.19], [0.025, 0.4, -0.32, 0], [0.025, 0.4, 0.32, 0]]) add(new THREE.BoxGeometry(w, h, 0.03), gold, x, y, 0.035);
+    for (const x of [-0.098, 0.098]) add(new THREE.BoxGeometry(0.012, 0.36, 0.28), dark, x, 0, -0.06);
+    add(new THREE.BoxGeometry(0.6, 0.006, 0.004), new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }), 0, 0, 0.09); // the payline
+    const glass = add(new THREE.PlaneGeometry(0.62, 0.38), new THREE.MeshStandardMaterial({ color: 0xbfd6e6, roughness: 0.04, metalness: 0.2, transparent: true, opacity: 0.12, depthWrite: false }), 0, 0, 0.1); glass.renderOrder = 7;
+    // credit meter above the window (updated after each spin)
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 64; const mt = new THREE.CanvasTexture(cv); mt.colorSpace = THREE.SRGBColorSpace;
+    const meter = add(new THREE.PlaneGeometry(0.6, 0.075), new THREE.MeshBasicMaterial({ map: mt, toneMapped: false }), 0, 0.245, 0.04);
+    const say = (text, color = '#ffd23f') => { const c = cv.getContext('2d'); c.fillStyle = '#05060a'; c.fillRect(0, 0, 512, 64); c.fillStyle = color; c.font = '700 34px Consolas, monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, 256, 34); mt.needsUpdate = true; };
+    say('AUTOMATED YIELD TERMINAL'); void meter;
+    const drumMat = new THREE.MeshStandardMaterial({ map: drumTex(), roughness: 0.5 });
+    s.reels = [-1, 0, 1].map((k) => { const d = add(geos().drum, drumMat, k * 0.196, 0, -0.065); const a = (Math.floor(Math.random() * 6) + 0.5) / 6 * TAU; d.rotation.x = a; return { d, a, speed: 0, stop: null }; });
+    s.say = say;
+  }
+  function spin(result) {
+    s.say('SPINNING…', '#7df9ff');
+    s.reels.forEach((r, i) => { r.speed = 0; r.accel = 26 + i * 3; r.stop = null; });
+    return (async () => {
+      await sleep(950);
+      for (let i = 0; i < 3; i++) {
+        await new Promise((ok) => {
+          const r = s.reels[i], k = SYM.indexOf(result[i]), target = ((k + 0.5) / 6) * TAU;
+          let d = (target - r.a) % TAU; if (d < 0) d += TAU;
+          r.stop = { from: r.a, to: r.a + TAU + d, t: 0, ok };
+        });
+        await sleep(140);
+      }
+    })();
+  }
+
+  // ---------------------------------------------------------------- life cycle
   function begin(kind, at) {
     end();
-    s = { kind, at, cards: [], dice: [], chips: [], t: 0, reels: null, shoe: null, ...frame(at), busy: null };
-    // you sit on the players' side: blackjack's half-moon always opens towards -z; on the ovals the dealer stands at -z, so never look from behind the dealer
-    if (kind === 'blackjack') { s.n.set(0, -1); s.r.set(1, 0); } else if (kind === 'baccarat' || kind === 'poker') { if (s.n.y < 0.3) { s.n.set(s.n.x * 0.6, 1).normalize(); s.r.set(-s.n.y, s.n.x); } }
-    const c = new THREE.Vector3(at.x, e0(), at.z);
-    // camera: behind the player's own position looking down at the felt (slots: close on the reel window)
-    if (kind === 'slots') { const yaw = at.yaw ?? 0, fx = Math.sin(yaw), fz = Math.cos(yaw); s.cam = new THREE.Vector3(at.x + fx * 1.35, e0() + 1.55, at.z + fz * 1.35); s.look = new THREE.Vector3(at.x + fx * 0.3, e0() + 1.3, at.z + fz * 0.3); buildReels(at, fx, fz); }
-    else { const d = kind === 'craps' ? 1.5 : 2.05; s.cam = new THREE.Vector3(at.x + s.n.x * d, e0() + (kind === 'craps' ? 2.7 : 1.75), at.z + s.n.y * d); s.look = new THREE.Vector3(at.x, e0() + 0.86, at.z); s.shoe = at3(at, -0.7, 0.9, 1.0); }
-    void c; if (kind !== 'slots') buildTable(kind, at); s.fov = kind === 'craps' ? 55 : 48; s.prevFov = camera.fov; group.visible = true;
+    s = { kind, at, T: at, L: at.layout || null, cards: [], dice: [], chips: null, pot: null, puck: null, reels: null, prevFov: camera.fov };
+    at.setBusy?.(true);
+    if (kind === 'slots') {
+      const yaw = at.yaw ?? 0, fx = Math.sin(yaw), fz = Math.cos(yaw), tall = at.tall || 1;
+      s.cam = new THREE.Vector3(at.x + fx * 1.05, e0() + 1.42 * tall, at.z + fz * 1.05); s.look = new THREE.Vector3(at.x + fx * 0.2, e0() + 1.13 * tall, at.z + fz * 0.2); s.fov = 48;
+      buildReels(at);
+    } else if (s.L) {
+      s.cam = W(s.L.cam[0], s.L.cam[2], s.L.cam[1]); s.look = W(s.L.look[0], s.L.look[2], s.L.look[1]); s.fov = s.L.fov || 50;
+      if (kind === 'craps') makePuck();
+    } else { s.cam = camera.position.clone(); s.look = new THREE.Vector3(at.x, e0() + 0.8, at.z); s.fov = camera.fov; }
+    group.visible = true;
   }
   function end() {
-    if (!s) return; group.clear(); group.visible = false; camera.fov = s.prevFov; camera.updateProjectionMatrix(); s = null;
+    if (!s) return;
+    s.at.setBusy?.(false);
+    group.clear(); group.visible = false; camera.fov = s.prevFov; camera.updateProjectionMatrix(); s = null;
   }
   const active = () => Boolean(s);
 
-  // ---- chips for the allocation (1..8 stacked)
-  function setChips(stake, kind) {
-    if (!s || kind === 'slots') return;
-    for (const c of s.chips) group.remove(c); s.chips = [];
-    const n = Math.max(1, Math.min(8, Math.ceil(Math.log2(stake / 100 + 1)))), p = at3(s.at, 0.38, kind === 'craps' ? -0.7 : 0.55);
-    for (let i = 0; i < n; i++) { const m = new THREE.Mesh(chipGeo, new THREE.MeshBasicMaterial({ color: [0xc8102e, 0x1f6fe0, 0x1a9a4a, 0x111111, 0xe3c27a][i % 5] })); m.position.set(p.x, p.y + i * 0.009, p.z); group.add(m); s.chips.push(m); }
-  }
-
-  // ---- cards
-  async function deal(spots, labels, { delay = 260 } = {}) {
-    // spots: [{ pos: Vector3, label | null (null = face down) }] animated from the shoe; resolves when the last card has landed
-    const ps = [];
-    for (let i = 0; i < spots.length; i++) {
-      const sp = spots[i], c = makeCard(); setFace(c, sp.label); c.position.copy(s.shoe); c.rotation.z = 0; c.userData.from = s.shoe.clone(); c.userData.to = sp.pos.clone(); c.userData.t = -i * delay / 1000; c.userData.down = !sp.label; s.cards.push(c);
-      ps.push(new Promise((ok) => { c.userData.done = ok; }));
-    }
-    void labels; await Promise.all(ps);
-  }
-  const flip = (c, label) => { setFace(c, label); c.userData.flip = 0; };
-
-  // ---- dice
-  const UP = [null, [0, 0, 0], [0, 0, Math.PI / 2], [-Math.PI / 2, 0, 0], [Math.PI / 2, 0, 0], [0, 0, -Math.PI / 2], [Math.PI, 0, 0]]; // euler to bring face n to +y
-  function makeDie() { const m = new THREE.Mesh(diceGeo, [2, 5, 1, 6, 3, 4].map((n) => new THREE.MeshBasicMaterial({ map: dieFace(n) }))); group.add(m); return m; }
-  async function roll(a, b) {
-    const dice = [makeDie(), makeDie()]; s.dice.push(...dice);
-    await Promise.all(dice.map((d, i) => new Promise((ok) => {
-      const v = [a, b][i], target = new THREE.Quaternion().setFromEuler(new THREE.Euler(...UP[v])), spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
-      const from = at3(s.at, 1.0, -0.9 + i * 0.25, 1.3), to = at3(s.at, -0.1 + i * 0.05, -0.2 + i * 0.22, 0.89 + 0.0275);
-      d.userData = { from, to, target, spin, t: 0, ok, turns: 3 + i };
-    })));
-  }
-
-  // ---- slots
-  function buildReels(at, fx, fz) {
-    const g = new THREE.Group(); const yaw = at.yaw ?? 0;
-    g.position.set(at.x + fx * 0.55, e0() + 1.3, at.z + fz * 0.55); g.rotation.y = yaw; group.add(g);
-    const frameM = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.26, 0.03), new THREE.MeshBasicMaterial({ color: 0xd8a62a })); frameM.position.z = -0.02; g.add(frameM);
-    const strips = [];
-    for (let i = 0; i < 3; i++) {
-      const t = reelStrip().clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 1 / SYM.length);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.19, 0.2), new THREE.MeshBasicMaterial({ map: t })); m.position.set((i - 1) * 0.205, 0, 0); g.add(m); strips.push({ t, off: Math.random(), speed: 0, stop: null });
-    }
-    s.reels = strips;
-  }
-  async function spin(result) {
-    s.reels.forEach((r, i) => { r.speed = 2.6 + i * 0.4; r.stop = null; });
-    await sleep(900);
-    for (let i = 0; i < 3; i++) {
-      await new Promise((ok) => { const r = s.reels[i], k = SYM.indexOf(result[i]); r.stop = { k, ok, t: 0, from: r.off % 1 }; });
-    }
-  }
-
   function update(dt) {
     if (!s) return;
-    s.t += dt;
     const k = 1 - Math.exp(-5 * dt); camera.position.lerp(s.cam, k); camera.lookAt(s.look); camera.fov += (s.fov - camera.fov) * k; camera.updateProjectionMatrix();
-    for (const c of s.cards) { // slide from the shoe, then flip when asked
-      const u = c.userData; if (u.t < 1) { u.t += dt * 2.4; const q = ease(Math.max(0, Math.min(1, u.t))); c.position.lerpVectors(u.from, u.to, q); c.position.y += Math.sin(Math.PI * q) * 0.06; c.rotation.y = (1 - q) * 0.8; if (u.t >= 1 && u.done) { u.done(); u.done = null; } }
-      c.rotation.z = u.down ? Math.PI : 0;
-      if (u.flip != null && u.flip < 1) { u.flip += dt * 3; const q = Math.min(1, u.flip); c.rotation.z = Math.PI * (1 - q); c.position.y = u.to.y + Math.sin(Math.PI * q) * 0.05; if (q >= 1) { u.flip = null; u.down = false; } }
+    const L = s.L;
+    for (const c of s.cards) { // slide from the shoe with a little lift and turn, then flip when asked
+      const u = c.userData, sp = u.spot, y = L.feltY + 0.0008 + u.layer;
+      let x = sp.x, z = sp.z, lift = 0, yaw = sp.yaw, flipA = u.down ? Math.PI : 0;
+      if (u.t < 1) {
+        u.t = Math.min(1, u.t + dt * 2.3); const q = ease(u.t);
+        x = L.shoe[0] + (sp.x - L.shoe[0]) * q; z = L.shoe[1] + (sp.z - L.shoe[1]) * q; lift = Math.sin(Math.PI * q) * 0.06 + (1 - q) * 0.06; yaw = sp.yaw + (1 - q) * 1.3;
+        if (u.t >= 1 && u.done) { u.done(); u.done = null; }
+      }
+      if (u.flip != null) {
+        u.flip = Math.min(1, u.flip + dt * u.flipSpeed); const q = ease(u.flip);
+        flipA = Math.PI * (1 - q); lift += Math.sin(Math.PI * u.flip) * 0.04;
+        if (u.flip >= 1) { u.flip = null; u.down = false; u.flipDone?.(); u.flipDone = null; }
+      }
+      c.position.copy(W(x, z, y + lift));
+      c.quaternion.copy(qa.setFromAxisAngle(up, s.T.yaw + yaw)).multiply(qb.setFromAxisAngle(zAxis, flipA));
     }
-    for (const d of s.dice) {
-      const u = d.userData; if (u.t >= 1) continue; u.t += dt / 1.2; const q = Math.min(1, u.t), e = ease(q);
-      d.position.lerpVectors(u.from, u.to, e); d.position.y += Math.sin(Math.PI * Math.min(1, q * 1.15)) * 0.28 * (1 - q * 0.4);
-      d.quaternion.copy(u.target).multiply(new THREE.Quaternion().setFromAxisAngle(u.spin, (1 - e) * u.turns * Math.PI * 2));
-      if (q >= 1 && u.ok) { d.quaternion.copy(u.target); u.ok(); u.ok = null; }
+    for (const d of s.dice) { // a toss to the far wall, a bounce back, a few hops, then the server's faces
+      const u = d.userData; if (!u.ok && u.t >= 1) continue;
+      u.t = Math.min(1, u.t + dt / 1.5); const q = u.t;
+      if (q < 0.45) { const a = q / 0.45; d.position.lerpVectors(u.from, u.wall, a); d.position.y += Math.sin(Math.PI * a) * 0.25; }
+      else { const a = (q - 0.45) / 0.55, e = ease(a); d.position.lerpVectors(u.wall, u.rest, e); d.position.y = u.rest.y + Math.abs(Math.sin(a * Math.PI * 3)) * 0.08 * (1 - a) ** 1.4; }
+      d.quaternion.copy(u.target).multiply(qb.setFromAxisAngle(u.axis, (1 - ease(q)) * 7 * TAU));
+      if (q >= 1 && u.ok) { d.quaternion.copy(u.target); d.position.copy(u.rest); u.ok(); u.ok = null; }
+    }
+    if (s.puck && s.puck.t < 1) {
+      const p = s.puck; p.t = Math.min(1, p.t + dt * 1.6); const e = ease(p.t);
+      p.m.position.lerpVectors(p.from, p.to, e); p.m.position.y += Math.sin(Math.PI * p.t) * 0.06;
+      const fromA = p.on ? Math.PI : 0, toA = p.on ? 0 : Math.PI; p.m.quaternion.setFromAxisAngle(xAxis, fromA + (toA - fromA) * e);
+      if (p.t >= 1 && p.ok) { p.ok(); p.ok = null; }
     }
     if (s.reels) for (const r of s.reels) {
-      if (r.stop) { r.stop.t += dt / 0.6; const q = Math.min(1, r.stop.t), cur = Math.floor(r.off) + r.stop.k / SYM.length + (q < 1 ? (1 - ease(q)) * 1.2 : 0); r.off = cur; r.speed = 0; if (q >= 1) { r.off = Math.floor(r.off) + r.stop.k / SYM.length; r.stop.ok(); r.stop = null; } }
-      else r.off += r.speed * dt;
-      r.t.offset.y = -(r.off % 1) + 0; // strip scroll
+      if (r.stop) { r.stop.t = Math.min(1, r.stop.t + dt / 0.55); r.a = r.stop.from + (r.stop.to - r.stop.from) * backOut(r.stop.t); if (r.stop.t >= 1) { r.a = r.stop.to % TAU; r.speed = 0; r.accel = 0; const ok = r.stop.ok; r.stop = null; ok(); } }
+      else if (r.accel) { r.speed = Math.min(22, r.speed + r.accel * dt); r.a += r.speed * dt; }
+      r.d.rotation.x = r.a;
     }
   }
 
-  // ---- public per-game scenes (each resolves when its animation has finished)
+  // ---------------------------------------------------------------- public per-game scenes (each resolves when its animation has finished)
+  const count = (side) => s.cards.filter((c) => c.userData.side === side).length;
   async function playBlackjack(view, { reveal = false } = {}) {
-    if (!s) return;
+    if (!s?.L) return;
     const p = view.player, d = view.dealer;
-    while (s.cards.length < p.length + d.length) {
-      // deal only the cards that are not on the table yet, in order: player cards, then dealer cards
-    const have = s.cards.length, mine = s.cards.filter((c) => c.userData.side === 'p').length;
-      void have;
-      if (mine < p.length) { const c0 = mine; await deal([{ pos: at3(s.at, 0.5, -0.25 + c0 * 0.13), label: p[c0] }]); const c = s.cards[s.cards.length - 1]; c.userData.side = 'p'; c.userData.idx = c0; c.position.y += 0.0005 * c0; continue; }
-      const dc = s.cards.filter((c) => c.userData.side === 'd').length, label = d[dc] === '??' ? null : d[dc];
-      await deal([{ pos: at3(s.at, -0.45, -0.2 + dc * 0.13), label }]); const c = s.cards[s.cards.length - 1]; c.userData.side = 'd'; c.userData.idx = dc;
+    for (;;) { // deal only the cards that are not on the table yet: yours first, then the dealer's
+      if (!s) return;
+      const mine = count('p'), theirs = count('d');
+      if (mine < p.length) { await deal(s.L.player(mine), p[mine], { side: 'p', idx: mine }); continue; }
+      if (theirs < d.length) { const label = d[theirs] === '??' ? null : d[theirs]; await deal(s.L.dealer(theirs), label, { side: 'd', idx: theirs }); continue; }
+      break;
     }
-    if (reveal) for (const c of s.cards) if (c.userData.side === 'd' && c.userData.down) { flip(c, d[c.userData.idx]); await sleep(350); }
-    // dealer drew extra cards after the reveal: handled by the while loop above on the next call
+    if (reveal) for (const c of s.cards) if (c.userData.side === 'd' && c.userData.down && d[c.userData.idx] !== '??') { await flip(c, d[c.userData.idx]); await sleep(200); }
   }
   async function playBaccarat(r) {
-    if (!s) return; const P = r.player, B = r.banker, order = [['p', 0], ['b', 0], ['p', 1], ['b', 1], ['p', 2], ['b', 2]].filter(([w, i]) => (w === 'p' ? P : B)[i]);
-    for (const [w, i] of order) { const label = (w === 'p' ? P : B)[i]; await deal([{ pos: at3(s.at, 0.0 + (w === 'p' ? 0.15 : -0.15), (w === 'p' ? -0.55 : 0.55) + i * 0.13), label: null }]); const c = s.cards[s.cards.length - 1]; await sleep(120); flip(c, label); await sleep(380); }
+    if (!s?.L) return;
+    const P = r.player, B = r.banker, order = [['p', 0], ['b', 0], ['p', 1], ['b', 1], ['p', 2], ['b', 2]].filter(([w, i]) => (w === 'p' ? P : B)[i]);
+    const placed = [];
+    for (const [w, i] of order.slice(0, 4)) { await deal((w === 'p' ? s.L.playerHand : s.L.bankerHand)(i), null, { side: w, idx: i, down: true }); placed.push([s.cards[s.cards.length - 1], w, i]); await sleep(90); }
+    for (const [c, w, i] of placed) { await flip(c, (w === 'p' ? P : B)[i], 1.6); await sleep(260); } // squeezed slowly, one by one
+    for (const [w, i] of order.slice(4)) { await deal((w === 'p' ? s.L.playerHand : s.L.bankerHand)(i), null, { side: w, idx: i, down: true }); await flip(s.cards[s.cards.length - 1], (w === 'p' ? P : B)[i], 1.6); await sleep(300); }
   }
   async function playPoker(v, { showBot = false, botLabels = null } = {}) {
-    if (!s) return;
-    const have = (side) => s.cards.filter((c) => c.userData.side === side).length;
-    for (let i = have('h'); i < v.hole.length; i++) { await deal([{ pos: at3(s.at, 0.55, -0.1 + i * 0.13), label: v.hole[i] }]); const c = s.cards[s.cards.length - 1]; c.userData.side = 'h'; }
-    if (have('x') < 2) for (let i = have('x'); i < 2; i++) { await deal([{ pos: at3(s.at, -0.5, -0.1 + i * 0.13), label: null }]); s.cards[s.cards.length - 1].userData.side = 'x'; s.cards[s.cards.length - 1].userData.idx = i; }
-    for (let i = have('b'); i < v.board.length; i++) { await deal([{ pos: at3(s.at, 0.0, -0.3 + i * 0.13), label: v.board[i] }]); const c = s.cards[s.cards.length - 1]; c.userData.side = 'b'; }
-    if (showBot && botLabels) for (const c of s.cards) if (c.userData.side === 'x' && c.userData.down) { flip(c, botLabels[c.userData.idx]); await sleep(300); }
+    if (!s?.L) return;
+    for (let i = count('h'); i < v.hole.length; i++) await deal(s.L.hole(i), v.hole[i], { side: 'h', idx: i });
+    for (let i = count('x'); i < 2; i++) await deal(s.L.bot(i), null, { side: 'x', idx: i, down: true });
+    for (let i = count('b'); i < v.board.length; i++) await deal(s.L.board(i), v.board[i], { side: 'b', idx: i });
+    if (v.pot != null) setPot(v.pot);
+    if (showBot && botLabels) for (const c of s.cards) if (c.userData.side === 'x' && c.userData.down) { await flip(c, botLabels[c.userData.idx]); await sleep(200); }
   }
-  async function playCraps(rolls) { if (!s) return; for (const [a, b] of rolls) { for (const d of s.dice) group.remove(d); s.dice = []; await roll(a, b); await sleep(450); } }
-  async function playSlots(reels) { if (s?.reels) await spin(reels); }
-  const clearHands = () => { if (!s) return; for (const c of s.cards) group.remove(c); s.cards = []; for (const d of s.dice) group.remove(d); s.dice = []; };
+  async function playCraps(rolls) {
+    if (!s?.L) return;
+    let point = null;
+    for (let i = 0; i < rolls.length; i++) {
+      for (const d of s.dice) group.remove(d); s.dice = [];
+      const [a, b] = rolls[i]; await roll(a, b); await sleep(420);
+      const sum = a + b;
+      if (i === 0 && s.L.point(sum)) { point = sum; await movePuck(...s.L.point(sum), true); }
+    }
+    if (point) { await sleep(500); await movePuck(...s.L.puckOff, false); }
+  }
+  async function playSlots(reels, win = null) {
+    if (!s?.reels) return;
+    await spin(reels);
+    if (win != null) { s.say(win > 0 ? `PAID ${win.toLocaleString('en-US')}` : 'NO YIELD THIS CYCLE', win > 0 ? '#5dff9a' : '#ffd23f'); if (win > 0) s.at.flash?.(); }
+  }
+  const clearHands = () => { if (!s) return; for (const c of s.cards) group.remove(c); s.cards = []; for (const d of s.dice) group.remove(d); s.dice = []; setPot(0); };
 
   const camPose = () => s && { cam: s.cam.toArray(), look: s.look.toArray(), fov: s.fov };
   return { begin, end, active, update, camPose, setChips, playBlackjack, playBaccarat, playPoker, playCraps, playSlots, clearHands };
