@@ -357,3 +357,22 @@ test('asset protection: staff call a key AI agent up to Security HQ; guests cann
   app.hub.advanceClock(5 * 60_000); app.hub.tick(); // the review runs its course
   assert.deepEqual(app.hub.meta().custody, [], 'agents go back to their desk when the time is up');
 });
+
+test('appoint admin: staff make a connected guest an Admin (and remove them); guests cannot; CEOs and yourself are off limits', () => {
+  const app = mkApp();
+  const ceo = client(app, 'Boss'), guest = client(app, 'Guest'), other = client(app, 'Other');
+  ceo.ask({ t: 'elevate', password: 'sesame', role: 'ceo' });
+  assert.equal(guest.ask({ t: 'makeAdmin', target: other.c.id }).ok, false, 'guests cannot appoint');
+  assert.equal(ceo.ask({ t: 'makeAdmin', target: ceo.c.id }).ok, false, 'not on yourself');
+  assert.equal(ceo.ask({ t: 'makeAdmin', target: 'nobody' }).ok, false, 'unknown target');
+  assert.equal(ceo.ask({ t: 'makeAdmin', target: guest.c.id }).ok, true);
+  assert.equal(guest.last('role').role, 'admin', 'the new admin is told at once');
+  assert.equal(guest.last('role').elevated, true);
+  assert.equal(ceo.ask({ t: 'makeAdmin', target: guest.c.id }).ok, false, 'already an admin');
+  assert.equal(guest.ask({ t: 'makeAdmin', target: other.c.id }).ok, true, 'a new admin may appoint others');
+  assert.equal(guest.ask({ t: 'makeAdmin', target: ceo.c.id, on: false }).ok, false, 'a Chief Executive cannot be demoted here');
+  assert.equal(guest.ask({ t: 'makeAdmin', target: other.c.id, on: false }).ok, true, 'staff can remove an admin');
+  assert.equal(other.last('role').role, 'player');
+  assert.equal(guest.ask({ t: 'makeAdmin', target: other.c.id, on: false }).ok, false, 'not an admin any more');
+  assert.equal(app.hub.isStaffPlayer(guest.c.playerId), true, 'HTTP routes see the new admin as staff');
+});

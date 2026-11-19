@@ -254,8 +254,28 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     return { role: r };
   }
 
+/** Staff appoint or remove an Admin from the console (Guests tab). Admins join by invitation: this is the invitation.
+   *  A Chief Executive cannot be demoted this way, and nobody changes their own seat here (use the role buttons). */
+  function grantAdmin(by, target, on = true) {
+    needStaff(by);
+    const c = conns.get(target);
+    if (!c || !c.ready) throw err(404, 'That guest is no longer connected.');
+    if (c.id === by.id || c.playerId === by.playerId) throw err(400, 'Use the seat buttons to change your own role.');
+    const cur = elevated.get(c.playerId) || 'player';
+    if (cur === 'ceo') throw err(409, `${c.name} is a Chief Executive.`);
+    if (on && cur === 'admin') throw err(409, `${c.name} is already an Admin.`);
+    if (!on && cur !== 'admin') throw err(409, `${c.name} is not an Admin.`);
+    const r = on ? 'admin' : 'player';
+    if (on) elevated.set(c.playerId, r); else elevated.delete(c.playerId);
+    for (const o of list()) if (o.playerId === c.playerId) { o.role = r; send(o, { t: 'role', role: r, elevated: on, by: by.name }); }
+    log.log?.(`[hub] ${by.name} (${by.role}) ${on ? 'appointed' : 'removed'} ${c.name} ${on ? 'as' : 'from'} Admin`);
+    gameCtx.announce(on ? `${c.name} has joined the Staff (Admin), appointed by ${by.name}.` : `${c.name} is no longer on the Staff, by order of ${by.name}.`);
+    dirtyMeta = true;
+    return { target: c.id, role: r };
+  }
+
   function setRole(c, role) {
-    if (!elevated.has(c.playerId)) throw err(403, 'Unlock the executive console first (Alt+F2).');
+    if (!elevated.has(c.playerId)) throw err(403, 'Unlock the executive console first (Alt+F6).');
     const r = role === 'ceo' ? 'ceo' : role === 'admin' ? 'admin' : 'player';
     if (r !== 'ceo' && baskets.has(c.id)) putDown(c.id); // only CEOs carry the basket
     if (r === 'player') elevated.delete(c.playerId); else elevated.set(c.playerId, r);
@@ -280,6 +300,7 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     elevate: (c, m) => elevate(c, m.password, m.role),
     role: (c, m) => setRole(c, m.role),
     kick: (c, m) => kick(c, m.target),
+    makeAdmin: (c, m) => grantAdmin(c, m.target, m.on !== false),
     summonAgent: (c, m) => summonAgent(c, m),
     releaseAgent: (c, m) => releaseAgent(c, m.agent),
     bring: (c, m) => bring(c, m.target),

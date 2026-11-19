@@ -171,13 +171,14 @@ export class ExecConsole {
   click(ev) {
     const mb = ev.target.closest('[data-mop]:not([data-money])'); // Treasury's Add / Remove / Set also carry data-mop; they are not media ops
     if (mb) { this.mediaOp(mb.dataset.mop, mb.dataset); return; }
-    const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-bring],[data-money],[data-summon],[data-release]');
+    const b = ev.target.closest('[data-tab],[data-op],[data-kick],[data-bring],[data-admin],[data-money],[data-summon],[data-release]');
     if (!b) return;
     if (b.dataset.money) { const inp = this.el.querySelector(`[data-amt="${b.dataset.money}"]`); if (inp) this.amt[b.dataset.money] = inp.value; this.money(b.dataset.money, b.dataset.mop); return; }
     if (b.dataset.tab) { this.tab = b.dataset.tab; this.render(true); return; }
     if (b.dataset.summon) { const a = AI_AGENTS.find((x) => x.id === b.dataset.summon); if (a) this.act('summonAgent', { agent: a.id, kind: b.dataset.kind }, `${a.name} has been called up to Asset Protection.`); return; }
     if (b.dataset.release) { const a = AI_AGENTS.find((x) => x.id === b.dataset.release); if (a) this.act('releaseAgent', { agent: a.id }, `${a.name} has been sent back to the desk.`); return; }
     if (b.dataset.bring) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.bring); if (p) this.act('bring', { target: p.id }, `${p.name} has been brought to you.`); return; }
+    if (b.dataset.admin) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.admin), on = b.dataset.on === '1'; if (p && confirm(on ? `Appoint ${p.name} as Staff (Admin)? They get full executive powers.` : `Remove ${p.name} from the Staff?`)) this.act('makeAdmin', { target: p.id, on }, on ? `${p.name} is now an Admin.` : `${p.name} is no longer an Admin.`); return; }
     if (b.dataset.kick) { const p = this.ctx.rt.players.find((x) => x.id === b.dataset.kick); if (p && confirm(`Remove ${p.name} from the building?`)) this.act('kick', { target: p.id }, `${p.name} has been removed.`); return; }
     const rt = this.ctx.rt, op = b.dataset.op;
     const ops = {
@@ -256,7 +257,7 @@ export class ExecConsole {
   tab_guests() {
     const { rt } = this.ctx;
     const rows = rt.players.map((p) => `<tr><td>${esc(p.name)} ${p.id === rt.id ? '<span class="badge you">YOU</span>' : ''}</td><td>${this.roleBadge(p) || 'Player'}</td><td><b>${esc(p.floor || '—')}</b> ${esc(roomName(p.room))}</td><td>${this.badge(p)}</td>
-      <td style="white-space:nowrap">${p.id === rt.id ? '' : `<button class="mp-btn sm" data-bring="${p.id}">TP to me</button> <button class="mp-btn sm danger" data-kick="${p.id}">Kick</button>`}</td></tr>`).join('');
+      <td style="white-space:nowrap">${p.id === rt.id ? '' : `<button class="mp-btn sm" data-bring="${p.id}">TP to me</button> ${p.role === 'player' ? `<button class="mp-btn sm" data-admin="${p.id}" data-on="1">Make admin</button> ` : p.role === 'admin' ? `<button class="mp-btn sm" data-admin="${p.id}" data-on="0">Remove admin</button> ` : ''}<button class="mp-btn sm danger" data-kick="${p.id}">Kick</button>`}</td></tr>`).join('');
     return `<table><tr><th>Name</th><th>Role</th><th>Floor · room</th><th>Device</th><th></th></tr>${rows}</table>`;
   }
 
