@@ -1,4 +1,4 @@
-/* Sign-in modal, the Alt+F2 executive console, and the live arena HUD (boxing / racing). */
+/* Sign-in modal, the Alt+F6 executive console, and the live arena HUD (boxing / racing). */
 .mp-modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; background: rgba(4, 5, 8, 0.66); backdrop-filter: blur(3px); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink, #f3ecdf); }
 .mp-modal .card { width: min(400px, calc(100vw - 32px)); background: #0f1219; border: 1px solid rgba(214, 178, 94, .6); border-radius: 14px; padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 .mp-modal h2 { margin: 0 0 2px; font-size: 19px; color: #f0d18a; letter-spacing: .02em; }

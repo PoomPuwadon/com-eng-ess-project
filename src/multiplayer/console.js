@@ -1,4 +1,4 @@
-// Sign-in modal (Name + Password) and the secret executive console (Alt+F2): unlock as CEO or Admin
+// Sign-in modal (Name + Password) and the secret executive console (Alt+F6): unlock as CEO or Admin
 // with the console password, then Overview · Guests (kick) · Tour · Combat (VT-03) · Equine (VT-04) ·
 // Arena Media (VT-02: head-to-head results and highlight videos on the Sports Analytics Arena's side screens).
 import './console.css';
@@ -78,10 +78,10 @@ export class ExecConsole {
     this.ctx = ctx; this.tab = 'overview'; this.sel = { box: new Set(), race: new Set() }; this.raceCount = 4;
     this.bal = new Map(); this.amt = {}; // Treasury tab: balances by connection id, typed amounts
     this.md = { fx: null, draft: null, dirty: false, fixtures: [], at: 0, busy: '', yt: '', ytTitle: '', fileTitle: '' }; // Arena Media tab
-    this.el = h(`<div id="mp-console"><header><b>Executive Console</b><span class="who"></span><button class="mp-btn sm" data-x>Close · Alt+F2</button></header><div class="tabs"></div><div class="body"></div></div>`);
+    this.el = h(`<div id="mp-console"><header><b>Executive Console</b><span class="who"></span><button class="mp-btn sm" data-x>Close · Alt+F6</button></header><div class="tabs"></div><div class="body"></div></div>`);
     document.body.append(this.el);
     // while elevated a small Console button stays on screen: closing the panel never locks it again (user, 2026-11-18)
-    this.btn = h('<button id="mp-console-btn" class="mp-btn" title="Executive Console (Alt+F2)">♛ Console <kbd>Alt+F2</kbd></button>');
+    this.btn = h('<button id="mp-console-btn" class="mp-btn" title="Executive Console (Alt+F6)">♛ Console <kbd>Alt+F6</kbd></button>');
     document.body.append(this.btn);
     this.btn.onclick = (ev) => { ev.stopPropagation(); this.toggle(); };
     this.el.querySelector('[data-x]').onclick = () => this.toggle(false);
@@ -95,7 +95,7 @@ export class ExecConsole {
     onArenaMedia(() => { if (this.tab !== 'media' || this.md.dirty) return; if (editing()) { this.md.pending = true; return; } this.md.draft = null; this.render(true); });
     this.el.addEventListener('focusout', () => setTimeout(() => { if (this.md.pending && !editing() && !this.md.dirty) { this.md.pending = false; this.md.draft = null; this.render(true); } }, 0));
     addEventListener('keydown', (ev) => {
-      if (ev.altKey && ev.code === 'F2') { ev.preventDefault(); ev.stopPropagation(); this.hotkey(); }
+      if (ev.altKey && ev.code === 'F6') { ev.preventDefault(); ev.stopPropagation(); this.hotkey(); }
     }, true);
     const { rt } = ctx;
     const paintBtn = () => { this.btn.classList.toggle('on', Boolean(rt.elevated)); this.btn.classList.toggle('open', this.open); };

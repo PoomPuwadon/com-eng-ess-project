@@ -20,7 +20,7 @@ the Visitors' Tower is; it is officially a "wellness" facility.
   (football-data.org). Muay Thai and horse racing are simulated, built so a real source can be swapped in.
 - **AI desks:** two rival trading desks (Claude v Gemini), a Thai markets desk, a sports desk. Models propose, the server disposes: every money action
   passes server-side limits. Without any API key the firm still runs, on deterministic rule books.
-- **Multiplayer:** up to 50 players, text chat, roles (Visitor, Admin "Staff", CEO), Tour Mode, an executive console (`Alt+F2`).
+- **Multiplayer:** up to 50 players, text chat, roles (Visitor, Admin "Staff", CEO), Tour Mode, an executive console (`Alt+F6`).
 - **Phones work too:** touch joystick, drag to look, and a tap button for anything you would press `E` for on a PC.
 
 ## Quick start (local)
@@ -50,7 +50,7 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill in what you want. Eve
 | `LLM_MONTHLY_CAP_USD` | Hard monthly spend cap across both providers (default `75`). At 70 % it slows, at 90 % events only, at 100 % it stops and falls back to rules. |
 | `FINNHUB_API_KEY` | Free-tier stock quotes (charts still come from Yahoo's public endpoint). |
 | `FOOTBALL_DATA_API_KEY` | Free-tier fixtures, results and crests. Without it the arena shows clearly flagged simulated fixtures. |
-| `ADMIN_PASSWORD` | Password for the `Alt+F2` executive console. **Defaults to `admin123`: change it.** |
+| `ADMIN_PASSWORD` | Password for the `Alt+F6` executive console. **Defaults to `admin123`: change it.** |
 | `DATABASE_URL` | Supabase Postgres (session-pooler URI). When set, Postgres is the database of record and SQLite is only the in-memory working set. |
 | `GAME_PORT` | Game server port (default `8787`). |
 | `STARTING_BALANCE_MINOR` | Starting balance for new visitors in minor units (default `1000000` = ¤10,000.00). |
@@ -84,7 +84,7 @@ If it says `cannot reach Supabase Postgres`, check that you used the **session p
 ### Signing in and roles
 
 - On first load you can continue as a guest, or sign up with a name and password (everyone starts as a **Visitor** with a starting balance).
-- To act as **Admin** or **CEO**, open the executive console (`Alt+F2`) and enter `ADMIN_PASSWORD`. Only a CEO can use the Treasury tab
+- To act as **Admin** or **CEO**, open the executive console (`Alt+F6`) and enter `ADMIN_PASSWORD`. Only a CEO can use the Treasury tab
   (add, remove or set a guest's balance) and Tour Mode.
 
 ### Controls

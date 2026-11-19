@@ -1,6 +1,6 @@
 // OT-04 Asset Protection HQ: the UNDERPERFORMANCE BOARD and the punished doubles (owner request).
 //  - A big board on the yard-side wall ranks every money-making AI agent by its real result, worst first (GET /api/ai/performance).
-//    It is read-only; the CEO / admins call an agent up from the console (Alt+F2, Asset Protection), exactly as for the four trading agents.
+//    It is read-only; the CEO / admins call an agent up from the console (Alt+F6, Asset Protection), exactly as for the four trading agents.
 //  - Every agent the CEO can call up (the extra ones here; the four trading agents are handled by aiTraders.js) appears in the yard in the
 //    chosen review: standing on a numbered spot, receiving kinetic performance feedback, or pacing the transition suite. While an agent is
 //    at Asset Protection its character at the desk disappears (`away(id)`), so the SAME character is the one being punished.
