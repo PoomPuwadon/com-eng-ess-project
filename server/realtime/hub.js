@@ -138,6 +138,10 @@ export function createHub({ players, auth, ledger, config, log = console }) {
     if (!p) { send(c, { t: 'error', code: 'auth', text: 'Session not recognised. Please sign in again.' }); c.close(4001, 'auth'); return; }
     const ban = banned.get(p.id);
     if (ban && ban > Date.now()) { send(c, { t: 'kicked', text: 'You have been kicked by an admin' }); c.close(4003, 'kicked'); return; }
+    // one body per account: a newer connection (second tab, second device, reload) replaces the older one
+    for (const o of [...conns.values()]) {
+      if (o !== c && o.ready && o.playerId === p.id) { send(o, { t: 'kicked', text: 'This account signed in somewhere else.' }); o.close(4005, 'replaced'); disconnect(o); }
+    }
     if (list().length >= (config.maxPlayers || 50)) { send(c, { t: 'error', code: 'full', text: 'The building is at capacity (50 guests). Please try again shortly.' }); c.close(4002, 'full'); return; }
     Object.assign(c, { ready: true, playerId: p.id, name: p.name, device: msg.device === 'mobile' ? 'mobile' : 'pc', role: elevated.get(p.id) || 'player', account: auth?.accountOf?.(p.id) ? 'member' : 'guest' });
     send(c, { t: 'welcome', id: c.id, name: c.name, role: c.role, elevated: elevated.has(p.id), hz: SNAPSHOT_HZ, meta: meta() });

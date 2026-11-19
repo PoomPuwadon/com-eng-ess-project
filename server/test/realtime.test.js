@@ -376,3 +376,15 @@ test('appoint admin: staff make a connected guest an Admin (and remove them); gu
   assert.equal(guest.ask({ t: 'makeAdmin', target: other.c.id, on: false }).ok, false, 'not an admin any more');
   assert.equal(app.hub.isStaffPlayer(guest.c.playerId), true, 'HTTP routes see the new admin as staff');
 });
+
+test('presence: a second connection for the same account replaces the first', () => {
+  const app = mkApp();
+  const a = client(app, 'Twin');
+  const { token } = app.auth.login('Twin', 'pw-Twin');
+  const inbox = [];
+  const c2 = app.hub.connect({ send: (m) => inbox.push(typeof m === 'string' ? JSON.parse(m) : m), close: () => {} });
+  app.hub.message(c2, JSON.stringify({ t: 'hello', token, device: 'pc' }));
+  assert.equal(a.closed, 4005, 'the older connection is closed');
+  assert.ok(a.last('kicked'), 'and told why');
+  assert.ok(inbox.find((x) => x.t === 'welcome'), 'the newer one is welcomed');
+});
