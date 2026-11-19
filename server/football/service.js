@@ -169,6 +169,18 @@ export function createFootball({ db, ledger, treasury, llm, config, feed = nullF
     return marquee;
   }
 
+  /** staff override: put any known fixture (upcoming or recently finished) on the big screens until released */
+  function pinMarquee(matchId, by = 'staff') {
+    const m = matches.find((x) => x.id === Number(matchId));
+    if (!m) throw err(404, 'Unknown fixture.');
+    const upc = m.status === 'TIMED' || m.status === 'SCHEDULED';
+    marquee = { id: m.id, by: 'staff', pinned: true, pinnedBy: by, model: null, preview: `${m.competition.name}: ${teams(m)}. Chosen by the Executive Floor.`, points: [upc ? `Kick-off ${new Date(m.utcDate).toUTCString().slice(0, 22)} UTC` : 'Full time: replays on the side screens', 'House pricing from the Analytics Desk goals model'], at: Date.now(), reason: 'staff', v: MARQUEE_V };
+    db.kvSet('football:marquee', marquee);
+    say('fixture_scout', 'scout', `MARQUEE SET BY STAFF: ${teams(m)}`, { ref: `match:${m.id}`, outcome: 'locked', data: { matchId: m.id, by: 'staff' } });
+    return { marquee: m.id };
+  }
+  async function releaseMarquee() { marquee = null; db.kvSet('football:marquee', null); await scout('released'); return { marquee: marquee?.id ?? null }; }
+
   // ---------------------------------------------------------------- positions
   function open({ owner, matchId, market, pick, stake, actor }) {
     const m = matches.find((x) => x.id === Number(matchId));
@@ -264,7 +276,9 @@ export function createFootball({ db, ledger, treasury, llm, config, feed = nullF
     return {
       source: state.source, attribution: ATTRIBUTION, simulated: state.source === 'simulated', pricingNote: 'House pricing (Analytics Desk goals model). The free data tier carries no bookmaker prices.',
       marquee: mq ? { ...view(mq), preview: marquee.preview, points: marquee.points, by: marquee.by, model: marquee.model || null } : null,
-      fixtures: upcoming().slice(0, 30).map(view), markets: MARKETS, lastFetch: state.lastFetch, lastError: state.lastError,
+      fixtures: upcoming().slice(0, 30).map(view),
+      recent: matches.filter((m) => m.status === 'FINISHED').sort((a, b) => Date.parse(b.utcDate) - Date.parse(a.utcDate)).slice(0, 20).map(view),
+      markets: MARKETS, lastFetch: state.lastFetch, lastError: state.lastError,
       mine: owner ? db.all('SELECT id, match_id, label, stake, price, status, payout, created_at FROM fixture_positions WHERE owner = ? ORDER BY id DESC LIMIT 30', owner) : [],
       desk: { balance: ledger.balance(DEPT_SPORTS), positions: db.all('SELECT label, stake, price, status, payout FROM fixture_positions WHERE owner = ? ORDER BY id DESC LIMIT 8', DEPT_SPORTS) },
     };
@@ -279,7 +293,8 @@ export function createFootball({ db, ledger, treasury, llm, config, feed = nullF
     let fresh = 0;
     try { fresh = await follow.refresh(upcoming().filter((m) => Date.parse(m.utcDate) - Date.now() < 7 * 86400_000).flatMap((m) => [m.homeTeam, m.awayTeam])); } catch (e) { log.warn?.('[football] following', e.message); }
     settle();
-    if (!marquee || marquee.v !== MARQUEE_V || fresh > 0 || !upcoming().some((m) => m.id === marquee.id) || Date.now() - marquee.at > 3 * 3600_000) await scout(reason);
+    if (marquee?.pinned && matches.some((m) => m.id === marquee.id)) { /* staff pick stays until released */ }
+    else if (!marquee || marquee.v !== MARQUEE_V || fresh > 0 || !upcoming().some((m) => m.id === marquee.id) || Date.now() - marquee.at > 3 * 3600_000) await scout(reason);
     agentTick();
     feed.status(ROOM, { nextScoutAt: (marquee?.at || Date.now()) + SCOUT_EVERY, nextCycleAt: Date.now() + 30 * 60_000, source: state.source, label: 'Next scout' });
   }
@@ -291,5 +306,5 @@ export function createFootball({ db, ledger, treasury, llm, config, feed = nullF
   }
   const stop = () => timers.forEach(clearInterval);
 
-  return { request: get, start, stop, cycle, scout, open, settle, agentTick, snapshot, crest, refreshFixtures, state, _setMatches: (ms) => { matches = ms; }, matches: () => matches, playerAccount: player };
+  return { request: get, start, stop, cycle, scout, pinMarquee, releaseMarquee, open, settle, agentTick, snapshot, crest, refreshFixtures, state, _setMatches: (ms) => { matches = ms; }, matches: () => matches, playerAccount: player };
 }

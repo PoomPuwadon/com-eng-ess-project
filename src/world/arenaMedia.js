@@ -145,7 +145,9 @@ let ytScreens = [];
 /** choose what each screen group shows for the current state */
 function apply() {
   const f0 = currentMedia();
-  const f = f0 && { ...f0, videos: f0.videos.filter((v) => v.kind !== 'file' || !FAILED.has(v.src)) }; // clips that failed are skipped
+  const mode = media?.mode || 'both'; // staff pick: head-to-head, highlights, or both
+  const f = f0 && { ...f0, h2h: mode === 'highlights' ? [] : f0.h2h, videos: mode === 'h2h' ? [] : f0.videos.filter((v) => v.kind !== 'file' || !FAILED.has(v.src)) }; // clips that failed are skipped
+  if (f && !f.h2h.length && !f.videos.length) { stopAll(); setArenaYoutube(null); for (const k of ['h2h', 'reel', 'reel2']) setMediaScreens(k, null); return; }
   if (!f) { stopAll(); setArenaYoutube(null); for (const k of ['h2h', 'reel', 'reel2']) setMediaScreens(k, null); return; }
   setMediaScreens('h2h', f.h2h.length ? H2H.t : null);
   if (!f.videos.length) { stopAll(); setArenaYoutube(null); for (const sl of SLOTS) setMediaScreens(sl.kind, f.h2h.length ? H2H.t : null); return; } // a dossier but no clips

@@ -5,6 +5,7 @@ import './console.css';
 import { signIn, signOut, signedIn, savedAccount, lastAccountName, esc, fmt, api, getToken, getMe } from '../net/api.js';
 import { zoomOf } from '../uiScale.js';
 import { arenaMediaState, onArenaMedia, refreshArenaMedia } from '../world/arenaMedia.js';
+import { refreshArenaFeed } from '../world/arenaFeed.js';
 import { FLOOR_BY_ID, findRoom } from '../layout/building.js';
 import { AI_AGENTS as TRADERS } from '../characters/aiTraders.js';
 import { EXTRA_AGENTS } from '../ai/ot04.js';
@@ -352,7 +353,8 @@ export class ExecConsole {
     try {
       const s = await api('/api/football/state');
       const seen = new Set();
-      this.md.fixtures = [s.marquee && { ...s.marquee, star: true }, ...(s.fixtures || [])].filter((m) => m && !seen.has(m.id) && seen.add(m.id));
+      this.md.marqueeId = s.marquee?.id ?? null; this.md.marqueeBy = s.marquee?.by || null;
+      this.md.fixtures = [s.marquee && { ...s.marquee, star: true }, ...(s.fixtures || []), ...(s.recent || []).map((m) => ({ ...m, done: true }))].filter((m) => m && !seen.has(m.id) && seen.add(m.id));
       if (!this.md.fx) this.md.fx = arenaMediaState()?.onScreens || s.marquee?.id || this.md.fixtures[0]?.id || null;
       refreshArenaMedia();
       if (this.tab === 'media') this.render(true);
@@ -410,6 +412,12 @@ export class ExecConsole {
       await run('Removing…', () => this.ctx.rt.ask('mediaRemoveVideo', { matchId: fx, videoId: ds.id }));
     } else if (op === 'show') {
       if (await run('…', () => this.ctx.rt.ask('mediaShow', { matchId: fx }))) this.ctx.toast('This fixture is now on the Arena media screens.', 2.5);
+    } else if (op === 'mode') {
+      if (await run('…', () => this.ctx.rt.ask('mediaMode', { mode: ds.mode }))) this.ctx.toast('Arena screens updated.', 2);
+    } else if (op === 'pin') {
+      if (await run('Setting the big screens…', () => this.ctx.rt.ask('mediaPinMarquee', { matchId: fx }))) { this.ctx.toast('This fixture is now on the big screens.', 2.5); refreshArenaFeed(); this.loadMediaFixtures(); }
+    } else if (op === 'unpin') {
+      if (await run('Handing back to the Fixture Scout…', () => this.ctx.rt.ask('mediaPinMarquee', { matchId: null }))) { this.ctx.toast('Big screens handed back to the Fixture Scout.', 2.5); refreshArenaFeed(); this.loadMediaFixtures(); }
     } else if (op === 'off') {
       if (await run('…', () => this.ctx.rt.ask('mediaShow', { matchId: null }))) this.ctx.toast('Media screens handed back to the fixture cards.', 2.5);
     } else if (op === 'clear') {
@@ -422,7 +430,7 @@ export class ExecConsole {
     if (!md.fixtures.length) return '<div class="note">Loading the fixture list…</div>';
     if (!md.draft) md.draft = (e?.h2h || []).map((r) => ({ ...r }));
     const name = (m) => `${m.homeTeam.shortName || m.homeTeam.name} v ${m.awayTeam.shortName || m.awayTeam.name}`;
-    const opts = md.fixtures.map((m) => `<option value="${m.id}" ${m.id === md.fx ? 'selected' : ''}>${m.star ? '★ MARQUEE · ' : ''}${esc(name(m))} · ${esc(m.competition?.code || '')} · ${new Date(m.utcDate).toUTCString().slice(5, 22)}${st?.fixtures?.[m.id] ? ' · media' : ''}</option>`).join('');
+    const opts = md.fixtures.map((m) => `<option value="${m.id}" ${m.id === md.fx ? 'selected' : ''}>${m.star ? '★ ON BIG SCREENS · ' : ''}${m.done ? 'FULL TIME ' + (m.score?.fullTime?.home ?? '') + '-' + (m.score?.fullTime?.away ?? '') + ' · ' : ''}${esc(name(m))} · ${esc(m.competition?.code || '')} · ${new Date(m.utcDate).toUTCString().slice(5, 22)}${st?.fixtures?.[m.id] ? ' · media' : ''}</option>`).join('');
     const onName = st?.onScreens ? esc(st.fixtures[st.onScreens]?.label || `fixture ${st.onScreens}`) : null;
     const inp = (i, k, v, ph, type = 'text') => `<input type="${type}" data-h2h="${i}:${k}" value="${esc(v)}" placeholder="${ph}" aria-label="${ph}" ${type === 'number' ? 'min="0" max="30"' : ''}>`;
     const rows = md.draft.map((r, i) => `<div class="md-row${r.src === 'auto' ? ' auto' : ''}"><div class="l1">${inp(i, 'date', r.date, 'Date', 'date')}${inp(i, 'competition', r.competition, 'Competition')}<button class="mp-btn sm danger" data-mop="delRow" data-i="${i}" title="Delete this result">✕</button></div>
@@ -430,7 +438,13 @@ export class ExecConsole {
     const vids = (e?.videos || []).map((v) => `<tr><td>${v.kind === 'youtube' ? '<span class="badge">YOUTUBE</span>' : '<span class="badge m">UPLOAD</span>'}</td><td>${esc(v.title)}${v.size ? ` <span class="note">${(v.size / 1024 / 1024).toFixed(1)} MB</span>` : ''}</td><td class="note">${esc(String(v.by || '').replace(/^\w+:/, ''))}</td><td><button class="mp-btn sm danger" data-mop="rmv" data-id="${v.id}">Remove</button></td></tr>`).join('');
     const busy = md.busy ? `<div class="note md-busy" style="color:#f0d18a">${esc(md.busy)}</div>` : '';
     const lim = st?.limits || { uploadMb: 80, videos: 8 };
-    return `<h4>Fixture</h4><select data-mfx style="width:100%;background:#171b25;color:#fff;border:1px solid #3a4152;border-radius:6px;padding:6px">${opts}</select>
+    const mode = st?.mode || 'both', pinned = md.marqueeBy === 'staff';
+    const mb = (m, l) => `<button class="mp-btn ${mode === m ? 'primary' : ''}" data-mop="mode" data-mode="${m}">${l}</button>`;
+    const bigNow = md.fixtures.find((m) => m.id === md.marqueeId);
+    return `<h4>Big screens</h4><div class="note">Centre-hung stack shows: ${bigNow ? esc(name(bigNow)) : 'nothing yet'} (${pinned ? 'chosen by staff' : 'picked by the Fixture Scout'}). Pick a game below, then:</div>
+      <div class="btns"><button class="mp-btn primary" data-mop="pin" ${md.fx && md.fx !== md.marqueeId ? '' : 'disabled'}>Put the selected game on the big screens</button><button class="mp-btn" data-mop="unpin" ${pinned ? '' : 'disabled'}>Hand back to the Fixture Scout</button></div>
+      <h4>Side screens show</h4><div class="btns">${mb('both', 'Head-to-head + highlights')}${mb('h2h', 'Head-to-head only')}${mb('highlights', 'Highlights only')}</div>
+      <h4>Game (highlights and head-to-head below are for this game)</h4><select data-mfx style="width:100%;background:#171b25;color:#fff;border:1px solid #3a4152;border-radius:6px;padding:6px">${opts}</select>
       <div class="note">Media screens: ${onName ? `<span class="live">ON</span> · ${onName}` : '<span class="off">showing fixture cards</span>'}. The marquee stack and pricing screens are never replaced: media goes on the side screens beside the Sports Analytics signs (five head-to-head, five highlights) on the back faces of the big hanging screens and on the middle ring of the centre-hung stack (highlights); the stack's top and bottom rings and the hanging screens' front faces keep the pricing.</div>
       <div class="btns"><button class="mp-btn primary" data-mop="show" ${e ? '' : 'disabled'}>Put this fixture on the screens</button><button class="mp-btn" data-mop="off" ${st?.onScreens ? '' : 'disabled'}>Hand screens back</button></div>${busy}
       <h4>Head-to-head · previous meetings</h4>

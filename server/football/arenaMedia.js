@@ -275,6 +275,14 @@ export function createArenaMedia({ db, football, dir, blobs = null, offline = fa
     return { onScreens: f.matchId };
   }
 
+  /** what the side screens carry: both feeds, only head-to-head, or only highlights */
+  function setMode(mode, by) {
+    if (!['both', 'h2h', 'highlights'].includes(mode)) throw err(400, 'Mode must be both, h2h or highlights.');
+    state.mode = mode; audit(by, `set the Arena screens to ${mode === 'both' ? 'head-to-head + highlights' : mode === 'h2h' ? 'head-to-head only' : 'highlights only'}`);
+    changed();
+    return { mode };
+  }
+
   // ---------------------------------------------------------------- serving
   function fileInfo(name) {
     if (!FILE_RE.test(name)) throw err(404, 'Not found');
@@ -320,7 +328,7 @@ export function createArenaMedia({ db, football, dir, blobs = null, offline = fa
   }
   function view() {
     pruneMissing();
-    return { onScreens: state.onScreens, fixtures: Object.fromEntries(Object.entries(state.fixtures).map(([k, f]) => [k, publicFixture(f)])), audit: state.audit.slice(0, 12), limits: { uploadMb: MAX_UPLOAD / 1024 / 1024, videos: MAX_VIDEOS, rows: MAX_ROWS } };
+    return { onScreens: state.onScreens, mode: state.mode || 'both', fixtures: Object.fromEntries(Object.entries(state.fixtures).map(([k, f]) => [k, publicFixture(f)])), audit: state.audit.slice(0, 12), limits: { uploadMb: MAX_UPLOAD / 1024 / 1024, videos: MAX_VIDEOS, rows: MAX_ROWS } };
   }
 
   // ---------------------------------------------------------------- hub ops (every one staff-only, checked here)
@@ -333,9 +341,16 @@ export function createArenaMedia({ db, football, dir, blobs = null, offline = fa
       mediaRemoveVideo: (c, m) => { hub.needStaff(c); return removeVideo(m.matchId, m.videoId, by(c)); },
       mediaClear: (c, m) => { hub.needStaff(c); return clear(m.matchId, by(c)); },
       mediaShow: (c, m) => { hub.needStaff(c); return show(m.matchId ?? null, by(c)); },
+      mediaMode: (c, m) => { hub.needStaff(c); return setMode(m.mode, by(c)); },
+      mediaPinMarquee: (c, m) => {
+        hub.needStaff(c);
+        if (!football?.pinMarquee) throw err(409, 'The football desk is not available.');
+        if (m.matchId == null) return football.releaseMarquee().then((r) => { audit(by(c), 'handed the big screens back to the Fixture Scout'); changed(); return r; });
+        const r = football.pinMarquee(m.matchId, by(c)); audit(by(c), `put ${label(m.matchId)} on the big screens`); changed(); return r;
+      },
     };
   }
 
-  return { view, restore, pruneMissing, fetchH2H, autoFill, setH2H, addYoutube, upload, removeVideo, clear, show, serveFile, thumb, hubOps, onChange: (fn) => listeners.add(fn), dir };
+  return { setMode, view, restore, pruneMissing, fetchH2H, autoFill, setH2H, addYoutube, upload, removeVideo, clear, show, serveFile, thumb, hubOps, onChange: (fn) => listeners.add(fn), dir };
 }
 
